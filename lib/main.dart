@@ -6,6 +6,7 @@ import 'widgets/sidebar.dart';
 import 'widgets/order_detail_popup.dart';
 import 'pages/mobile_accounts_page.dart';
 import 'pages/users_management_page.dart';
+import 'pages/login_page.dart';
 
 
 void main() {
@@ -39,7 +40,7 @@ class DolphinApp extends StatelessWidget {
           secondary: blue,
         ),
       ),
-      home: const DeliveryPage(),
+      home: const LoginPage(),
     );
   }
 }
