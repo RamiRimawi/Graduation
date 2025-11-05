@@ -1,0 +1,43 @@
+name: dolphin
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # أيقونات iOS-style
+  cupertino_icons: ^1.0.8
+
+  # أيقونات إضافية (Material Icons)
+  iconsax: ^0.0.8
+
+  # لإدارة التخطيطات
+  flutter_staggered_grid_view: ^0.7.0
+
+  # لتسهيل بناء واجهات responsive
+  responsive_framework: ^1.2.0
+
+  # مكتبة الألوان والأنماط الجاهزة
+  google_fonts: ^6.2.1
+
+  # لأيقونات إضافية وجميلة (اختياري)
+  font_awesome_flutter: ^10.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
