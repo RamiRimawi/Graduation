@@ -40,7 +40,7 @@ class DolphinApp extends StatelessWidget {
           secondary: blue,
         ),
       ),
-      home: const LoginPage(),
+      home: const MobileAccountsPage(),
     );
   }
 }
