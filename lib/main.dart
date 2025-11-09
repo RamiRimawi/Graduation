@@ -2,12 +2,12 @@ import 'package:dolphin/pages/delivery_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
 import 'widgets/sidebar.dart';
 import 'widgets/order_detail_popup.dart';
 import 'pages/mobile_accounts_page.dart';
 import 'pages/users_management_page.dart';
 import 'pages/login_page.dart';
-
 
 void main() {
   runApp(const DolphinApp());
@@ -40,7 +40,18 @@ class DolphinApp extends StatelessWidget {
           secondary: blue,
         ),
       ),
-      home: const MobileAccountsPage(),
+
+      // 🔹 البداية من صفحة الـ Dashboard
+      initialRoute: '/dashboard',
+
+      // 🔹 الراوتس عشان الـ Sidebar يقدر يتنقل بينهم
+      routes: {
+        '/login': (_) => const LoginPage(),
+        '/dashboard': (_) => const DashboardPage(),
+        '/delivery': (_) => const DeliveryPage(),
+        '/mobileAccounts': (_) => const MobileAccountsPage(),
+        '/usersManagement': (_) => const UsersManagementPage(),
+      },
     );
   }
 }
@@ -53,7 +64,8 @@ class DashboardPage extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
-          const Sidebar(),
+          // 🔵 الزر الأول (الـ Home) هو الفعّال في هاي الصفحة
+          const Sidebar(activeIndex: 0),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -135,7 +147,11 @@ class _StepCard extends StatelessWidget {
           color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(18),
           boxShadow: const [
-            BoxShadow(color: Colors.black45, offset: Offset(0, 6), blurRadius: 10)
+            BoxShadow(
+              color: Colors.black45,
+              offset: Offset(0, 6),
+              blurRadius: 10,
+            )
           ],
         ),
         child: Column(
@@ -146,11 +162,14 @@ class _StepCard extends StatelessWidget {
             const Text('15',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
             const Text('Order', style: TextStyle(color: Colors.grey)),
-            Text(title,
-                style: const TextStyle(
-                    color: Color(0xFFB7A447),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFFB7A447),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -198,40 +217,51 @@ class _ActiveWorkersCard extends StatelessWidget {
         color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
-          BoxShadow(color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
+          BoxShadow(
+              color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
         ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text('Active',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.roboto(
-                color: const Color(0xFFB7A447),
-                fontSize: 40,
-                fontWeight: FontWeight.w900,
-              )),
-          Text('worker account',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.roboto(
-                color: const Color(0xFFB7A447),
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              )),
+          Text(
+            'Active',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.roboto(
+              color: const Color(0xFFB7A447),
+              fontSize: 40,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            'worker account',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.roboto(
+              color: const Color(0xFFB7A447),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 10),
           Expanded(
             child: ListView.separated(
               itemCount: workers.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(color: Colors.white24, thickness: 1, height: 16),
+              separatorBuilder: (_, __) => const Divider(
+                color: Colors.white24,
+                thickness: 1,
+                height: 16,
+              ),
               itemBuilder: (_, i) {
                 final w = workers[i];
                 return Row(
                   children: [
                     Stack(
                       children: [
-                        CircleAvatar(radius: 22, backgroundImage: AssetImage(w.$3)),
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundImage: AssetImage(w.$3),
+                        ),
                         Positioned(
                           right: 0,
                           bottom: 0,
@@ -241,7 +271,8 @@ class _ActiveWorkersCard extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: Colors.greenAccent,
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black, width: 1.5),
+                              border:
+                                  Border.all(color: Colors.black, width: 1.5),
                             ),
                           ),
                         ),
@@ -249,17 +280,23 @@ class _ActiveWorkersCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(w.$1,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.white)),
-                    ),
-                    Text('${w.$2}',
+                      child: Text(
+                        w.$1,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 18,
-                            color: Colors.white)),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${w.$2}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
                   ],
                 );
               },
@@ -295,18 +332,22 @@ class _OrdersCard extends StatelessWidget {
         color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
-          BoxShadow(color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
+          BoxShadow(
+              color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
         ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Receives Order',
-              style: GoogleFonts.roboto(
-                  color: const Color(0xFFB7A447),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22)),
+          Text(
+            'Receives Order',
+            style: GoogleFonts.roboto(
+              color: const Color(0xFFB7A447),
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+            ),
+          ),
           const SizedBox(height: 14),
           _tableHeader(),
           const SizedBox(height: 8),
@@ -325,8 +366,10 @@ class _OrdersCard extends StatelessWidget {
   }
 
   Widget _tableHeader() {
-    final hStyle =
-        GoogleFonts.roboto(color: Colors.grey.shade300, fontWeight: FontWeight.w600);
+    final hStyle = GoogleFonts.roboto(
+      color: Colors.grey.shade300,
+      fontWeight: FontWeight.w600,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -339,15 +382,19 @@ class _OrdersCard extends StatelessWidget {
               Expanded(flex: 2, child: Text('Type', style: hStyle)),
               Expanded(flex: 2, child: Text('Created by', style: hStyle)),
               Expanded(
-                  flex: 1,
-                  child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text('Time', style: hStyle))),
+                flex: 1,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('Time', style: hStyle),
+                ),
+              ),
               Expanded(
-                  flex: 1,
-                  child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text('Date', style: hStyle))),
+                flex: 1,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('Date', style: hStyle),
+                ),
+              ),
             ],
           ),
         ),
@@ -356,9 +403,9 @@ class _OrdersCard extends StatelessWidget {
     );
   }
 
-  // ✅ تعديل هنا — صار يفتح الـ Popup عند الضغط
   Widget _orderRow(BuildContext context, List<String> r) {
-    final typeColor = r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
+    final typeColor =
+        r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
 
     return InkWell(
       onTap: () {
@@ -407,15 +454,50 @@ class _OrdersCard extends StatelessWidget {
           children: [
             const Icon(Icons.person, color: Colors.white54, size: 22),
             const SizedBox(width: 8),
-            Expanded(flex: 3, child: Text(r[0], style: const TextStyle(fontWeight: FontWeight.w600))),
-            Expanded(flex: 2, child: Text(r[1], style: TextStyle(fontWeight: FontWeight.bold, color: typeColor))),
-            Expanded(flex: 2, child: Text(r[2], style: const TextStyle(fontWeight: FontWeight.w600))),
             Expanded(
-                flex: 1,
-                child: Align(alignment: Alignment.centerRight, child: Text(r[3], style: const TextStyle(fontWeight: FontWeight.w700)))),
+              flex: 3,
+              child: Text(
+                r[0],
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
             Expanded(
-                flex: 1,
-                child: Align(alignment: Alignment.centerRight, child: Text(r[4], style: const TextStyle(fontWeight: FontWeight.w700)))),
+              flex: 2,
+              child: Text(
+                r[1],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: typeColor,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                r[2],
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  r[3],
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  r[4],
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
           ],
         ),
       ),

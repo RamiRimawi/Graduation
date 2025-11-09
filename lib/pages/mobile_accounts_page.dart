@@ -64,7 +64,7 @@ class MobileAccountsPage extends StatelessWidget {
       backgroundColor: bg,
       body: Row(
         children: [
-          const Sidebar(),
+          const Sidebar(activeIndex: 6),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
@@ -87,14 +87,18 @@ class MobileAccountsPage extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: gold,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 10),
+                            horizontal: 18,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
                           ),
                         ),
                         onPressed: () => _openRoleChooser(context),
-                        icon: const Icon(Icons.person_add_alt_1,
-                            color: Colors.black),
+                        icon: const Icon(
+                          Icons.person_add_alt_1,
+                          color: Colors.black,
+                        ),
                         label: const Text(
                           "Add Account",
                           style: TextStyle(
@@ -121,8 +125,11 @@ class MobileAccountsPage extends StatelessWidget {
                         ),
                         child: Row(
                           children: const [
-                            Icon(Icons.person_search_rounded,
-                                color: Colors.white60, size: 20),
+                            Icon(
+                              Icons.person_search_rounded,
+                              color: Colors.white60,
+                              size: 20,
+                            ),
                             SizedBox(width: 8),
                             Expanded(
                               child: TextField(
@@ -138,8 +145,10 @@ class MobileAccountsPage extends StatelessWidget {
                               ),
                             ),
                             SizedBox(width: 5),
-                            Icon(Icons.filter_alt_rounded,
-                                color: Colors.amberAccent),
+                            Icon(
+                              Icons.filter_alt_rounded,
+                              color: Colors.amberAccent,
+                            ),
                           ],
                         ),
                       ),
@@ -214,8 +223,10 @@ class MobileAccountsPage extends StatelessWidget {
                 color: Colors.transparent,
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 880),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 32,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF111111),
                     borderRadius: BorderRadius.circular(24),
@@ -230,8 +241,11 @@ class MobileAccountsPage extends StatelessWidget {
                   child: Stack(
                     children: [
                       Padding(
-                        padding:
-                            const EdgeInsets.only(top: 6, right: 8, left: 8),
+                        padding: const EdgeInsets.only(
+                          top: 6,
+                          right: 8,
+                          left: 8,
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -255,7 +269,9 @@ class MobileAccountsPage extends StatelessWidget {
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     _openRoleForm(
-                                        context, _RoleFormType.customer);
+                                      context,
+                                      _RoleFormType.customer,
+                                    );
                                   },
                                 ),
                                 _RoleCard(
@@ -264,7 +280,9 @@ class MobileAccountsPage extends StatelessWidget {
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     _openRoleForm(
-                                        context, _RoleFormType.supplier);
+                                      context,
+                                      _RoleFormType.supplier,
+                                    );
                                   },
                                 ),
                                 _RoleCard(
@@ -273,7 +291,9 @@ class MobileAccountsPage extends StatelessWidget {
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     _openRoleForm(
-                                        context, _RoleFormType.salesRep);
+                                      context,
+                                      _RoleFormType.salesRep,
+                                    );
                                   },
                                 ),
                                 _RoleCard(
@@ -282,7 +302,9 @@ class MobileAccountsPage extends StatelessWidget {
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     _openRoleForm(
-                                        context, _RoleFormType.storageStaff);
+                                      context,
+                                      _RoleFormType.storageStaff,
+                                    );
                                   },
                                 ),
                                 _RoleCard(
@@ -291,7 +313,9 @@ class MobileAccountsPage extends StatelessWidget {
                                   onTap: () {
                                     Navigator.pop(ctx);
                                     _openRoleForm(
-                                        context, _RoleFormType.deliveryDriver);
+                                      context,
+                                      _RoleFormType.deliveryDriver,
+                                    );
                                   },
                                 ),
                               ],
@@ -305,8 +329,10 @@ class MobileAccountsPage extends StatelessWidget {
                         child: IconButton(
                           splashRadius: 20,
                           onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(Icons.close_rounded,
-                              color: Colors.white70),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                     ],
@@ -388,8 +414,10 @@ class MobileAccountsPage extends StatelessWidget {
                     maxWidth: 880,
                     minWidth: 620,
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 32,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF111111),
                     borderRadius: BorderRadius.circular(24),
@@ -404,8 +432,11 @@ class MobileAccountsPage extends StatelessWidget {
                   child: Stack(
                     children: [
                       Padding(
-                        padding:
-                            const EdgeInsets.only(top: 6, right: 8, left: 8),
+                        padding: const EdgeInsets.only(
+                          top: 6,
+                          right: 8,
+                          left: 8,
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -429,8 +460,10 @@ class MobileAccountsPage extends StatelessWidget {
                         child: IconButton(
                           splashRadius: 20,
                           onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(Icons.close_rounded,
-                              color: Colors.white70),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                     ],
@@ -446,7 +479,13 @@ class MobileAccountsPage extends StatelessWidget {
 }
 
 // أنواع النماذج
-enum _RoleFormType { customer, supplier, salesRep, storageStaff, deliveryDriver }
+enum _RoleFormType {
+  customer,
+  supplier,
+  salesRep,
+  storageStaff,
+  deliveryDriver,
+}
 
 // الكرت في القائمة الرئيسية
 class _AccountCard extends StatelessWidget {
@@ -463,11 +502,7 @@ class _AccountCard extends StatelessWidget {
         color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(10),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            offset: Offset(0, 3),
-            blurRadius: 6,
-          ),
+          BoxShadow(color: Colors.black26, offset: Offset(0, 3), blurRadius: 6),
         ],
       ),
       child: Row(
@@ -570,11 +605,7 @@ class _SimpleThreeFieldForm extends StatelessWidget {
       children: [
         _FormLabel(firstLabel),
         const SizedBox(height: 6),
-        _FormFieldBox(
-          controller: nameCtrl,
-          hint: firstHint,
-          isDropdown: true,
-        ),
+        _FormFieldBox(controller: nameCtrl, hint: firstHint, isDropdown: true),
         const SizedBox(height: 18),
         Row(
           children: [
@@ -584,10 +615,7 @@ class _SimpleThreeFieldForm extends StatelessWidget {
                 children: [
                   const _FormLabel('User Name'),
                   const SizedBox(height: 6),
-                  _FormFieldBox(
-                    controller: userCtrl,
-                    hint: 'Entre User Name',
-                  ),
+                  _FormFieldBox(controller: userCtrl, hint: 'Entre User Name'),
                 ],
               ),
             ),
@@ -621,10 +649,7 @@ class _ExtendedStaffForm extends StatelessWidget {
   final String title;
   final String nameLabel;
 
-  const _ExtendedStaffForm({
-    required this.title,
-    required this.nameLabel,
-  });
+  const _ExtendedStaffForm({required this.title, required this.nameLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -636,9 +661,7 @@ class _ExtendedStaffForm extends StatelessWidget {
     final passCtrl = TextEditingController();
 
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
       padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -810,16 +833,17 @@ class _FormFieldBox extends StatelessWidget {
         ),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(
-            color: Colors.white54,
-            fontSize: 13,
-          ),
+          hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
           suffixIcon: isDropdown
-              ? const Icon(Icons.expand_more_rounded,
-                  color: MobileAccountsPage.borderGold)
+              ? const Icon(
+                  Icons.expand_more_rounded,
+                  color: MobileAccountsPage.borderGold,
+                )
               : null,
         ),
       ),

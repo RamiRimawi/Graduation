@@ -23,7 +23,7 @@ class DeliveryPage extends StatelessWidget {
       backgroundColor: const Color(0xFF202020),
       body: Row(
         children: [
-          const Sidebar(),
+          const Sidebar(activeIndex: 3),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
@@ -141,20 +141,13 @@ class _DeliveryCard extends StatelessWidget {
         color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black38,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
+          BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircleAvatar(
-            radius: 49,
-            backgroundImage: AssetImage(imgPath),
-          ),
+          CircleAvatar(radius: 49, backgroundImage: AssetImage(imgPath)),
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),

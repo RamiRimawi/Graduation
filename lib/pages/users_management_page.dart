@@ -114,7 +114,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
       backgroundColor: bg,
       body: Row(
         children: [
-          const Sidebar(),
+          const Sidebar(activeIndex: 7),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),

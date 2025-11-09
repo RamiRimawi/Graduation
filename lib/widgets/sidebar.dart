@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 
-class Sidebar extends StatefulWidget {
-  const Sidebar({super.key});
+class Sidebar extends StatelessWidget {
+  /// index الزر الفعّال حالياً
+  ///
+  /// 0: Home
+  /// 1: Orders stock out (لسّه بدون صفحة)
+  /// 2: Inventory (لسّه بدون صفحة)
+  /// 3: Delivery
+  /// 4: Payment (لسّه بدون صفحة)
+  /// 5: Report  (لسّه بدون صفحة)
+  /// 6: Mobile Account
+  /// 7: Users Management
+  const Sidebar({super.key, required this.activeIndex});
 
-  @override
-  State<Sidebar> createState() => _SidebarState();
-}
-
-class _SidebarState extends State<Sidebar> {
-  int selectedTop = 0;
-  int? selectedBottom;
-
-  final List<String> topIcons =
-      List.generate(6, (i) => 'assets/icons/${i + 1}.png');
-  final List<String> bottomIcons =
-      List.generate(2, (i) => 'assets/icons/${i + 8}.png');
+  final int activeIndex;
 
   static const double barWidth = 26;
   static const double itemGap = 32;
+
+  List<String> get topIcons =>
+      List.generate(6, (i) => 'assets/icons/${i + 1}.png');
+
+  List<String> get bottomIcons =>
+      List.generate(2, (i) => 'assets/icons/${i + 8}.png');
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +39,7 @@ class _SidebarState extends State<Sidebar> {
         children: [
           const SizedBox(height: 16),
 
-          // ---------------- اللوجو ----------------
+          // اللوجو
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 5),
             child: Image.asset(
@@ -46,7 +51,7 @@ class _SidebarState extends State<Sidebar> {
 
           const SizedBox(height: 10),
 
-          // ---------------- الأيقونات العلوية ----------------
+          // الأيقونات العلوية
           SizedBox(
             width: barWidth,
             child: Column(
@@ -54,19 +59,19 @@ class _SidebarState extends State<Sidebar> {
                 for (int i = 0; i < topIcons.length; i++) ...[
                   _HoverIcon(
                     path: topIcons[i],
-                    isActive: selectedTop == i,
-                    onTap: () => setState(() => selectedTop = i),
+                    isActive: activeIndex == i,
+                    onTap: () => _onItemTap(context, i),
                   ),
                   if (i != topIcons.length - 1)
                     const SizedBox(height: itemGap),
-                ]
+                ],
               ],
             ),
           ),
 
           const Spacer(),
 
-          // ---------------- الأيقونات السفلية ----------------
+          // الأيقونات السفلية
           SizedBox(
             width: barWidth,
             child: Column(
@@ -76,8 +81,8 @@ class _SidebarState extends State<Sidebar> {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: _HoverIcon(
                       path: bottomIcons[i],
-                      isActive: selectedBottom == i,
-                      onTap: () => setState(() => selectedBottom = i),
+                      isActive: activeIndex == 6 + i,
+                      onTap: () => _onItemTap(context, 6 + i),
                     ),
                   ),
                   if (i != bottomIcons.length - 1)
@@ -89,7 +94,7 @@ class _SidebarState extends State<Sidebar> {
 
           const SizedBox(height: 22),
 
-          // ---------------- الصورة السفلية (صورتك) ----------------
+          // الصورة السفلية (Account)
           const _HoverProfileImage(),
 
           const SizedBox(height: 18),
@@ -97,9 +102,36 @@ class _SidebarState extends State<Sidebar> {
       ),
     );
   }
+
+  // التنقل بين الصفحات
+  void _onItemTap(BuildContext context, int index) {
+    if (index == activeIndex) return; // نفس الصفحة
+
+    String? routeName;
+
+    switch (index) {
+      case 0:
+        routeName = '/dashboard';
+        break;
+      case 3:
+        routeName = '/delivery';
+        break;
+      case 6:
+        routeName = '/mobileAccounts';
+        break;
+      case 7:
+        routeName = '/usersManagement';
+        break;
+      // باقي الأزرار ما عليهم صفحات لسه
+      default:
+        return;
+    }
+
+    Navigator.pushReplacementNamed(context, routeName);
+  }
 }
 
-// 🎨 Widget للأيقونات مع Hover أنيق
+// 🎨 أيقونة مع Hover + لون أزرق للـ active
 class _HoverIcon extends StatefulWidget {
   final String path;
   final bool isActive;
@@ -157,7 +189,7 @@ class _HoverIconState extends State<_HoverIcon> {
   }
 }
 
-// 🌟 الصورة السفلية (صورتك) مع Glow + Zoom عند المرور بالماوس
+// 🌟 الصورة السفلية (صورتك) مع Glow + Zoom عند الـ Hover
 class _HoverProfileImage extends StatefulWidget {
   const _HoverProfileImage({super.key});
 
@@ -181,7 +213,7 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           image: const DecorationImage(
-            image: AssetImage('assets/images/rami.jpg'), // 🔹 حط صورتك هون
+            image: AssetImage('assets/images/rami.jpg'),
             fit: BoxFit.cover,
           ),
           boxShadow: [
