@@ -163,7 +163,7 @@ class ProductDetailsPopup extends StatelessWidget {
                                     ),
                                   ),
                                   child: Image.asset(
-                                    'assets/icon/hand_shower.png',
+                                    'assets/icons/hand_shower.png',
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) {
                                       return const Center(

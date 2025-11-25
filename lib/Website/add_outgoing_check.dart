@@ -657,7 +657,7 @@ class _AddOutgoingCheckPageState extends State<AddOutgoingCheckPage> {
                                               borderRadius:
                                                   BorderRadius.circular(10),
                                               child: Image.asset(
-                                                'assets/icon/bank.png',
+                                                'assets/icons/bank.png',
                                                 fit: BoxFit.contain,
                                                 width:
                                                     null, // مهم جداً (عشان ما يتمدد)

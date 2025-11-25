@@ -7,6 +7,10 @@ import 'Website/order_detail_popup.dart';
 import 'Website/mobile_accounts_page.dart';
 import 'Website/users_management_page.dart';
 import 'Website/login_page.dart';
+import 'Website/payment_page.dart';
+import 'Website/report_page.dart';
+import 'Website/inventory_page.dart';
+import 'Website/stock_out_page.dart';
 
 void main() {
   runApp(const DolphinApp());
@@ -51,6 +55,10 @@ class DolphinApp extends StatelessWidget {
         '/delivery': (_) => const DeliveryPage(),
         '/mobileAccounts': (_) => const MobileAccountsPage(),
         '/usersManagement': (_) => const UsersManagementPage(),
+        '/payment': (_) => const PaymentPage(),
+        '/report': (_) => const ReportPage(),
+        '/inventory': (_) => const InventoryPage(),
+        '/stockOut': (_) => const OrdersPage(),
       },
     );
   }

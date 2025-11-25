@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 class Sidebar extends StatelessWidget {
   /// index الزر الفعّال حالياً
   ///
-  /// 0: Home
-  /// 1: Orders stock out (لسّه بدون صفحة)
-  /// 2: Inventory (لسّه بدون صفحة)
-  /// 3: Delivery
-  /// 4: Payment (لسّه بدون صفحة)
-  /// 5: Report  (لسّه بدون صفحة)
-  /// 6: Mobile Account
-  /// 7: Users Management
+  /// 1: Home
+  /// 2: Orders stock out (لسّه بدون صفحة)
+  /// 3: Inventory (لسّه بدون صفحة)
+  /// 4: Delivery
+  /// 5: Payment (لسّه بدون صفحة)
+  /// 6: Report  (لسّه بدون صفحة)
+  /// 8: Mobile Account
+  /// 9: Users Management
   const Sidebar({super.key, required this.activeIndex});
 
   final int activeIndex;
@@ -112,8 +112,20 @@ class Sidebar extends StatelessWidget {
       case 0:
         routeName = '/dashboard';
         break;
+      case 1:
+        routeName = '/stockOut';
+        break;
+      case 2:
+        routeName = '/inventory';
+        break;
       case 3:
         routeName = '/delivery';
+        break;
+      case 4:
+        routeName = '/payment';
+        break;
+      case 5:
+        routeName = '/report';
         break;
       case 6:
         routeName = '/mobileAccounts';

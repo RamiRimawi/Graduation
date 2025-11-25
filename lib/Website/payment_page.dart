@@ -382,7 +382,7 @@ class _TopStatsCards extends StatelessWidget {
         Expanded(
           child: _SingleStatCard(
             icon: Image.asset(
-              'assets/icon/doller.png',
+              'assets/icons/doller.png',
               width: 60,
               height: 60,
               fit: BoxFit.contain,
@@ -401,7 +401,7 @@ class _TopStatsCards extends StatelessWidget {
         Expanded(
           child: _SingleStatCard(
             icon: Image.asset(
-              'assets/icon/dontcheck.png',
+              'assets/icons/dontcheck.png',
               width: 50,
               height: 50,
               fit: BoxFit.contain,
@@ -1041,7 +1041,7 @@ void showSelectTransactionDialog(BuildContext context) {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Image.asset(
-                                      'assets/icon/incoming_payment.png',
+                                      'assets/icons/incoming_payment.png',
                                       width: 40,
                                       height: 40,
                                       fit: BoxFit.contain,
@@ -1083,7 +1083,7 @@ void showSelectTransactionDialog(BuildContext context) {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Image.asset(
-                                      'assets/icon/outgoing_payment.png',
+                                      'assets/icons/outgoing_payment.png',
                                       width: 40,
                                       height: 40,
                                       fit: BoxFit.contain,

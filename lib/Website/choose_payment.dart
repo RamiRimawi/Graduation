@@ -78,7 +78,7 @@ void showChoosePaymentMethodDialog(BuildContext context, String paymentType) {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Image.asset(
-                                      'assets/icon/cash.png',
+                                      'assets/icons/cash.png',
                                       width: 40,
                                       height: 40,
                                       fit: BoxFit.contain,
@@ -139,7 +139,7 @@ void showChoosePaymentMethodDialog(BuildContext context, String paymentType) {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Image.asset(
-                                      'assets/icon/check.png',
+                                      'assets/icons/check.png',
                                       width: 40,
                                       height: 40,
                                       fit: BoxFit.contain,
