@@ -1,13 +1,12 @@
-import 'package:dolphin/pages/delivery_page.dart';
+import 'package:dolphin/Website/delivery_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-
-import 'widgets/sidebar.dart';
-import 'widgets/order_detail_popup.dart';
-import 'pages/mobile_accounts_page.dart';
-import 'pages/users_management_page.dart';
-import 'pages/login_page.dart';
+import 'Website/sidebar.dart';
+import 'Website/order_detail_popup.dart';
+import 'Website/mobile_accounts_page.dart';
+import 'Website/users_management_page.dart';
+import 'Website/login_page.dart';
 
 void main() {
   runApp(const DolphinApp());

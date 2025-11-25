@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../widgets/sidebar.dart'; // نفس الشريط الجانبي
+import 'sidebar.dart'; // نفس الشريط الجانبي
 
 class DeliveryPage extends StatelessWidget {
   const DeliveryPage({super.key});

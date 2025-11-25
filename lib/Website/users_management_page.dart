@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../widgets/sidebar.dart';
+import 'sidebar.dart';
 
 class UsersManagementPage extends StatefulWidget {
   const UsersManagementPage({super.key});
