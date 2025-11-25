@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'Bar.dart';
 import 'package:dolphin/Mobile/Manager/CustomSendButton.dart';
 
-
 class SelectStaffSheet extends StatefulWidget {
   final void Function(String staffName) onSelected;
 
-  const SelectStaffSheet({
-    super.key,
-    required this.onSelected,
-  });
+  const SelectStaffSheet({super.key, required this.onSelected});
 
   @override
   State<SelectStaffSheet> createState() => _SelectStaffSheetState();
@@ -61,7 +57,9 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
                 child: Column(
                   children: [
                     Container(
-                      padding: isSelected ? const EdgeInsets.all(3) : EdgeInsets.zero,
+                      padding: isSelected
+                          ? const EdgeInsets.all(3)
+                          : EdgeInsets.zero,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: isSelected
@@ -79,8 +77,9 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,
-                        fontWeight:
-                            isSelected ? FontWeight.w900 : FontWeight.w700,
+                        fontWeight: isSelected
+                            ? FontWeight.w900
+                            : FontWeight.w700,
                       ),
                     ),
                   ],

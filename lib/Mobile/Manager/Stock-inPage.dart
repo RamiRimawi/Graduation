@@ -51,7 +51,6 @@ class _StockInPageState extends State<StockInPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // ===================== TITLE =====================
               const Text(
                 "Recommended orders",
@@ -65,7 +64,10 @@ class _StockInPageState extends State<StockInPage> {
 
               // ===================== SEARCH FIELD =====================
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 0,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(12),
@@ -77,10 +79,16 @@ class _StockInPageState extends State<StockInPage> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
                         decoration: const InputDecoration(
                           hintText: "Supplier Name",
-                          hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+                          hintStyle: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                          ),
                           border: InputBorder.none,
                         ),
                       ),
@@ -99,9 +107,10 @@ class _StockInPageState extends State<StockInPage> {
                     child: Text(
                       "Order ID #",
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -109,9 +118,10 @@ class _StockInPageState extends State<StockInPage> {
                     child: Text(
                       "Supplier Name",
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -120,9 +130,10 @@ class _StockInPageState extends State<StockInPage> {
                       "Inventory #",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -141,7 +152,9 @@ class _StockInPageState extends State<StockInPage> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(18),
@@ -211,7 +224,9 @@ class _StockInPageState extends State<StockInPage> {
 
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 12),
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.gold,
                       borderRadius: BorderRadius.circular(20),
@@ -219,8 +234,11 @@ class _StockInPageState extends State<StockInPage> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_box_rounded,
-                            color: Colors.black, size: 22),
+                        Icon(
+                          Icons.add_box_rounded,
+                          color: Colors.black,
+                          size: 22,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           "Create Order",

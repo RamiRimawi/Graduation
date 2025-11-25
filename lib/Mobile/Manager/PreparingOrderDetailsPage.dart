@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'Bar.dart';
 import 'order_item.dart';
 
-
 class PreparingOrderDetailsPage extends StatelessWidget {
   final String customerName;
   final List<OrderItem> items;
@@ -159,7 +158,7 @@ class PreparingOrderDetailsPage extends StatelessWidget {
                     "Preparing By:",
                     style: TextStyle(
                       color: Colors.white70,
-                      fontSize: 16,            // 🔥 أكبر من قبل
+                      fontSize: 16, // 🔥 أكبر من قبل
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -167,7 +166,7 @@ class PreparingOrderDetailsPage extends StatelessWidget {
 
                   // 🔥 صورة أكبر
                   CircleAvatar(
-                    radius: 28,                // كان 20 → الآن أكبر
+                    radius: 28, // كان 20 → الآن أكبر
                     backgroundImage: AssetImage(preparedByImage),
                   ),
 
@@ -178,13 +177,12 @@ class PreparingOrderDetailsPage extends StatelessWidget {
                     preparedByName,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 18,             // كان 15 → الآن أكبر
+                      fontSize: 18, // كان 15 → الآن أكبر
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
-
 
               const SizedBox(height: 30),
             ],

@@ -94,10 +94,7 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
                   ),
                   const SizedBox(width: kGap),
                   Expanded(
-                    child: StaffCard(
-                      data: staff,
-                      fixedHeight: staffCardHeight,
-                    ),
+                    child: StaffCard(data: staff, fixedHeight: staffCardHeight),
                   ),
                 ],
               ),
@@ -247,16 +244,13 @@ class _StaffRow extends StatelessWidget {
   final String name;
   final int inv;
   final bool online;
-  const _StaffRow({
-    required this.name,
-    required this.inv,
-    this.online = true,
-  });
+  const _StaffRow({required this.name, required this.inv, this.online = true});
 
   @override
   Widget build(BuildContext context) {
-    final String initial =
-        name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+    final String initial = name.isNotEmpty
+        ? name.substring(0, 1).toUpperCase()
+        : '?';
 
     return Container(
       decoration: BoxDecoration(

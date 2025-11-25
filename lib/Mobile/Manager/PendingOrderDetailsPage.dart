@@ -3,7 +3,6 @@ import 'Bar.dart';
 import 'SelectStaffSheet.dart';
 import 'order_item.dart';
 
-
 class OrderDetailsPage extends StatefulWidget {
   final String customerName;
   final List<OrderItem> items;
@@ -225,10 +224,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               const SizedBox(height: 10),
 
               // SEND BUTTON
-              CustomSendButton(
-                text: "s  e  n  d",
-                onTap: _openStaffSelector,
-              ),
+              CustomSendButton(text: "s  e  n  d", onTap: _openStaffSelector),
             ],
           ),
         ),

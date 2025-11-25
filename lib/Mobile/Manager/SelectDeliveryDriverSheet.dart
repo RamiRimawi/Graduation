@@ -5,13 +5,11 @@ import 'package:dolphin/Mobile/Manager/CustomSendButton.dart';
 class SelectDeliveryDriverSheet extends StatefulWidget {
   final void Function(String driverName) onSelected;
 
-  const SelectDeliveryDriverSheet({
-    super.key,
-    required this.onSelected,
-  });
+  const SelectDeliveryDriverSheet({super.key, required this.onSelected});
 
   @override
-  State<SelectDeliveryDriverSheet> createState() => _SelectDeliveryDriverSheetState();
+  State<SelectDeliveryDriverSheet> createState() =>
+      _SelectDeliveryDriverSheetState();
 }
 
 class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
@@ -58,7 +56,9 @@ class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
                 child: Column(
                   children: [
                     Container(
-                      padding: isSelected ? const EdgeInsets.all(3) : EdgeInsets.zero,
+                      padding: isSelected
+                          ? const EdgeInsets.all(3)
+                          : EdgeInsets.zero,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: isSelected
@@ -76,7 +76,9 @@ class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                        fontWeight: isSelected
+                            ? FontWeight.w900
+                            : FontWeight.w700,
                       ),
                     ),
                   ],

@@ -17,14 +17,13 @@ class _ManagerShellState extends State<ManagerShell> {
   int _currentIndex = 0;
 
   // الصفحات (ممكن لاحقاً تستبدل الـ Placeholder بصفحات حقيقية)
- final List<Widget> _pages = [
-  const HomeManagerPage(),
-  const StockOutPage(),
-  StockInPage(), // مش const
-  NotificationPage(),
-  const _PlaceholderPage(title: 'Account'),
-];
-
+  final List<Widget> _pages = [
+    const HomeManagerPage(),
+    const StockOutPage(),
+    StockInPage(), // مش const
+    NotificationPage(),
+    const _PlaceholderPage(title: 'Account'),
+  ];
 
   void _onNavTap(int index) {
     setState(() => _currentIndex = index);

@@ -5,11 +5,7 @@ class CustomSendButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
 
-  const CustomSendButton({
-    super.key,
-    required this.text,
-    required this.onTap,
-  });
+  const CustomSendButton({super.key, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
