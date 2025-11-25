@@ -2,10 +2,6 @@ import 'package:dolphin/Website/delivery_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-<<<<<<< HEAD
-
-=======
->>>>>>> c97a9b1aebc28f061a6c93ac70fb040a0a94cb08
 import 'Website/sidebar.dart';
 import 'Website/order_detail_popup.dart';
 import 'Website/mobile_accounts_page.dart';

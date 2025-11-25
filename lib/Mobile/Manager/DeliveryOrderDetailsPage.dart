@@ -22,7 +22,6 @@ class DeliveryOrderDetailsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // Back
               Row(
                 children: [
@@ -49,19 +48,25 @@ class DeliveryOrderDetailsPage extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 5,
-                    child: Text("Product Name",
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Product Name",
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                   Expanded(
                     flex: 3,
-                    child: Text("Brand",
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Brand",
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                   Expanded(
                     flex: 2,
-                    child: Text("Qty",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Qty",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -79,7 +84,9 @@ class DeliveryOrderDetailsPage extends StatelessWidget {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(16),
@@ -87,30 +94,39 @@ class DeliveryOrderDetailsPage extends StatelessWidget {
                       child: Row(
                         children: [
                           Expanded(
-                              flex: 5,
-                              child: Text(item.name,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 14))),
+                            flex: 5,
+                            child: Text(
+                              item.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
                           Expanded(
-                              flex: 3,
-                              child: Text(item.brand,
-                                  style: const TextStyle(
-                                      color: Colors.white70, fontSize: 13))),
+                            flex: 3,
+                            child: Text(
+                              item.brand,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                           Expanded(
                             flex: 2,
-                            
-                              child: Center(
-                                child: Text(
-                                  "${item.qty} ${item.unit}",
-                                  style: const TextStyle(
-                                    color: AppColors.gold,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+
+                            child: Center(
+                              child: Text(
+                                "${item.qty} ${item.unit}",
+                                style: const TextStyle(
+                                  color: AppColors.gold,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
-                            
-                          )
+                            ),
+                          ),
                         ],
                       ),
                     );

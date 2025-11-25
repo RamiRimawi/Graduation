@@ -22,7 +22,6 @@ class DriverOrdersPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // BACK + TITLE
               Row(
                 children: [
@@ -73,7 +72,7 @@ class DriverOrdersPage extends StatelessWidget {
                               color: Colors.black26,
                               blurRadius: 6,
                               offset: Offset(0, 3),
-                            )
+                            ),
                           ],
                         ),
                         child: Row(
@@ -85,7 +84,9 @@ class DriverOrdersPage extends StatelessWidget {
                                 const Text(
                                   "ID #",
                                   style: TextStyle(
-                                      color: Colors.white70, fontSize: 11),
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                  ),
                                 ),
                                 Text(
                                   "${order["id"]}",
@@ -108,7 +109,9 @@ class DriverOrdersPage extends StatelessWidget {
                                   const Text(
                                     "Customer Name",
                                     style: TextStyle(
-                                        color: Colors.white70, fontSize: 11),
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                   Text(
                                     order["customer"],
@@ -125,7 +128,9 @@ class DriverOrdersPage extends StatelessWidget {
                             // COUNT OF PRODUCTS
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.cardAlt,
                                 borderRadius: BorderRadius.circular(14),
@@ -143,7 +148,9 @@ class DriverOrdersPage extends StatelessWidget {
                                   const Text(
                                     "Product",
                                     style: TextStyle(
-                                        color: AppColors.gold, fontSize: 11),
+                                      color: AppColors.gold,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -154,7 +161,7 @@ class DriverOrdersPage extends StatelessWidget {
                     );
                   },
                 ),
-              )
+              ),
             ],
           ),
         ),

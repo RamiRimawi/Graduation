@@ -72,8 +72,9 @@ class _AccountPageState extends State<AccountPage> {
                             boxShadow: _isPressed
                                 ? [
                                     BoxShadow(
-                                      color:
-                                          Colors.blueAccent.withOpacity(0.45),
+                                      color: Colors.blueAccent.withOpacity(
+                                        0.45,
+                                      ),
                                       blurRadius: 30,
                                       spreadRadius: 5,
                                       offset: const Offset(0, 0),
@@ -155,11 +156,7 @@ class _AccountPageState extends State<AccountPage> {
                   color: const Color(0xFFE74C3C),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(
-                  Icons.logout,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                child: const Icon(Icons.logout, color: Colors.white, size: 28),
               ),
             ),
           ),

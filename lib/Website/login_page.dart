@@ -5,11 +5,7 @@ class LoginPage extends StatelessWidget {
 
   // ألوان الواجهة
   static const _bg = Color(0xFF0E1115); // خلفية غامقة
-  static const _panel = Color(0xFF232427); // لون الحقول
   static const _gold = Color(0xFFF7D348); // زر Login الأصفر
-  static const _blue = Color(
-    0xFF0E3A6B,
-  ); // ✅ أعدناه لمنع خطأ hot reload (حتى لو غير مستخدم)
 
   @override
   Widget build(BuildContext context) {

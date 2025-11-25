@@ -193,10 +193,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
             // خط تحت الهيدر
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
-              child: Container(
-                height: 1,
-                color: const Color(0xFFFFFFFF),
-              ),
+              child: Container(height: 1, color: const Color(0xFFFFFFFF)),
             ),
 
             //========== LIST OF PRODUCTS ==========
@@ -264,7 +261,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                     child: Container(
                                       width: 60,
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                        vertical: 12,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFB7A447),
                                         borderRadius: BorderRadius.circular(14),
@@ -337,9 +335,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _isUpdateMode
-                            ? 'Send  Update'
-                            : ' Done ',
+                        _isUpdateMode ? 'Send  Update' : ' Done ',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -350,7 +346,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                       Icon(
                         Icons.arrow_right_alt,
                         size: 50,
-                        color:  Colors.black, // أبيض مع الأزرق، أسود مع الذهبي
+                        color: Colors.black, // أبيض مع الأزرق، أسود مع الذهبي
                       ),
                     ],
                   ),
@@ -382,10 +378,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
           onTap: _onItemTapped,
           type: BottomNavigationBarType.fixed,
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(
               icon: Icon(Icons.account_circle),
               label: 'Account',

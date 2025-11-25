@@ -16,8 +16,7 @@ class CreateStockInOrderPage extends StatefulWidget {
   const CreateStockInOrderPage({super.key});
 
   @override
-  State<CreateStockInOrderPage> createState() =>
-      _CreateStockInOrderPageState();
+  State<CreateStockInOrderPage> createState() => _CreateStockInOrderPageState();
 }
 
 class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
@@ -65,9 +64,10 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
               title: const Text(
                 "Select Products",
                 style: TextStyle(
-                    color: AppColors.gold,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18),
+                  color: AppColors.gold,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
               ),
 
               content: SizedBox(
@@ -77,8 +77,10 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   children: [
                     // ===== SEARCH FIELD =====
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.cardAlt,
                         borderRadius: BorderRadius.circular(10),
@@ -146,22 +148,29 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                                         Text(
                                           p.brand,
                                           style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12),
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
 
-                                  Text("${p.availableQty}",
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800)),
+                                  Text(
+                                    "${p.availableQty}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
                                   const SizedBox(width: 6),
-                                  Text(p.unit,
-                                      style: const TextStyle(
-                                          color: Colors.white70)),
+                                  Text(
+                                    p.unit,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -199,7 +208,9 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   child: const Text(
                     "ADD",
                     style: TextStyle(
-                        color: Colors.black, fontWeight: FontWeight.w800),
+                      color: Colors.black,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
@@ -229,9 +240,10 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
               const Text(
                 "Create Stock-in Order",
                 style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900),
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -251,13 +263,13 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                       "Select Supplier",
                       style: TextStyle(color: Colors.white54),
                     ),
-                    icon: const Icon(Icons.arrow_drop_down,
-                        color: AppColors.gold),
-                    items: [
-                      "Ahmad Nizar",
-                      "Saed Rimawi",
-                      "Akef Al Asmar"
-                    ].map((s) {
+                    icon: const Icon(
+                      Icons.arrow_drop_down,
+                      color: AppColors.gold,
+                    ),
+                    items: ["Ahmad Nizar", "Saed Rimawi", "Akef Al Asmar"].map((
+                      s,
+                    ) {
                       return DropdownMenuItem(
                         value: s,
                         child: Text(
@@ -280,19 +292,25 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                 children: [
                   Expanded(
                     flex: 4,
-                    child: Text("Product Name",
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Product Name",
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                   Expanded(
                     flex: 3,
-                    child: Text("Brand",
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Brand",
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                   Expanded(
                     flex: 3,
-                    child: Text("Quantity",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      "Quantity",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -307,8 +325,9 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   itemCount: selectedProducts.length,
                   itemBuilder: (_, i) {
                     final p = selectedProducts[i];
-                    final controller =
-                        TextEditingController(text: p["qty"].toString());
+                    final controller = TextEditingController(
+                      text: p["qty"].toString(),
+                    );
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -325,8 +344,9 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                             child: Text(
                               p["name"],
                               style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700),
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
 
@@ -360,8 +380,10 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                                       controller: controller,
                                       onChanged: (v) {
                                         if (v.isNotEmpty) {
-                                          setState(() => p["qty"] =
-                                              int.tryParse(v) ?? p["qty"]);
+                                          setState(
+                                            () => p["qty"] =
+                                                int.tryParse(v) ?? p["qty"],
+                                          );
                                         }
                                       },
                                       textAlign: TextAlign.center,
@@ -372,9 +394,10 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                                         fontWeight: FontWeight.w900,
                                       ),
                                       decoration: const InputDecoration(
-                                          border: InputBorder.none,
-                                          isCollapsed: true,
-                                          contentPadding: EdgeInsets.zero),
+                                        border: InputBorder.none,
+                                        isCollapsed: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
                                   ),
 
@@ -383,8 +406,9 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                                   Text(
                                     p["unit"],
                                     style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w600),
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
 
                                   const SizedBox(width: 8),
@@ -452,8 +476,11 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                             : AppColors.gold,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.add,
-                          color: Colors.black, size: 28),
+                      child: const Icon(
+                        Icons.add,
+                        color: Colors.black,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ],
