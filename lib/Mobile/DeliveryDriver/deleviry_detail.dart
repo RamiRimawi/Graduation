@@ -190,10 +190,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
             // خط تحت الهيدر
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
-              child: Container(
-                height: 1,
-                color: const Color(0xFFFFFFFF),
-              ),
+              child: Container(height: 1, color: const Color(0xFFFFFFFF)),
             ),
 
             //========== LIST OF PRODUCTS ==========
@@ -261,7 +258,8 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                                     child: Container(
                                       width: 60,
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                        vertical: 12,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFB7A447),
                                         borderRadius: BorderRadius.circular(14),
@@ -364,7 +362,9 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                               TextButton(
                                 onPressed: () {
                                   Navigator.pop(context); // Close dialog
-                                  Navigator.pop(context); // Go back to previous page
+                                  Navigator.pop(
+                                    context,
+                                  ); // Go back to previous page
                                 },
                                 child: const Text(
                                   'Confirm',
@@ -387,7 +387,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                         'Confirm Delivery',
                         style: TextStyle(
                           fontSize: 21,
-                          color: Color( 0xFFFFFFFF),
+                          color: Color(0xFFFFFFFF),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -421,10 +421,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
           onTap: _onItemTapped,
           type: BottomNavigationBarType.fixed,
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(
               icon: Icon(Icons.account_circle),
               label: 'Account',

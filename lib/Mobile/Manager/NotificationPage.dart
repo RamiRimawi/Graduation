@@ -8,22 +8,22 @@ class NotificationPage extends StatelessWidget {
     {
       "img": "assets/images/rami.jpg",
       "title": "Rami Rimawi",
-      "msg": "Send you a updated order"
+      "msg": "Send you a updated order",
     },
     {
       "img": "assets/images/assi.jpg",
       "title": "Moath Moudi",
-      "msg": "prepared the order that assigned to him"
+      "msg": "prepared the order that assigned to him",
     },
     {
       "img": "assets/images/Logo.png",
       "title": "Attention:",
-      "msg": 'Product "Name" has reached the minimum allowed quantity'
+      "msg": 'Product "Name" has reached the minimum allowed quantity',
     },
     {
       "img": "assets/images/ameer.jpg",
       "title": "Mohammad Assi",
-      "msg": "Send you new order"
+      "msg": "Send you new order",
     },
   ];
 
@@ -101,7 +101,7 @@ class NotificationPage extends StatelessWidget {
                     );
                   },
                 ),
-              )
+              ),
             ],
           ),
         ),

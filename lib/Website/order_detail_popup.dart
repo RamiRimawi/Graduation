@@ -383,7 +383,12 @@ class OrderDetailPopup {
                                               22,
                                             ),
                                             borderSide: const BorderSide(
-                                              color: Color.fromARGB(255, 255, 222, 74),
+                                              color: Color.fromARGB(
+                                                255,
+                                                255,
+                                                222,
+                                                74,
+                                              ),
                                               width: 1.8,
                                             ),
                                           ),

@@ -8,7 +8,7 @@ class AppColors {
   static const yellow = Color(0xFFFFE14D);
   static const bgDark = Color(0xFF202020);
   static const shadow = Colors.black26;
-  static const cardAlt = Color(0xFF262626); 
+  static const cardAlt = Color(0xFF262626);
 }
 
 class BottomNav extends StatelessWidget {

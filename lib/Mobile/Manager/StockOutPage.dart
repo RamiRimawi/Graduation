@@ -6,9 +6,6 @@ import 'order_item.dart';
 import 'PreparedOrderDetailsPage.dart';
 import 'DriverOrdersPage.dart';
 
-
-
-
 // ====================== MODELS ======================
 
 class OrderInfo {
@@ -37,7 +34,6 @@ class DeliveryDriver {
   });
 }
 
-
 // ====================== PAGE ======================
 
 class StockOutPage extends StatefulWidget {
@@ -52,31 +48,55 @@ class _StockOutPageState extends State<StockOutPage> {
   int _currentTab = 0;
 
   final List<OrderInfo> _orders = [
-    OrderInfo(id: 26, customerName: 'Ahmad Nizar', inventoryNo: 1, supplierName: 'Ahmad Nizar'),
-    OrderInfo(id: 27, customerName: 'Saed Rimawi', inventoryNo: 1, supplierName: 'Saed Rimawi'),
-    OrderInfo(id: 30, customerName: 'Akef Al Asmar', inventoryNo: 2, supplierName: 'Akef Al Asmar'),
-    OrderInfo(id: 28, customerName: 'Nizar Fares', inventoryNo: 2, supplierName: 'Nizar Fares'),
-    OrderInfo(id: 20, customerName: 'Eyas Barghouthi', inventoryNo: 1, supplierName: 'Eyas Barghouthi'),
+    OrderInfo(
+      id: 26,
+      customerName: 'Ahmad Nizar',
+      inventoryNo: 1,
+      supplierName: 'Ahmad Nizar',
+    ),
+    OrderInfo(
+      id: 27,
+      customerName: 'Saed Rimawi',
+      inventoryNo: 1,
+      supplierName: 'Saed Rimawi',
+    ),
+    OrderInfo(
+      id: 30,
+      customerName: 'Akef Al Asmar',
+      inventoryNo: 2,
+      supplierName: 'Akef Al Asmar',
+    ),
+    OrderInfo(
+      id: 28,
+      customerName: 'Nizar Fares',
+      inventoryNo: 2,
+      supplierName: 'Nizar Fares',
+    ),
+    OrderInfo(
+      id: 20,
+      customerName: 'Eyas Barghouthi',
+      inventoryNo: 1,
+      supplierName: 'Eyas Barghouthi',
+    ),
   ];
 
- final List<DeliveryDriver> _drivers = [
-  DeliveryDriver(
-    name: 'Rami Rimawi',
-    assignedOrders: 8,
-    image: "assets/images/rami.jpg",
-  ),
-  DeliveryDriver(
-    name: 'Mohammad Assi',
-    assignedOrders: 0,
-    image: "assets/images/assi.jpg",
-  ),
-  DeliveryDriver(
-    name: 'Ameer Yasin',
-    assignedOrders: 2,
-    image: "assets/images/ameer.jpg",
-  ),
-];
-
+  final List<DeliveryDriver> _drivers = [
+    DeliveryDriver(
+      name: 'Rami Rimawi',
+      assignedOrders: 8,
+      image: "assets/images/rami.jpg",
+    ),
+    DeliveryDriver(
+      name: 'Mohammad Assi',
+      assignedOrders: 0,
+      image: "assets/images/assi.jpg",
+    ),
+    DeliveryDriver(
+      name: 'Ameer Yasin',
+      assignedOrders: 2,
+      image: "assets/images/ameer.jpg",
+    ),
+  ];
 
   void _onTabSelected(int index) {
     setState(() => _currentTab = index);
@@ -138,11 +158,19 @@ class _PendingSection extends StatelessWidget {
         children: [
           const Text(
             'Pending Order',
-            style: TextStyle(color: AppColors.gold, fontSize: 20, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: AppColors.gold,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 16),
 
-          const _HeaderRow(left: 'Order ID #', middle: 'Customer Name', right: ''),
+          const _HeaderRow(
+            left: 'Order ID #',
+            middle: 'Customer Name',
+            right: '',
+          ),
 
           const SizedBox(height: 10),
 
@@ -161,7 +189,12 @@ class _PendingSection extends StatelessWidget {
                           customerName: o.customerName,
                           items: [
                             OrderItem('Hand Shower', 'GROHE', 'cm', 1),
-                            OrderItem('Freestanding Bathtub', 'Royal', 'pcs', 1),
+                            OrderItem(
+                              'Freestanding Bathtub',
+                              'Royal',
+                              'pcs',
+                              1,
+                            ),
                             OrderItem('Wall-Hung Toilet', 'GROHE', 'cm', 1),
                           ],
                         ),
@@ -225,7 +258,12 @@ class _PreparingSection extends StatelessWidget {
                           customerName: o.customerName,
                           items: [
                             OrderItem("Hand Shower", "GROHE", "cm", 1),
-                            OrderItem("Freestanding Bathtub", "Royal", "pcs", 1),
+                            OrderItem(
+                              "Freestanding Bathtub",
+                              "Royal",
+                              "pcs",
+                              1,
+                            ),
                             OrderItem("Kitchen Sink", "Royal", "cm", 1),
                           ],
                           preparedByName: "Ayman Al Asmar",
@@ -296,7 +334,12 @@ class _PreparedSection extends StatelessWidget {
                           preparedByImage: "assets/images/ayman.jpg",
                           items: [
                             OrderItem("Hand Shower", "GROHE", "cm", 1),
-                            OrderItem("Freestanding Bathtub", "Royal", "pcs", 1),
+                            OrderItem(
+                              "Freestanding Bathtub",
+                              "Royal",
+                              "pcs",
+                              1,
+                            ),
                             OrderItem("Wall-Hung Toilet", "GROHE", "cm", 1),
                           ],
                         ),
@@ -372,16 +415,21 @@ class _DeliverySection extends StatelessWidget {
                               "items": [
                                 OrderItem("Hand Shower", "GROHE", "cm", 1),
                                 OrderItem("Kitchen Sink", "Royal", "pcs", 2),
-                              ]
+                              ],
                             },
                             {
                               "id": 22,
                               "customer": "Nizar Ahamd",
                               "items": [
                                 OrderItem("Wall-Hung Toilet", "GROHE", "cm", 1),
-                                OrderItem("Freestanding Bathtub", "Royal", "pcs", 1),
-                              ]
-                            }
+                                OrderItem(
+                                  "Freestanding Bathtub",
+                                  "Royal",
+                                  "pcs",
+                                  1,
+                                ),
+                              ],
+                            },
                           ],
                         ),
                       ),
@@ -402,7 +450,11 @@ class _DeliverySection extends StatelessWidget {
 
 class _HeaderRow extends StatelessWidget {
   final String left, middle, right;
-  const _HeaderRow({required this.left, required this.middle, required this.right});
+  const _HeaderRow({
+    required this.left,
+    required this.middle,
+    required this.right,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -412,15 +464,27 @@ class _HeaderRow extends StatelessWidget {
           children: [
             Expanded(
               flex: 3,
-              child: Text(left,
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+              child: Text(
+                left,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
             Expanded(
               flex: 6,
               child: Padding(
                 padding: const EdgeInsets.only(left: 42),
-                child: Text(middle,
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                child: Text(
+                  middle,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -432,7 +496,11 @@ class _HeaderRow extends StatelessWidget {
                       child: Text(
                         right,
                         textAlign: TextAlign.right,
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
             ),
@@ -458,30 +526,48 @@ class _OrderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+        ],
       ),
       child: Row(
         children: [
           SizedBox(
             width: 52,
             child: Center(
-              child: Text(left,
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+              child: Text(
+                left,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
           Expanded(
             child: Text(
               middle,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           if (right != null)
             SizedBox(
               width: 50,
-              child: Text(right!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+              child: Text(
+                right!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
         ],
       ),
@@ -497,32 +583,18 @@ class _DeliveryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = driver.name
-        .split(" ")
-        .map((e) => e[0])
-        .take(2)
-        .join();
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 6,
-            offset: Offset(0, 3),
-          )
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
         ],
       ),
       child: Row(
         children: [
-
-          CircleAvatar(
-            radius: 26,
-            backgroundImage: AssetImage(driver.image),
-          ),
+          CircleAvatar(radius: 26, backgroundImage: AssetImage(driver.image)),
 
           const SizedBox(width: 12),
 
@@ -557,10 +629,7 @@ class _DeliveryCard extends StatelessWidget {
                 ),
                 const Text(
                   'Assign',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ],
             ),
@@ -575,7 +644,10 @@ class _StockOutStatusBar extends StatelessWidget {
   final int currentIndex;
   final void Function(int) onChanged;
 
-  const _StockOutStatusBar({required this.currentIndex, required this.onChanged});
+  const _StockOutStatusBar({
+    required this.currentIndex,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -590,7 +662,9 @@ class _StockOutStatusBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(26),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Row(
@@ -605,12 +679,18 @@ class _StockOutStatusBar extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.gold.withOpacity(0.18) : Colors.transparent,
+                  color: active
+                      ? AppColors.gold.withOpacity(0.18)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
                   children: [
-                    Icon(data.icon, size: 20, color: active ? AppColors.gold : Colors.white),
+                    Icon(
+                      data.icon,
+                      size: 20,
+                      color: active ? AppColors.gold : Colors.white,
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       data.label,
@@ -619,7 +699,7 @@ class _StockOutStatusBar extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),

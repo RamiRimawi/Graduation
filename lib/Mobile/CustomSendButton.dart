@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-import 'Bar.dart';
+import 'Manager/Bar.dart';
 
 class CustomSendButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
 
-  const CustomSendButton({
-    super.key,
-    required this.text,
-    required this.onTap,
-  });
+  const CustomSendButton({super.key, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
