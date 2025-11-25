@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../widgets/sidebar.dart';
+import 'sidebar.dart';
 
 class UsersManagementPage extends StatefulWidget {
   const UsersManagementPage({super.key});
@@ -145,7 +145,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                         indicatorWeight: 2.5,
                         indicatorSize: TabBarIndicatorSize.label,
                         dividerColor: Colors.transparent,
-                        overlayColor: MaterialStateProperty.all(
+                        overlayColor: WidgetStateProperty.all(
                           Colors.transparent,
                         ),
                         labelStyle: GoogleFonts.roboto(
@@ -180,7 +180,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                                   indicatorWeight: 2.5,
                                   indicatorSize: TabBarIndicatorSize.label,
                                   dividerColor: Colors.transparent,
-                                  overlayColor: MaterialStateProperty.all(
+                                  overlayColor: WidgetStateProperty.all(
                                     Colors.transparent,
                                   ),
                                   labelStyle: GoogleFonts.roboto(
@@ -207,7 +207,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                                   indicatorWeight: 2.5,
                                   indicatorSize: TabBarIndicatorSize.label,
                                   dividerColor: Colors.transparent,
-                                  overlayColor: MaterialStateProperty.all(
+                                  overlayColor: WidgetStateProperty.all(
                                     Colors.transparent,
                                   ),
                                   labelStyle: GoogleFonts.roboto(

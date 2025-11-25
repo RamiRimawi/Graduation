@@ -1,13 +1,13 @@
-import 'package:dolphin/pages/delivery_page.dart';
+import 'package:dolphin/Website/delivery_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-import 'widgets/sidebar.dart';
-import 'widgets/order_detail_popup.dart';
-import 'pages/mobile_accounts_page.dart';
-import 'pages/users_management_page.dart';
-import 'pages/login_page.dart';
+import 'Website/sidebar.dart';
+import 'Website/order_detail_popup.dart';
+import 'Website/mobile_accounts_page.dart';
+import 'Website/users_management_page.dart';
+import 'Website/login_page.dart';
 
 void main() {
   runApp(const DolphinApp());
@@ -31,10 +31,11 @@ class DolphinApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: bg,
-        textTheme: GoogleFonts.robotoTextTheme()
-            .apply(bodyColor: white, displayColor: white),
+        textTheme: GoogleFonts.robotoTextTheme().apply(
+          bodyColor: white,
+          displayColor: white,
+        ),
         colorScheme: ColorScheme.dark(
-          background: bg,
           surface: panel,
           primary: gold,
           secondary: blue,
@@ -117,7 +118,7 @@ class _TopStepsRow extends StatelessWidget {
 
 class _ArrowSpacer extends StatelessWidget {
   final double width;
-  const _ArrowSpacer({super.key, required this.width});
+  const _ArrowSpacer({required this.width});
 
   @override
   Widget build(BuildContext context) {
@@ -125,8 +126,11 @@ class _ArrowSpacer extends StatelessWidget {
       width: width,
       height: _TopStepsRow.cardH,
       child: const Center(
-        child: Icon(Icons.arrow_forward_ios_rounded,
-            color: Color(0xFF50B2E7), size: 20),
+        child: Icon(
+          Icons.arrow_forward_ios_rounded,
+          color: Color(0xFF50B2E7),
+          size: 20,
+        ),
       ),
     );
   }
@@ -135,7 +139,7 @@ class _ArrowSpacer extends StatelessWidget {
 class _StepCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  const _StepCard({super.key, required this.title, required this.icon});
+  const _StepCard({required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +155,7 @@ class _StepCard extends StatelessWidget {
               color: Colors.black45,
               offset: Offset(0, 6),
               blurRadius: 10,
-            )
+            ),
           ],
         ),
         child: Column(
@@ -159,8 +163,10 @@ class _StepCard extends StatelessWidget {
           children: [
             Icon(icon, size: 26, color: Colors.amberAccent),
             const SizedBox(height: 6),
-            const Text('15',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            const Text(
+              '15',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
             const Text('Order', style: TextStyle(color: Colors.grey)),
             Text(
               title,
@@ -218,7 +224,10 @@ class _ActiveWorkersCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
+            color: Colors.black54,
+            offset: Offset(0, 6),
+            blurRadius: 10,
+          ),
         ],
       ),
       padding: const EdgeInsets.all(20),
@@ -271,8 +280,10 @@ class _ActiveWorkersCard extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: Colors.greenAccent,
                               shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: Colors.black, width: 1.5),
+                              border: Border.all(
+                                color: Colors.black,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
@@ -333,7 +344,10 @@ class _OrdersCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black54, offset: Offset(0, 6), blurRadius: 10)
+            color: Colors.black54,
+            offset: Offset(0, 6),
+            blurRadius: 10,
+          ),
         ],
       ),
       padding: const EdgeInsets.all(20),
@@ -404,8 +418,7 @@ class _OrdersCard extends StatelessWidget {
   }
 
   Widget _orderRow(BuildContext context, List<String> r) {
-    final typeColor =
-        r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
+    final typeColor = r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
 
     return InkWell(
       onTap: () {
@@ -420,7 +433,7 @@ class _OrdersCard extends StatelessWidget {
               "brand": "GROHE",
               "price": "26\$",
               "quantity": 26,
-              "total": "26\$"
+              "total": "26\$",
             },
             {
               "id": 2,
@@ -428,7 +441,7 @@ class _OrdersCard extends StatelessWidget {
               "brand": "Royal",
               "price": "150\$",
               "quantity": 30,
-              "total": "150\$"
+              "total": "150\$",
             },
             {
               "id": 3,
@@ -436,7 +449,7 @@ class _OrdersCard extends StatelessWidget {
               "brand": "GROHE",
               "price": "200\$",
               "quantity": 30,
-              "total": "200\$"
+              "total": "200\$",
             },
           ],
         );
@@ -446,7 +459,11 @@ class _OrdersCard extends StatelessWidget {
           color: const Color(0xFF252525),
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
-            BoxShadow(color: Colors.black26, offset: Offset(0, 4), blurRadius: 8)
+            BoxShadow(
+              color: Colors.black26,
+              offset: Offset(0, 4),
+              blurRadius: 8,
+            ),
           ],
         ),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
@@ -465,10 +482,7 @@ class _OrdersCard extends StatelessWidget {
               flex: 2,
               child: Text(
                 r[1],
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: typeColor,
-                ),
+                style: TextStyle(fontWeight: FontWeight.bold, color: typeColor),
               ),
             ),
             Expanded(

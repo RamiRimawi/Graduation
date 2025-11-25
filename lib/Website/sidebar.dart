@@ -62,8 +62,7 @@ class Sidebar extends StatelessWidget {
                     isActive: activeIndex == i,
                     onTap: () => _onItemTap(context, i),
                   ),
-                  if (i != topIcons.length - 1)
-                    const SizedBox(height: itemGap),
+                  if (i != topIcons.length - 1) const SizedBox(height: itemGap),
                 ],
               ],
             ),
@@ -159,8 +158,8 @@ class _HoverIconState extends State<_HoverIcon> {
     final color = widget.isActive
         ? activeColor
         : _isHovered
-            ? hoverColor
-            : defaultColor;
+        ? hoverColor
+        : defaultColor;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -191,7 +190,7 @@ class _HoverIconState extends State<_HoverIcon> {
 
 // 🌟 الصورة السفلية (صورتك) مع Glow + Zoom عند الـ Hover
 class _HoverProfileImage extends StatefulWidget {
-  const _HoverProfileImage({super.key});
+  const _HoverProfileImage();
 
   @override
   State<_HoverProfileImage> createState() => _HoverProfileImageState();
@@ -218,8 +217,9 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF50B2E7)
-                  .withOpacity(_isHovered ? 0.35 : 0.1),
+              color: const Color(
+                0xFF50B2E7,
+              ).withOpacity(_isHovered ? 0.35 : 0.1),
               blurRadius: _isHovered ? 22 : 10,
               spreadRadius: _isHovered ? 3 : 1,
             ),
