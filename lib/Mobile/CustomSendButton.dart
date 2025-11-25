@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Bar.dart';
+import 'Manager/Bar.dart';
 
 class CustomSendButton extends StatelessWidget {
   final String text;
