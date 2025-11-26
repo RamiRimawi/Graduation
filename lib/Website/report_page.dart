@@ -380,8 +380,7 @@ class _ProductRow extends StatefulWidget {
     required this.category,
     required this.price,
     required this.qty,
-    Key? key,
-  }) : super(key: key);
+  });
 
   @override
   State<_ProductRow> createState() => _ProductRowState();

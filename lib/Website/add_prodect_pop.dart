@@ -276,7 +276,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
     required Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       style: const TextStyle(color: Colors.white, fontSize: 16),
       dropdownColor: const Color(0xFF2D2D2D),
       decoration: InputDecoration(

@@ -157,7 +157,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
                                       _label("Customer Name"),
                                       const SizedBox(height: 10),
                                       DropdownButtonFormField<String>(
-                                        value: selectedCustomer,
+                                        initialValue: selectedCustomer,
                                         dropdownColor: AppColors.card,
                                         style: const TextStyle(
                                           color: AppColors.white,
@@ -239,7 +239,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
                                                 _label("Bank Name"),
                                                 const SizedBox(height: 10),
                                                 DropdownButtonFormField<String>(
-                                                  value: selectedBank,
+                                                  initialValue: selectedBank,
                                                   dropdownColor: AppColors.card,
                                                   style: const TextStyle(
                                                     color: AppColors.white,
@@ -331,7 +331,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
                                                 _label("Branch"),
                                                 const SizedBox(height: 10),
                                                 DropdownButtonFormField<String>(
-                                                  value: selectedBranch,
+                                                  initialValue: selectedBranch,
                                                   dropdownColor: AppColors.card,
                                                   style: const TextStyle(
                                                     color: AppColors.white,

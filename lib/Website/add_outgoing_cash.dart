@@ -141,7 +141,7 @@ class _AddOutgoingCashPageState extends State<AddOutgoingCashPage> {
                                 const SizedBox(height: 10),
 
                                 DropdownButtonFormField<String>(
-                                  value: selectedSupplier,
+                                  initialValue: selectedSupplier,
                                   dropdownColor: AppColors.card,
                                   style: const TextStyle(
                                     color: AppColors.white,

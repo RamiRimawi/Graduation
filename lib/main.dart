@@ -11,7 +11,6 @@ import 'Website/payment_page.dart';
 import 'Website/report_page.dart';
 import 'Website/inventory_page.dart';
 import 'Website/stock_out_page.dart';
-import 'Website/sidebar.dart';
 
 void main() {
   runApp(const DolphinApp());

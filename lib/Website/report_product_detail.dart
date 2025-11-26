@@ -194,8 +194,8 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
               flex: 5,
               child: _SectionCard(
                 title: 'Total profit',
-                child: _ProfitChart(),
-                hideTitle: true, // العنوان موجود في _ProfitChart
+                hideTitle: true,
+                child: _ProfitChart(), // العنوان موجود في _ProfitChart
               ),
             ),
           ],
