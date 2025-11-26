@@ -2,28 +2,15 @@ import 'package:flutter/material.dart';
 import 'sidebar.dart';
 import 'report_product_detail.dart';
 
-void main() {
-  runApp(const ReportPage());
-}
-
 class ReportPage extends StatelessWidget {
   const ReportPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Report Page',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-      ),
-      home: const ReportPageContent(),
-    );
+    return const ReportPageContent();
   }
 }
+
 
 // 🎨 الألوان
 class AppColors {
