@@ -41,6 +41,22 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool rememberMe = false;
+  late FocusNode _usernameFocus;
+  late FocusNode _passwordFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _usernameFocus = FocusNode();
+    _passwordFocus = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _usernameFocus.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +67,7 @@ class _LoginPageState extends State<LoginPage> {
           // ===== الخلفية =====
           Positioned.fill(
             child: Image.asset(
-              'assets/images/VectorMobile.png', // اسم الصورة الجديدة
+              'assets/images/VectorMobile.png',
               fit: BoxFit.cover,
               alignment: Alignment.centerRight,
             ),
@@ -67,7 +83,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     // ---- اللوغو ----
                     Transform.translate(
-                      offset: const Offset(0, -35), // ✅ رفعنا اللوغو شوي لفوق
+                      offset: const Offset(0, -35),
                       child: SizedBox(
                         height: 260,
                         child: Image.asset(
@@ -77,17 +93,25 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
 
-                    // ---- اسم المستخدم ----
-                    _buildTextField(hint: 'Enter User Name', obscure: false),
+                    // ---- User Name ----
+                    _buildLoginField(
+                      hint: 'Enter User Name',
+                      obscure: false,
+                      focusNode: _usernameFocus,
+                    ),
                     const SizedBox(height: 16),
 
-                    // ---- كلمة المرور ----
-                    _buildTextField(hint: 'Enter Password', obscure: true),
+                    // ---- Password ----
+                    _buildLoginField(
+                      hint: 'Enter Password',
+                      obscure: true,
+                      focusNode: _passwordFocus,
+                    ),
                     const SizedBox(height: 16),
 
-                    // ---- تذكّرني ----
+                    // ---- Remember me ----
                     Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
@@ -123,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
 
                     const SizedBox(height: 32),
 
-                    // ---- زر تسجيل الدخول ----
+                    // ---- Login Button ----
                     SizedBox(
                       width: 220,
                       child: ElevatedButton(
@@ -139,7 +163,6 @@ class _LoginPageState extends State<LoginPage> {
                           child: Center(
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: const [
                                 Text(
                                   'Login',
@@ -173,8 +196,16 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildTextField({required String hint, required bool obscure}) {
+  // ============================
+  // 🔥 TextField مع Border ذهبي عند التركيز
+  // ============================
+  Widget _buildLoginField({
+    required String hint,
+    required bool obscure,
+    required FocusNode focusNode,
+  }) {
     return TextField(
+      focusNode: focusNode,
       obscureText: obscure,
       style: const TextStyle(
         color: AppColors.white,
@@ -188,7 +219,6 @@ class _LoginPageState extends State<LoginPage> {
           color: Color(0xFF777777),
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.4,
         ),
         filled: true,
         fillColor: AppColors.card,
@@ -196,13 +226,22 @@ class _LoginPageState extends State<LoginPage> {
           horizontal: 20,
           vertical: 16,
         ),
+
+        // === الـ Border العادي ===
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.transparent, width: 1.7),
+        ),
+
+        // === Border لما يصير Focus ===
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.yellow, width: 1.7),
+        ),
+
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.yellow, width: 1.5),
         ),
       ),
     );
