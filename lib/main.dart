@@ -50,7 +50,7 @@ class DolphinApp extends StatelessWidget {
       // 🔹 البداية من صفحة Login
       initialRoute: '/login',
 
-      // 🔹 جميع الراوتس
+      // 🔹 جميع الراوتسa
       routes: {
         '/login': (_) => const LoginPage(),
         '/dashboard': (_) => const DashboardPage(),
