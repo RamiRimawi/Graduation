@@ -79,7 +79,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const StockOutPage(),
+                                        builder: (_) => const OrdersPage(),
                                       ),
                                     );
                                   } else {
@@ -162,27 +162,27 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInPage(),
-                                      ),
-                                    );
+                                          builder: (_) =>
+                                            const StockInPage(),
+                                        ),
+                                      );
                                   } else if (index == 1) {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockInReceivesPage(),
+                                          builder: (_) =>
+                                            const OrdersStockInReceivesPage(),
                                       ),
                                     );
                                   } else {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInPage(),
-                                      ),
-                                    );
-                                  }
+                                          builder: (_) =>
+                                            const StockInPage(),
+                                        ),
+                                      );
+                                    }
                                 },
                               ),
                             ),

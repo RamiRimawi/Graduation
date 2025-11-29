@@ -4,34 +4,6 @@ import 'add_prodect_pop.dart';
 import 'add_inventory_pop.dart';
 import 'product_details_popup.dart';
 
-void main() {
-  runApp(const InventoryApp());
-}
-
-class InventoryApp extends StatelessWidget {
-  const InventoryApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Inventory Page',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB7A447),
-          surface: Color(0xFF2D2D2D),
-          secondary: Color(0xFF50B2E7),
-        ),
-      ),
-      home: const InventoryPage(),
-    );
-  }
-}
-
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
 

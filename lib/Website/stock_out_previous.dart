@@ -80,8 +80,8 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInPage(),
+                                          builder: (_) =>
+                                            const StockInPage(),
                                       ),
                                     );
                                   } else {
@@ -165,7 +165,7 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const StockOutPage(),
+                                        builder: (_) => const OrdersPage(),
                                       ),
                                     );
                                   } else if (index == 1) {
@@ -173,8 +173,8 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockOutReceivesPage(),
+                                          builder: (_) =>
+                                            const OrdersReceivesPage(),
                                       ),
                                     );
                                   }

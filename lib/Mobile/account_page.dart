@@ -86,7 +86,7 @@ class _AccountPageState extends State<AccountPage> {
                             radius: 95,
                             backgroundImage: _photo != null
                                 ? FileImage(File(_photo!.path)) as ImageProvider
-                                : const AssetImage('assets/ramadan.png'),
+                                : const AssetImage('assets/images/ramadan.jpg'),
                             backgroundColor: Colors.transparent,
                           ),
                         ),
