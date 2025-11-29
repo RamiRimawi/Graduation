@@ -44,7 +44,7 @@ class _CheckPageState extends State<CheckPage> {
                         ElevatedButton.icon(
                           onPressed: () => showChoosePaymentMethodDialog(
                             context,
-                            'incoming',
+                            isIncoming ? 'incoming' : 'outgoing',
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.blue,
