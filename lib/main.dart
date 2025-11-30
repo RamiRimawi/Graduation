@@ -12,6 +12,7 @@ import 'Website/payment_page.dart';
 import 'Website/report_page.dart';
 import 'Website/inventory_page.dart';
 import 'Website/stock_out_page.dart';
+import 'Website/account_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,7 @@ class DolphinApp extends StatelessWidget {
         ),
       ),
 
+      // 🔹 البداية من صفحة Login
       initialRoute: '/login',
 
       routes: {
@@ -61,6 +63,7 @@ class DolphinApp extends StatelessWidget {
         '/report': (_) => const ReportPage(),
         '/inventory': (_) => const InventoryPage(),
         '/stockOut': (_) => const OrdersPage(),
+        '/account': (_) => const ProfilePageContent(),
       },
     );
   }

@@ -5,34 +5,6 @@ import 'stock_in_page.dart';
 import 'stock_out_receives.dart';
 import 'stock_out_previous.dart';
 
-void main() {
-  runApp(const StockOutPage());
-}
-
-class StockOutPage extends StatelessWidget {
-  const StockOutPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dolphin Orders',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB7A447),
-          surface: Color(0xFF2D2D2D),
-          secondary: Color(0xFF50B2E7),
-        ),
-      ),
-      home: const OrdersPage(),
-    );
-  }
-}
-
 // 🎨 الألوان
 class AppColors {
   static const white = Color(0xFFFFFFFF);
@@ -109,8 +81,8 @@ class _OrdersPageState extends State<OrdersPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInPage(),
+                                          builder: (_) =>
+                                            const StockInPage(),
                                       ),
                                     );
                                   } else {
@@ -156,8 +128,8 @@ class _OrdersPageState extends State<OrdersPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockOutReceivesPage(),
+                                          builder: (_) =>
+                                            const OrdersReceivesPage(),
                                       ),
                                     );
                                   } else if (index == 2) {

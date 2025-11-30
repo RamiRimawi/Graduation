@@ -15,8 +15,8 @@ class DeliveryPage extends StatelessWidget {
 
     final idleDeliveries = [
       {"name": "Eyas Barghouthi", "img": "assets/images/eyas.jpg"},
-      {"name": "Ahmad Naser", "img": "assets/images/ahmad.jpg"},
-      {"name": "Salah Amar", "img": "assets/images/salah.jpg"},
+      {"name": "Ameer Yasin", "img": "assets/images/ameer.jpg"},
+      {"name": "Mohammed Assi", "img": "assets/images/assi.jpg"},
     ];
 
     return Scaffold(

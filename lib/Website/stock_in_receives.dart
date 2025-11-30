@@ -5,34 +5,6 @@ import 'stock_in_page.dart';
 import 'stock_in_previous.dart';
 import 'create_stock_in_page.dart';
 
-void main() {
-  runApp(const StockInReceivesPage());
-}
-
-class StockInReceivesPage extends StatelessWidget {
-  const StockInReceivesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dolphin Orders Stock-in Receives',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB7A447),
-          surface: Color(0xFF2D2D2D),
-          secondary: Color(0xFF50B2E7),
-        ),
-      ),
-      home: const OrdersStockInReceivesPage(),
-    );
-  }
-}
-
 class OrdersStockInReceivesPage extends StatefulWidget {
   const OrdersStockInReceivesPage({super.key});
 
@@ -97,12 +69,12 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                               onChanged: (i) {
                                 if (i == 0) {
                                   // Stock-out
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const StockOutPage(),
-                                    ),
-                                  );
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                      builder: (_) => const OrdersPage(),
+                                      ),
+                                    );
                                 } else {
                                   setState(() => stockTab = i);
                                 }
@@ -142,12 +114,12 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
 
                           if (i == 0) {
                             // 👉 Today (Stock-in الرئيسية)
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const OrdersStockInPage(),
-                              ),
-                            );
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                builder: (_) => const StockInPage(),
+                                ),
+                              );
                           } else if (i == 2) {
                             // 👉 Previous
                             Navigator.pushReplacement(

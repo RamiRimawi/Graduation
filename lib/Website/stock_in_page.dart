@@ -5,34 +5,6 @@ import 'stock_out_page.dart';
 import 'stock_in_previous.dart';
 import 'stock_in_receives.dart';
 
-void main() {
-  runApp(const OrdersStockInPage());
-}
-
-class OrdersStockInPage extends StatelessWidget {
-  const OrdersStockInPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dolphin Orders',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB7A447),
-          surface: Color(0xFF2D2D2D),
-          secondary: Color(0xFF50B2E7),
-        ),
-      ),
-      home: const StockInPage(),
-    );
-  }
-}
-
 // 🎨 الألوان
 class AppColors {
   static const white = Color(0xFFFFFFFF);
@@ -108,7 +80,7 @@ class _StockInPageState extends State<StockInPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const StockOutPage(),
+                                        builder: (_) => const OrdersPage(),
                                       ),
                                     );
                                   } else {
@@ -152,16 +124,16 @@ class _StockInPageState extends State<StockInPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInPage(),
+                                          builder: (_) =>
+                                            const StockInPage(),
                                       ),
                                     );
                                   } else if (index == 1) {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockInReceivesPage(),
+                                          builder: (_) =>
+                                            const OrdersStockInReceivesPage(),
                                       ),
                                     );
                                   } else if (index == 2) {

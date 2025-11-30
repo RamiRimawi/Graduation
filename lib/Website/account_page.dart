@@ -1,29 +1,6 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
 
-void main() {
-  runApp(const AccountPage());
-}
-
-class AccountPage extends StatelessWidget {
-  const AccountPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Profile',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-      ),
-      home: const ProfilePageContent(),
-    );
-  }
-}
-
 // 🎨 الألوان
 class AppColors {
   static const white = Color(0xFFFFFFFF);
@@ -304,7 +281,7 @@ class _ProfileAvatar extends StatelessWidget {
           backgroundColor: AppColors.card,
           child: ClipOval(
             child: Image.asset(
-              'assets/image/ayman.png',
+              'assets/images/ramadan.jpg',
               fit: BoxFit.cover,
               width: 220,
               height: 220,

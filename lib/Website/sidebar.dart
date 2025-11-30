@@ -1,16 +1,7 @@
 import 'package:flutter/material.dart';
 
 class Sidebar extends StatelessWidget {
-  /// index الزر الفعّال حالياً
-  ///
-  /// 1: Home
-  /// 2: Orders stock out (لسّه بدون صفحة)
-  /// 3: Inventory (لسّه بدون صفحة)
-  /// 4: Delivery
-  /// 5: Payment (لسّه بدون صفحة)
-  /// 6: Report  (لسّه بدون صفحة)
-  /// 8: Mobile Account
-  /// 9: Users Management
+
   const Sidebar({super.key, required this.activeIndex});
 
   final int activeIndex;
@@ -27,9 +18,9 @@ class Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 158,
+      width: 150,
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
+        color: Color(0xFF2A2A2A),
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(30),
           bottomRight: Radius.circular(30),
@@ -189,8 +180,8 @@ class _HoverIconState extends State<_HoverIcon> {
             colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
             child: Image.asset(
               widget.path,
-              width: 26,
-              height: 26,
+              width: 29,
+              height: 29,
               fit: BoxFit.contain,
             ),
           ),
@@ -214,28 +205,34 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        width: _isHovered ? 56 : 52,
-        height: _isHovered ? 56 : 52,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          image: const DecorationImage(
-            image: AssetImage('assets/images/rami.jpg'),
-            fit: BoxFit.cover,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(
-                0xFF50B2E7,
-              ).withOpacity(_isHovered ? 0.35 : 0.1),
-              blurRadius: _isHovered ? 22 : 10,
-              spreadRadius: _isHovered ? 3 : 1,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.pushReplacementNamed(context, '/account');
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          width: _isHovered ? 67 : 52,
+          height: _isHovered ? 67 : 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            image: const DecorationImage(
+              image: AssetImage('assets/images/rami.jpg'),
+              fit: BoxFit.cover,
             ),
-          ],
+            boxShadow: [
+              BoxShadow(
+                color: const Color(
+                  0xFF50B2E7,
+                ).withOpacity(_isHovered ? 0.35 : 0.1),
+                blurRadius: _isHovered ? 22 : 10,
+                spreadRadius: _isHovered ? 3 : 1,
+              ),
+            ],
+          ),
         ),
       ),
     );

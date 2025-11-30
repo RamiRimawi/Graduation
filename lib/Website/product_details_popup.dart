@@ -135,7 +135,7 @@ class ProductDetailsPopup extends StatelessWidget {
                                   child: Container(
                                     padding: const EdgeInsets.all(20),
                                     child: Image.asset(
-                                      'assets/icon/hand_shower.png',
+                                      'assets/icons/hand_shower.png',
                                       fit: BoxFit.contain,
                                       errorBuilder:
                                           (context, error, stackTrace) {

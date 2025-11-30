@@ -5,34 +5,6 @@ import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_out_previous.dart';
 
-void main() {
-  runApp(const StockOutReceivesPage());
-}
-
-class StockOutReceivesPage extends StatelessWidget {
-  const StockOutReceivesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Dolphin Orders Receives',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF202020),
-        fontFamily: 'Roboto',
-        useMaterial3: true,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB7A447),
-          surface: Color(0xFF2D2D2D),
-          secondary: Color(0xFF50B2E7),
-        ),
-      ),
-      home: const OrdersReceivesPage(),
-    );
-  }
-}
-
 class OrdersReceivesPage extends StatefulWidget {
   const OrdersReceivesPage({super.key});
 
@@ -101,12 +73,12 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                               selected: stockTab,
                               onChanged: (i) {
                                 if (i == 1) {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const OrdersStockInPage(),
-                                    ),
-                                  );
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                      builder: (_) => const StockInPage(),
+                                      ),
+                                    );
                                 } else {
                                   setState(() => stockTab = i);
                                 }
@@ -144,12 +116,12 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                         onTap: (i) {
                           setState(() => currentTab = i);
                           if (i == 0) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const StockOutPage(),
-                              ),
-                            );
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                builder: (_) => const OrdersPage(),
+                                ),
+                              );
                           } else {
                             Navigator.pushReplacement(
                               context,
