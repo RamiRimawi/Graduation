@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
+import '../supabase_config.dart';
 import 'sidebar.dart';
 import 'create_stock_out_page.dart';
 import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_out_previous.dart';
+
+class OrderReceiveRow {
+  final String id;
+  final String customerName;
+  final String type;
+  final String createdBy;
+  final String time;
+  final String date;
+  OrderReceiveRow({
+    required this.id,
+    required this.customerName,
+    required this.type,
+    required this.createdBy,
+    required this.time,
+    required this.date,
+  });
+}
 
 class OrdersReceivesPage extends StatefulWidget {
   const OrdersReceivesPage({super.key});
@@ -16,27 +34,99 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
   int stockTab = 0;
   int currentTab = 1; // Receives selected
   int? hoveredIndex; // ✅ لتتبع الصف الذي عليه الماوس
+  bool _loading = true;
+  String? _error;
+  List<OrderReceiveRow> _orders = [];
+  List<OrderReceiveRow> _onHold = [];
+  String _searchQuery = '';
 
-  final orders = const [
-    ('26', 'Ahmad Nizar', 'out (NEW)', 'Sender', '12:30 AM', '14/8'),
-    ('27', 'Saed Rimawi', 'out (NEW)', 'Sender', '10:43 AM', '14/8'),
-    ('30', 'Akef Al Asmar', 'in (NEW)', 'Sender', '9:30 AM', '14/8'),
-    ('29', 'Nizar Fares', 'out (UPDATE)', 'Ayman Rimawi', '8:43 AM', '14/8'),
-    ('31', 'Sameer Haj', 'in (NEW)', 'Sender', '2:30 PM', '13/8'),
-    (
-      '28',
-      'Eyas Barghouthi',
-      'out (UPDATE)',
-      'Ayman Rimawi',
-      '8:43 AM',
-      '14/8',
-    ),
-    ('20', 'Sami jaber', 'out (NEW)', 'Sender', '2:30 PM', '13/8'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrders();
+  }
 
-  final onHold = const [
-    ('20', 'Sami jaber', 'in (NEW)', 'Sender', '10:43 AM', '14/8'),
-  ];
+  Future<void> _fetchOrders() async {
+    try {
+      final data = await supabase
+          .from('customer_order')
+          .select('customer_order_id, order_status, order_date, customer:customer_id(name), sales_representative:sales_rep_id(name)')
+          .order('customer_order_id', ascending: false)
+          .limit(100);
+
+      final ordersList = <OrderReceiveRow>[];
+      final onHoldList = <OrderReceiveRow>[];
+
+      for (final row in data) {
+        final id = (row['customer_order_id'] ?? '').toString();
+        final status = (row['order_status'] ?? '').toString();
+        
+        // Only process orders with 'Received' status or 'hold' in status
+        if (status != 'Received' && !status.toLowerCase().contains('hold')) {
+          continue;
+        }
+        
+        final customerName = (row['customer'] is Map)
+            ? (row['customer']['name'] ?? 'Unknown')
+            : 'Unknown';
+        final createdBy = (row['sales_representative'] is Map)
+            ? (row['sales_representative']['name'] ?? 'Sender')
+            : 'Sender';
+        
+        final orderDate = row['order_date'] != null
+            ? DateTime.parse(row['order_date'])
+            : DateTime.now();
+        final time = '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
+        final date = '${orderDate.day}/${orderDate.month}';
+        
+        final type = status.contains('Pending') ? 'out (NEW)' : status.contains('Preparing') ? 'out (UPDATE)' : 'out (NEW)';
+
+        final orderRow = OrderReceiveRow(
+          id: id,
+          customerName: customerName,
+          type: type,
+          createdBy: createdBy,
+          time: time,
+          date: date,
+        );
+
+        // Separate orders based on status containing "hold"
+        if (status.toLowerCase().contains('hold')) {
+          onHoldList.add(orderRow);
+        } else {
+          ordersList.add(orderRow);
+        }
+      }
+
+      setState(() {
+        _orders = ordersList;
+        _onHold = onHoldList;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  List<OrderReceiveRow> get _filteredOrders {
+    if (_searchQuery.isEmpty) return _orders;
+    final q = _searchQuery.toLowerCase();
+    return _orders
+        .where((o) => o.customerName.toLowerCase().startsWith(q))
+        .toList(growable: false);
+  }
+
+  List<OrderReceiveRow> get _filteredOnHold {
+    if (_searchQuery.isEmpty) return _onHold;
+    final q = _searchQuery.toLowerCase();
+    return _onHold
+        .where((o) => o.customerName.toLowerCase().startsWith(q))
+        .toList(growable: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +234,11 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                           width: 230,
                           child: _SearchField(
                             hint: 'Customer Name',
-                            onChanged: (v) {},
+                            onChanged: (v) {
+                              setState(() {
+                                _searchQuery = v.trim();
+                              });
+                            },
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -163,146 +257,167 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
 
                     // 🔹 Orders list
                     Expanded(
-                      child: ListView(
-                        children: [
-                          ...List.generate(orders.length, (i) {
-                            final o = orders[i];
-                            final even = int.tryParse(o.$1) ?? 0;
-                            final bg = even.isEven
-                                ? const Color(0xFF2D2D2D)
-                                : const Color(0xFF262626);
-
-                            // ✅ Hover effect فقط
-                            return MouseRegion(
-                              onEnter: (_) => setState(() => hoveredIndex = i),
-                              onExit: (_) =>
-                                  setState(() => hoveredIndex = null),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: bg,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: hoveredIndex == i
-                                        ? const Color(0xFF50B2E7)
-                                        : Colors.transparent,
-                                    width: 2,
+                      child: _loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _error != null
+                              ? Center(
+                                  child: Text(
+                                    _error!,
+                                    style: const TextStyle(color: Colors.redAccent),
                                   ),
-                                ),
-                                child: Row(
+                                )
+                              : ListView(
                                   children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$1, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(o.$2, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$3, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$4, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$5, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: Text(o.$6, style: _cellStyle()),
+                                    if (_filteredOrders.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(40.0),
+                                        child: Center(
+                                          child: Text(
+                                            'No Received orders found',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      ...List.generate(_filteredOrders.length, (i) {
+                                      final o = _filteredOrders[i];
+                                      final even = int.tryParse(o.id) ?? 0;
+                                      final bg = even.isEven
+                                          ? const Color(0xFF2D2D2D)
+                                          : const Color(0xFF262626);
+
+                                      return MouseRegion(
+                                        onEnter: (_) => setState(() => hoveredIndex = i),
+                                        onExit: (_) => setState(() => hoveredIndex = null),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: hoveredIndex == i
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(o.id, style: _cellStyle()),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(o.customerName, style: _cellStyle()),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(o.type, style: _cellStyle()),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(o.createdBy, style: _cellStyle()),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(o.time, style: _cellStyle()),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Align(
+                                                  alignment: Alignment.centerRight,
+                                                  child: Text(o.date, style: _cellStyle()),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                    if (_filteredOnHold.isNotEmpty) ...[
+                                      const SizedBox(height: 20),
+                                      const Text(
+                                        'On Hold',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 10),
+                                      ...List.generate(_filteredOnHold.length, (i) {
+                                        final o = _filteredOnHold[i];
+                                        final even = int.tryParse(o.id) ?? 0;
+                                        final bg = even.isEven
+                                            ? const Color(0xFF2D2D2D)
+                                            : const Color(0xFF262626);
+
+                                        return MouseRegion(
+                                          onEnter: (_) => setState(() => hoveredIndex = i + 100),
+                                          onExit: (_) => setState(() => hoveredIndex = null),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: bg,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: hoveredIndex == i + 100
+                                                    ? const Color(0xFF50B2E7)
+                                                    : Colors.transparent,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(o.id, style: _cellStyle()),
+                                                ),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Text(o.customerName, style: _cellStyle()),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(o.type, style: _cellStyle()),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(o.createdBy, style: _cellStyle()),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(o.time, style: _cellStyle()),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Align(
+                                                    alignment: Alignment.centerRight,
+                                                    child: Text(o.date, style: _cellStyle()),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
                                   ],
                                 ),
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'On Hold',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          ...List.generate(onHold.length, (i) {
-                            final o = onHold[i];
-                            final even = int.tryParse(o.$1) ?? 0;
-                            final bg = even.isEven
-                                ? const Color(0xFF2D2D2D)
-                                : const Color(0xFF262626);
-
-                            return MouseRegion(
-                              onEnter: (_) =>
-                                  setState(() => hoveredIndex = i + 100),
-                              onExit: (_) =>
-                                  setState(() => hoveredIndex = null),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: bg,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: hoveredIndex == i + 100
-                                        ? const Color(0xFF50B2E7)
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$1, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(o.$2, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$3, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$4, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$5, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: Text(o.$6, style: _cellStyle()),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
                     ),
                   ],
                 ),
