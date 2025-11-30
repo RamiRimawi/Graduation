@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 // 🔹 صفحات الويب
 import 'Website/login_page.dart';
