@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../supabase_config.dart';
 import 'sidebar.dart';
 import 'stock_in_page.dart';
 import 'stock_out_page.dart'; // عشان نرجع لصفحة Today
@@ -16,6 +17,19 @@ class AppColors {
   static const blue = Color(0xFF50B2E7);
 }
 
+class OrderPreviousRow {
+  final String id;
+  final String customerName;
+  final String inventory;
+  final String date;
+  OrderPreviousRow({
+    required this.id,
+    required this.customerName,
+    required this.inventory,
+    required this.date,
+  });
+}
+
 class StockOutPrevious extends StatefulWidget {
   const StockOutPrevious({super.key});
 
@@ -27,16 +41,84 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
   int stockTab = 0; // Stock-out selected
   int currentTab = 2; // Previous tab selected
   int? hoveredRow;
+  bool _loading = true;
+  String? _error;
+  List<OrderPreviousRow> _previousOrders = [];
+  String _searchQuery = '';
 
-  final previousOrders = const [
-    (id: '26', name: 'Ahmad Nizar', inventory: '1', date: '12/5/2020'),
-    (id: '27', name: 'Saed Rimawi', inventory: '2', date: '12/5/2023'),
-    (id: '30', name: 'Akef Al Asmar', inventory: '1', date: '12/5/2022'),
-    (id: '29', name: 'Nizar Fares', inventory: '1', date: '12/5/2025'),
-    (id: '31', name: 'Sameer Haj', inventory: '1', date: '12/5/2021'),
-    (id: '28', name: 'Eyas Barghouthi', inventory: '2', date: '12/5/2025'),
-    (id: '20', name: 'Sami jaber', inventory: '2', date: '12/5/2020'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchPreviousOrders();
+  }
+
+  Future<void> _fetchPreviousOrders() async {
+    try {
+      // Fetch orders with status 'Delivered'
+      final data = await supabase
+          .from('customer_order')
+          .select('customer_order_id, order_date, customer:customer_id(name), customer_order_description(product:product_id(batch(inventory:inventory_id(inventory_location))))')
+          .eq('order_status', 'Delivered')
+          .order('order_date', ascending: false)
+          .limit(100);
+
+      final ordersList = <OrderPreviousRow>[];
+
+      for (final row in data) {
+        final id = (row['customer_order_id'] ?? '').toString();
+        final customerName = (row['customer'] is Map)
+            ? (row['customer']['name'] ?? 'Unknown')
+            : 'Unknown';
+        
+        // Extract inventory from nested join
+        String inventoryLocation = 'N/A';
+        if (row['customer_order_description'] is List && 
+            (row['customer_order_description'] as List).isNotEmpty) {
+          final firstDesc = (row['customer_order_description'] as List)[0];
+          if (firstDesc is Map && firstDesc['product'] is Map) {
+            final product = firstDesc['product'];
+            if (product['batch'] is List && (product['batch'] as List).isNotEmpty) {
+              final firstBatch = (product['batch'] as List)[0];
+              if (firstBatch is Map && firstBatch['inventory'] is Map) {
+                inventoryLocation = firstBatch['inventory']['inventory_location'] ?? 'N/A';
+              }
+            }
+          }
+        }
+
+        final orderDate = row['order_date'] != null
+            ? DateTime.parse(row['order_date'])
+            : DateTime.now();
+        final date = '${orderDate.day}/${orderDate.month}/${orderDate.year}';
+
+        ordersList.add(OrderPreviousRow(
+          id: id,
+          customerName: customerName,
+          inventory: inventoryLocation,
+          date: date,
+        ));
+      }
+
+      setState(() {
+        _previousOrders = ordersList;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  List<OrderPreviousRow> get _filteredOrders {
+    if (_searchQuery.isEmpty) return _previousOrders;
+    final q = _searchQuery.toLowerCase();
+    return _previousOrders
+        .where((o) => o.customerName.toLowerCase().startsWith(q))
+        .toList(growable: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +273,11 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
                                   width: 250,
                                   child: _SearchField(
                                     hint: 'Customer Name',
-                                    onChanged: (v) {},
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _searchQuery = v.trim();
+                                      });
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -208,102 +294,122 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
 
                             // 🔹 الجدول
                             Expanded(
-                              child: ListView.separated(
-                                itemCount: previousOrders.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 6),
-                                itemBuilder: (context, i) {
-                                  final row = previousOrders[i];
-                                  final bg = i.isEven
-                                      ? AppColors.card
-                                      : AppColors.cardAlt;
-                                  final isHovered = hoveredRow == i;
-
-                                  return MouseRegion(
-                                    onEnter: (_) =>
-                                        setState(() => hoveredRow = i),
-                                    onExit: (_) =>
-                                        setState(() => hoveredRow = null),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: isHovered
-                                            ? Border.all(
-                                                color: AppColors.blue,
-                                                width: 2,
-                                              )
-                                            : null,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          // Order ID
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              row.id,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
+                              child: _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : _error != null
+                                      ? Center(
+                                          child: Text(
+                                            _error!,
+                                            style: const TextStyle(
+                                                color: Colors.redAccent),
                                           ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: _filteredOrders.length,
+                                          separatorBuilder: (_, __) =>
+                                              const SizedBox(height: 6),
+                                          itemBuilder: (context, i) {
+                                            final row = _filteredOrders[i];
+                                            final bg = i.isEven
+                                                ? AppColors.card
+                                                : AppColors.cardAlt;
+                                            final isHovered = hoveredRow == i;
 
-                                          // Customer Name
-                                          Expanded(
-                                            flex: 4,
-                                            child: Text(
-                                              row.name,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
+                                            return MouseRegion(
+                                              onEnter: (_) =>
+                                                  setState(() => hoveredRow = i),
+                                              onExit: (_) =>
+                                                  setState(() => hoveredRow = null),
+                                              child: AnimatedContainer(
+                                                duration: const Duration(
+                                                  milliseconds: 200,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: bg,
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                  border: isHovered
+                                                      ? Border.all(
+                                                          color: AppColors.blue,
+                                                          width: 2,
+                                                        )
+                                                      : null,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 12,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    // Order ID
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Text(
+                                                        row.id,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    ),
 
-                                          // Inventory #
-                                          Expanded(
-                                            flex: 8,
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Text(
-                                                row.inventory,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w700,
+                                                    // Customer Name
+                                                    Expanded(
+                                                      flex: 4,
+                                                      child: Text(
+                                                        row.customerName,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+
+                                                    // Inventory #
+                                                    Expanded(
+                                                      flex: 8,
+                                                      child: Align(
+                                                        alignment:
+                                                            Alignment.centerLeft,
+                                                        child: Text(
+                                                          row.inventory,
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+
+                                                    // Date (ذهبي)
+                                                    Expanded(
+                                                      flex: 4,
+                                                      child: Align(
+                                                        alignment:
+                                                            Alignment.centerRight,
+                                                        child: Text(
+                                                          row.date,
+                                                          style: const TextStyle(
+                                                            color: AppColors.gold,
+                                                            fontSize: 15,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ),
-
-                                          // Date (ذهبي)
-                                          Expanded(
-                                            flex: 4,
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: Text(
-                                                row.date,
-                                                style: const TextStyle(
-                                                  color: AppColors.gold,
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                            );
+                                          },
+                                        ),
                             ),
                           ],
                         ),
@@ -404,7 +510,7 @@ class _SearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: const BorderSide(color: Colors.black, width: 1.2),
+          borderSide: const BorderSide(color: Color(0xFFB7A447), width: 1.2),
         ),
       ),
     );
@@ -563,7 +669,7 @@ class _TableHeader extends StatelessWidget {
           children: [
             _hCell('Order ID #', flex: 2),
             _hCell('Customer Name', flex: 4),
-            _hCell('Inventory #', flex: 8),
+            _hCell('Inventory ', flex: 8),
             _hCell('Date', flex: 4, alignEnd: true),
           ],
         ),

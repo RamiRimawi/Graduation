@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../supabase_config.dart';
 import 'sidebar.dart';
 import 'create_stock_out_page.dart';
 import 'stock_in_page.dart';
@@ -25,19 +26,72 @@ class OrdersPage extends StatefulWidget {
   State<OrdersPage> createState() => _OrdersPageState();
 }
 
+class OrderRow {
+  final String id;
+  final String name;
+  final String status;
+  OrderRow({required this.id, required this.name, required this.status});
+}
+
 class _OrdersPageState extends State<OrdersPage> {
   int stockTab = 0;
   int? hoveredRow;
+  bool _loading = true;
+  String? _error;
+  List<OrderRow> _orders = [];
+  String _searchQuery = '';
 
-  final orders = const [
-    (id: '26', name: 'Ahmad Nizar', status: 'Pending'),
-    (id: '27', name: 'Saed Rimawi', status: 'Pending'),
-    (id: '30', name: 'Akef Al Asmar', status: 'Preparing'),
-    (id: '29', name: 'Nizar Fares', status: 'Delivering'),
-    (id: '31', name: 'Sameer Haj', status: 'Delivering'),
-    (id: '28', name: 'Eyas Barghouthi', status: 'Delivered'),
-    (id: '20', name: 'Sami Jaber', status: 'Rejected'),
-  ];
+  List<OrderRow> get _filteredOrders {
+    if (_searchQuery.isEmpty) return _orders;
+    final q = _searchQuery.toLowerCase();
+    // Prefix match: equivalent to SQL LIKE 'q%'
+    return _orders
+      .where((o) => o.name.toLowerCase().startsWith(q))
+      .toList(growable: false);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrders();
+  }
+
+  Future<void> _fetchOrders() async {
+    try {
+      // Select order id, status, and related customer name.
+      // Adjust selected columns if schema differs.
+      final data = await supabase
+          .from('customer_order')
+          .select('customer_order_id, order_status, customer:customer_id(name)')
+          .order('customer_order_id', ascending: false)
+          .limit(100);
+
+      final list = <OrderRow>[];
+      for (final row in data) {
+        final id = (row['customer_order_id'] ?? '').toString();
+        final status = (row['order_status'] ?? '').toString();
+        // Only show orders with specific statuses
+        if (status != 'Received' && status != 'Prepared' &&
+            status != 'Delivery' && status != 'Updated') {
+          continue;
+        }
+        final customer = (row['customer'] is Map)
+            ? (row['customer']['name'] ?? '')
+            : '';
+        list.add(OrderRow(id: id, name: customer, status: status));
+      }
+      setState(() {
+        _orders = list;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +210,11 @@ class _OrdersPageState extends State<OrdersPage> {
                                   width: 250,
                                   child: _SearchField(
                                     hint: 'Customer Name',
-                                    onChanged: (v) {},
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _searchQuery = v.trim();
+                                      });
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -173,77 +231,82 @@ class _OrdersPageState extends State<OrdersPage> {
 
                             // 🔹 الجدول
                             Expanded(
-                              child: ListView.separated(
-                                itemCount: orders.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 6),
-                                itemBuilder: (context, i) {
-                                  final row = orders[i];
-                                  final bg = i.isEven
-                                      ? AppColors.card
-                                      : AppColors.cardAlt;
-                                  final isHovered = hoveredRow == i;
-
-                                  return MouseRegion(
-                                    onEnter: (_) =>
-                                        setState(() => hoveredRow = i),
-                                    onExit: (_) =>
-                                        setState(() => hoveredRow = null),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: isHovered
-                                            ? Border.all(
-                                                color: AppColors.blue,
-                                                width: 2,
-                                              )
-                                            : null,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              row.id,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
+                              child: _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : _error != null
+                                      ? Center(
+                                          child: Text(
+                                            _error!,
+                                            style: const TextStyle(color: Colors.redAccent),
                                           ),
-                                          Expanded(
-                                            flex: 5,
-                                            child: Text(
-                                              row.name,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
+                                        )
+                                      : ListView.separated(
+                                          itemCount: _filteredOrders.length,
+                                          separatorBuilder: (_, __) => const SizedBox(height: 6),
+                                          itemBuilder: (context, i) {
+                                            final row = _filteredOrders[i];
+                                            final bg = i.isEven
+                                                ? AppColors.card
+                                                : AppColors.cardAlt;
+                                            final isHovered = hoveredRow == i;
+                                            return MouseRegion(
+                                              onEnter: (_) => setState(() => hoveredRow = i),
+                                              onExit: (_) => setState(() => hoveredRow = null),
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 200),
+                                                decoration: BoxDecoration(
+                                                  color: bg,
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: isHovered
+                                                      ? Border.all(
+                                                          color: AppColors.blue,
+                                                          width: 2,
+                                                        )
+                                                      : null,
+                                                ),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 12,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Text(
+                                                        row.id,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 5,
+                                                      child: Text(
+                                                        row.name,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 3,
+                                                      child: Align(
+                                                        alignment: Alignment.centerRight,
+                                                        child: _StatusChip(
+                                                          status: row.status,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: _StatusChip(
-                                                status: row.status,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                            );
+                                          },
+                                        ),
                             ),
                           ],
                         ),
@@ -339,7 +402,7 @@ class _SearchField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
           borderSide: BorderSide(
-            color: const Color.fromARGB(255, 0, 0, 0),
+            color: Color(0xFFB7A447),
             width: 1.2,
           ),
         ),
