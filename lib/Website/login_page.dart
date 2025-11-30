@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,7 +18,6 @@ class _LoginPageState extends State<LoginPage> {
 
   bool usernameError = false;
   bool passwordError = false;
-
   bool loading = false;
 
   Future<void> login() async {
@@ -28,37 +27,42 @@ class _LoginPageState extends State<LoginPage> {
       passwordError = false;
     });
 
-    const url = "http://localhost/graduation_backend/api/login_accountant.php";
+    final supabase = Supabase.instance.client;
+    final id = idController.text.trim();
+    final pass = passController.text.trim();
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "id": idController.text.trim(),
-        "password": passController.text.trim(),
-      }),
-    );
+    try {
+      final response = await supabase
+          .from('user_account_accountant')
+          .select('password')
+          .eq('accountant_id', id)
+          .maybeSingle();
 
-    final data = jsonDecode(response.body);
+      print("LOGIN RESPONSE: $response");
 
-    if (data["status"] == "success") {
+      if (response == null) {
+        setState(() {
+          usernameError = true;
+          loading = false;
+        });
+        return;
+      }
+
+      final savedPass = response['password'];
+
+      if (savedPass != pass) {
+        setState(() {
+          passwordError = true;
+          loading = false;
+        });
+        return;
+      }
+
       Navigator.pushReplacementNamed(context, "/dashboard");
-    } else {
-      // هنا نفصل الخطأ
-      setState(() {
-        if (data["message"] == "Invalid ID or password") {
-          // الآن لازم نعرف: ID غلط؟ ولا Password غلط؟
-          // رح نعمل Check إضافي
-          if (idController.text != "1") {
-            usernameError = true;
-          } else {
-            passwordError = true;
-          }
-        }
-      });
+    } catch (e) {
+      print("LOGIN ERROR: $e");
+      setState(() => loading = false);
     }
-
-    setState(() => loading = false);
   }
 
   @override
@@ -102,7 +106,6 @@ class _LoginPageState extends State<LoginPage> {
 
                       const SizedBox(height: 24),
 
-                      // USERNAME
                       _GlassField(
                         hint: "Enter Username",
                         obscure: false,
@@ -113,9 +116,9 @@ class _LoginPageState extends State<LoginPage> {
                           setState(() => usernameError = false);
                         },
                       ),
+
                       const SizedBox(height: 16),
 
-                      // PASSWORD
                       _GlassField(
                         hint: "Enter Password",
                         obscure: true,
@@ -148,9 +151,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           onPressed: loading ? null : login,
                           child: loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.black,
-                                )
+                              ? const CircularProgressIndicator(color: Colors.black)
                               : const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -225,7 +226,6 @@ class _GlassFieldState extends State<_GlassField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // TEXTFIELD
         Container(
           decoration: BoxDecoration(
             color: _panel,
@@ -258,7 +258,7 @@ class _GlassFieldState extends State<_GlassField> {
               border: InputBorder.none,
               hintText: widget.hint,
               hintStyle: TextStyle(
-                color: Colors.white.withOpacity(.55),
+                color: Colors.white54,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.0,
               ),
@@ -266,7 +266,6 @@ class _GlassFieldState extends State<_GlassField> {
           ),
         ),
 
-        // ERROR TEXT
         if (widget.error)
           Padding(
             padding: const EdgeInsets.only(left: 6, top: 6),

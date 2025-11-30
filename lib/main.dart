@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'supabase_config.dart';
 // 🔹 صفحات الويب
 import 'Website/login_page.dart';
 import 'Website/dashboard_page.dart';
@@ -12,7 +13,9 @@ import 'Website/report_page.dart';
 import 'Website/inventory_page.dart';
 import 'Website/stock_out_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseConfig.initialize(); // ← مهم جداً
   runApp(const DolphinApp());
 }
 
@@ -31,7 +34,6 @@ class DolphinApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Dolphin Dashboard',
 
-      // 🔹 الثيم
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -47,10 +49,8 @@ class DolphinApp extends StatelessWidget {
         ),
       ),
 
-      // 🔹 البداية من صفحة Login
       initialRoute: '/login',
 
-      // 🔹 جميع الراوتسa
       routes: {
         '/login': (_) => const LoginPage(),
         '/dashboard': (_) => const DashboardPage(),
