@@ -662,65 +662,7 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-class _DropdownField extends StatelessWidget {
-  final String label;
-  final int? value;
-  final List<DropdownMenuItem<int>> items;
-  final ValueChanged<int?> onChanged;
 
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.roboto(
-            color: const Color(0xFFB7A447),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<int>(
-          value: value,
-          items: items,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFF1E1E1E),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFB7A447), width: 2),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-          dropdownColor: const Color(0xFF1E1E1E),
-          style: const TextStyle(color: Colors.white, fontSize: 15),
-          icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFB7A447)),
-        ),
-      ],
-    );
-  }
-}
 
 class _SearchableSalesRep extends StatelessWidget {
   final String label;

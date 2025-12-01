@@ -205,24 +205,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     });
   }
 
-  // Sort original lists by id ascending (does not overwrite filtered lists)
-  void _sortOriginals() {
-    int compareId(Map a, Map b) {
-      final ai = a['id'] is int
-          ? a['id'] as int
-          : int.tryParse(a['id'].toString()) ?? 0;
-      final bi = b['id'] is int
-          ? b['id'] as int
-          : int.tryParse(b['id'].toString()) ?? 0;
-      return ai.compareTo(bi);
-    }
 
-    customers.sort(compareId);
-    salesReps.sort(compareId);
-    suppliers.sort(compareId);
-    brands.sort(compareId);
-    categories.sort(compareId);
-  }
 
   // =============== INIT ===============
   @override
