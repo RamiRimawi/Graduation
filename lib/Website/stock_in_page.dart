@@ -4,6 +4,7 @@ import 'create_stock_in_page.dart';
 import 'stock_out_page.dart';
 import 'stock_in_previous.dart';
 import 'stock_in_receives.dart';
+import '../supabase_config.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -28,16 +29,95 @@ class StockInPage extends StatefulWidget {
 class _StockInPageState extends State<StockInPage> {
   int stockTab = 1;
   int? hoveredRow;
+  List<Map<String, dynamic>> orders = [];
+  List<Map<String, dynamic>> filteredOrders = [];
+  bool isLoading = true;
+  String searchQuery = '';
 
-  final orders = const [
-    (id: '101', name: 'Ahmad Nizar', status: 'Pending'),
-    (id: '102', name: 'Saed Rimawi', status: 'Accepted'),
-    (id: '103', name: 'Akef Al Asmar', status: 'Accepted'),
-    (id: '104', name: 'Nizar Fares', status: 'Delivered'),
-    (id: '105', name: 'Sameer Haj', status: 'Rejected'),
-    (id: '106', name: 'Eyas Barghouthi', status: 'Pending'),
-    (id: '107', name: 'Sami Jaber', status: 'Accepted'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayOrders();
+  }
+
+  Future<void> _loadTodayOrders() async {
+    setState(() => isLoading = true);
+    
+    try {
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
+
+      // Query supplier_order with supplier details
+      final response = await supabase
+          .from('supplier_order')
+          .select('''
+            order_id,
+            order_status,
+            order_date,
+            supplier:supplier_id (
+              supplier_id,
+              name
+            )
+          ''')
+          .inFilter('order_status', ['Sent', 'Accepted', 'Rejected', 'Updated'])
+          .order('order_date', ascending: false);
+
+      final List<Map<String, dynamic>> allOrders = [];
+      
+      for (var order in response) {
+        final orderDate = DateTime.parse(order['order_date']);
+        final status = order['order_status'];
+        
+        // Include Sent and Updated regardless of date
+        // Include Accepted and Rejected only if same day
+        bool shouldInclude = false;
+        
+        if (status == 'Sent' || status == 'Updated') {
+          shouldInclude = true;
+        } else if (status == 'Accepted' || status == 'Rejected') {
+          shouldInclude = orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
+        }
+        
+        if (shouldInclude) {
+          allOrders.add({
+            'id': order['order_id'].toString(),
+            'name': order['supplier']?['name'] ?? 'Unknown Supplier',
+            'status': status,
+            'supplier_id': order['supplier']?['supplier_id'],
+          });
+        }
+      }
+
+      setState(() {
+        orders = allOrders;
+        filteredOrders = allOrders;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() => isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading orders: $e')),
+        );
+      }
+    }
+  }
+
+  void _filterOrders(String query) {
+    setState(() {
+      searchQuery = query;
+      if (query.isEmpty) {
+        filteredOrders = orders;
+      } else {
+        filteredOrders = orders.where((order) {
+          final supplierName = order['name'].toString().toLowerCase();
+          final searchLower = query.toLowerCase();
+          return supplierName.startsWith(searchLower);
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +240,7 @@ class _StockInPageState extends State<StockInPage> {
                                   width: 250,
                                   child: _SearchField(
                                     hint: 'Supplier Name',
-                                    onChanged: (v) {},
+                                    onChanged: _filterOrders,
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -177,87 +257,105 @@ class _StockInPageState extends State<StockInPage> {
 
                             // 🔹 القائمة
                             Expanded(
-                              child: ListView.separated(
-                                itemCount: orders.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, i) {
-                                  final row = orders[i];
-                                  final bg = i.isEven
-                                      ? AppColors.card
-                                      : AppColors.cardAlt;
-                                  final isHovered = hoveredRow == i;
+                              child: isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.blue,
+                                      ),
+                                    )
+                                  : filteredOrders.isEmpty
+                                      ? Center(
+                                          child: Text(
+                                            searchQuery.isEmpty
+                                                ? 'No orders for today'
+                                                : 'No suppliers found matching "$searchQuery"',
+                                            style: TextStyle(
+                                              color: AppColors.white.withOpacity(0.6),
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: filteredOrders.length,
+                                          separatorBuilder: (_, __) =>
+                                              const SizedBox(height: 10),
+                                          itemBuilder: (context, i) {
+                                            final row = filteredOrders[i];
+                                            final bg = i.isEven
+                                                ? AppColors.card
+                                                : AppColors.cardAlt;
+                                            final isHovered = hoveredRow == i;
 
-                                  return MouseRegion(
-                                    onEnter: (_) =>
-                                        setState(() => hoveredRow = i),
-                                    onExit: (_) =>
-                                        setState(() => hoveredRow = null),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      height: 64,
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: isHovered
-                                              ? AppColors.blue
-                                              : Colors.transparent,
-                                          width: 1.5,
+                                            return MouseRegion(
+                                              onEnter: (_) =>
+                                                  setState(() => hoveredRow = i),
+                                              onExit: (_) =>
+                                                  setState(() => hoveredRow = null),
+                                              child: AnimatedContainer(
+                                                duration: const Duration(
+                                                  milliseconds: 200,
+                                                ),
+                                                height: 64,
+                                                decoration: BoxDecoration(
+                                                  color: bg,
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: Border.all(
+                                                    color: isHovered
+                                                        ? AppColors.blue
+                                                        : Colors.transparent,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 20,
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.spaceBetween,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Align(
+                                                        alignment: Alignment.centerLeft,
+                                                        child: Text(
+                                                          row['id'] ?? '',
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 5,
+                                                      child: Align(
+                                                        alignment: Alignment.centerLeft,
+                                                        child: Text(
+                                                          row['name'] ?? '',
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 3,
+                                                      child: Align(
+                                                        alignment: Alignment.centerRight,
+                                                        child: _StatusChip(
+                                                          status: row['status'] ?? '',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Text(
-                                                row.id,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 5,
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: Text(
-                                                row.name,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: _StatusChip(
-                                                status: row.status,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
                             ),
                           ],
                         ),
@@ -486,7 +584,7 @@ class _SearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide(color: AppColors.blue, width: 2.3),
+          borderSide: BorderSide(color: AppColors.gold, width: 2.3),
         ),
       ),
     );
@@ -670,6 +768,12 @@ class _StatusChip extends StatelessWidget {
     } else if (status == 'Accepted') {
       text = Colors.greenAccent.shade400;
       bg = Colors.greenAccent.shade400.withOpacity(.15);
+    } else if (status == 'Sent') {
+      text = AppColors.blue;
+      bg = AppColors.blue.withOpacity(.15);
+    } else if (status == 'Updated') {
+      text = Colors.orangeAccent.shade400;
+      bg = Colors.orangeAccent.shade400.withOpacity(.15);
     }
 
     return Container(

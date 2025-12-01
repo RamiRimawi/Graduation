@@ -175,14 +175,14 @@ class _AddInventoryPopupState extends State<AddInventoryPopup> {
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
         filled: true,
-        fillColor: const Color(0xFF2D2D2D),
+        fillColor: const Color(0xFF1E1E1E),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 1.8),
+          borderSide: const BorderSide(color: Colors.transparent, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

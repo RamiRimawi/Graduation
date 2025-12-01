@@ -38,10 +38,13 @@ class DolphinApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: bg,
-        textTheme: GoogleFonts.robotoTextTheme().apply(
+        textTheme: GoogleFonts.robotoTextTheme(
+          ThemeData.dark().textTheme,
+        ).apply(
           bodyColor: white,
           displayColor: white,
         ),
+        fontFamily: GoogleFonts.roboto().fontFamily,
         colorScheme: ColorScheme.dark(
           surface: panel,
           primary: gold,

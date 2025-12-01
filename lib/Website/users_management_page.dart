@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'sidebar.dart';
-import 'customer_popup.dart';
-import 'sales_rep_popup.dart';
-import 'supplier_popup.dart';
-import 'one_field_popup.dart';
+// import 'customer_popup.dart';
+// import 'sales_rep_popup.dart';
+// import 'supplier_popup.dart';
+// import 'one_field_popup.dart';
 
 // 🔥 مهم
 import '../supabase_config.dart';
