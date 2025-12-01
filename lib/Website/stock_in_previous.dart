@@ -3,7 +3,8 @@ import 'sidebar.dart';
 import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_in_receives.dart';
-import 'create_stock_in_page.dart'; // فيها OrdersStockInPage أو StockInPage
+import 'create_stock_in_page.dart';
+import '../supabase_config.dart';
 
 // لو عندك AppColors معرف في ملف ثاني بنفس القيم، احذف هذا التعريف و استعمل الموجود
 class AppColors {
@@ -28,15 +29,102 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
   int currentTab = 2; // ✅ Previous tab selected
   int? hoveredRow;
 
-  final previousOrders = const [
-    (id: '101', name: 'Al-Nassar', inventory: '1', date: '12/5/2042'),
-    (id: '102', name: 'Royal Supply', inventory: '2', date: '12/5/2042'),
-    (id: '103', name: 'Beit Al-Tayeb', inventory: '1', date: '12/5/2042'),
-    (id: '104', name: 'Al-Nassar', inventory: '1', date: '12/5/2042'),
-    (id: '105', name: 'Royal Supply', inventory: '2', date: '12/5/2042'),
-    (id: '106', name: 'Beit Al-Tayeb', inventory: '1', date: '12/5/2042'),
-    (id: '107', name: 'Al-Nassar', inventory: '2', date: '12/5/2042'),
-  ];
+  List<Map<String, dynamic>> allOrders = [];
+  List<Map<String, dynamic>> filteredOrders = [];
+  bool isLoading = true;
+  String searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreviousOrders();
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  Future<void> _loadPreviousOrders() async {
+    setState(() => isLoading = true);
+
+    try {
+      // Query for Previous tab: Rejected (all days), Delivered
+      // First, get supplier orders with their details
+      final ordersResponse = await supabase
+          .from('supplier_order')
+          .select('''
+            order_id,
+            supplier_id,
+            order_date,
+            order_status,
+            receives_by_id,
+            supplier:supplier_id (
+              name
+            )
+          ''')
+          .or('order_status.eq.Rejected,order_status.eq.Delivered')
+          .order('order_date', ascending: false);
+
+      final orders = (ordersResponse as List).cast<Map<String, dynamic>>();
+
+      // Now get the batch information to find inventory
+      for (var order in orders) {
+        try {
+          // First get the product_id from supplier_order_description
+          final descriptionResponse = await supabase
+              .from('supplier_order_description')
+              .select('product_id')
+              .eq('order_id', order['order_id'])
+              .limit(1);
+
+          if (descriptionResponse.isNotEmpty) {
+            final productId = descriptionResponse[0]['product_id'];
+            
+            // Then get the inventory from batch table
+            final batchResponse = await supabase
+                .from('batch')
+                .select('inventory:inventory_id(inventory_location)')
+                .eq('product_id', productId)
+                .limit(1);
+
+            if (batchResponse.isNotEmpty && batchResponse[0]['inventory'] != null) {
+              order['inventory_name'] = batchResponse[0]['inventory']['inventory_location'] ?? '-';
+            } else {
+              order['inventory_name'] = '-';
+            }
+          } else {
+            order['inventory_name'] = '-';
+          }
+        } catch (e) {
+          print('Error loading inventory for order ${order['order_id']}: $e');
+          order['inventory_name'] = '-';
+        }
+      }
+
+      setState(() {
+        allOrders = orders;
+        filteredOrders = orders;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading previous orders: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _filterOrders(String query) {
+    setState(() {
+      searchQuery = query;
+      if (query.isEmpty) {
+        filteredOrders = allOrders;
+      } else {
+        filteredOrders = allOrders.where((order) {
+          final supplierName = order['supplier']['name']?.toString().toLowerCase() ?? '';
+          return supplierName.startsWith(query.toLowerCase());
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +284,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                   width: 250,
                                   child: _SearchField(
                                     hint: 'Supplier Name',
-                                    onChanged: (v) {},
+                                    onChanged: _filterOrders,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -213,96 +301,118 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
 
                             // 🔹 الجدول
                             Expanded(
-                              child: ListView.separated(
-                                itemCount: previousOrders.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 6),
-                                itemBuilder: (context, i) {
-                                  final row = previousOrders[i];
-                                  final bg = i.isEven
-                                      ? AppColors.card
-                                      : AppColors.cardAlt;
-                                  final isHovered = hoveredRow == i;
+                              child: isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.blue,
+                                      ),
+                                    )
+                                  : filteredOrders.isEmpty
+                                      ? const Center(
+                                          child: Text(
+                                            'No previous orders found',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        )
+                                      : ListView.separated(
+                                          itemCount: filteredOrders.length,
+                                          separatorBuilder: (_, __) =>
+                                              const SizedBox(height: 6),
+                                          itemBuilder: (context, i) {
+                                            final order = filteredOrders[i];
+                                            final orderId = order['order_id'].toString();
+                                            final supplierName = order['supplier']['name'] ?? 'Unknown';
+                                            final inventoryName = order['inventory_name'] ?? '-';
+                                            
+                                            final orderDate = DateTime.parse(order['order_date']);
+                                            final date = _formatDate(orderDate);
 
-                                  return MouseRegion(
-                                    onEnter: (_) =>
-                                        setState(() => hoveredRow = i),
-                                    onExit: (_) =>
-                                        setState(() => hoveredRow = null),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: isHovered
-                                            ? Border.all(
-                                                color: AppColors.blue,
-                                                width: 2,
-                                              )
-                                            : null,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              row.id,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 4,
-                                            child: Text(
-                                              row.name,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 8,
-                                            child: Align(
-                                              alignment: Alignment
-                                                  .centerLeft, // ✅ يجعل الأرقام تحت الهيدر بالضبط
-                                              child: Text(
-                                                row.inventory,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w700,
+                                            final bg = i.isEven
+                                                ? AppColors.card
+                                                : AppColors.cardAlt;
+                                            final isHovered = hoveredRow == i;
+
+                                            return MouseRegion(
+                                              onEnter: (_) =>
+                                                  setState(() => hoveredRow = i),
+                                              onExit: (_) =>
+                                                  setState(() => hoveredRow = null),
+                                              child: AnimatedContainer(
+                                                duration: const Duration(
+                                                  milliseconds: 200,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: bg,
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: isHovered
+                                                      ? Border.all(
+                                                          color: AppColors.blue,
+                                                          width: 2,
+                                                        )
+                                                      : null,
+                                                ),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 12,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Text(
+                                                        orderId,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 4,
+                                                      child: Text(
+                                                        supplierName,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 8,
+                                                      child: Align(
+                                                        alignment: Alignment.centerLeft,
+                                                        child: Text(
+                                                          inventoryName,
+                                                          style: const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      flex: 3,
+                                                      child: Align(
+                                                        alignment: Alignment.centerRight,
+                                                        child: Text(
+                                                          date,
+                                                          style: const TextStyle(
+                                                            color: AppColors.gold,
+                                                            fontSize: 15,
+                                                            fontWeight: FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: Text(
-                                                row.date,
-                                                style: const TextStyle(
-                                                  color: AppColors.gold,
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                            );
+                                          },
+                                        ),
                             ),
                           ],
                         ),
@@ -404,7 +514,7 @@ class _SearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: const BorderSide(color: Colors.black, width: 1.2),
+          borderSide: const BorderSide(color: AppColors.gold, width: 1.2),
         ),
       ),
     );
@@ -562,7 +672,7 @@ class _TableHeader extends StatelessWidget {
           children: const [
             _HeaderCell(text: 'Order ID #', flex: 2),
             _HeaderCell(text: 'Supplier Name', flex: 4),
-            _HeaderCell(text: 'Inventory #', flex: 8),
+            _HeaderCell(text: 'Inventory ', flex: 8),
             _HeaderCell(text: 'Date', flex: 3, alignEnd: true),
           ],
         ),

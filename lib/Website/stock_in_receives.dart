@@ -4,6 +4,7 @@ import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_in_previous.dart';
 import 'create_stock_in_page.dart';
+import '../supabase_config.dart';
 
 class OrdersStockInReceivesPage extends StatefulWidget {
   const OrdersStockInReceivesPage({super.key});
@@ -18,18 +19,106 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
   int currentTab = 1; // ✅ Receives هو التاب الحالي
   int? hoveredIndex;
 
-  // بيانات تجريبية (ممكن تغيّر الأسماء لمورّدين)
-  final orders = const [
-    ('101', 'Al-Nassar', 'in (NEW)', 'Sender', '12:30 AM', '14/8'),
-    ('102', 'Royal Supply', 'in (NEW)', 'Sender', '10:43 AM', '14/8'),
-    ('103', 'Beit Al-Tayeb', 'in (UPDATE)', 'Ayman Rimawi', '9:30 AM', '14/8'),
-    ('104', 'Al-Nassar', 'in (NEW)', 'Sender', '8:43 AM', '13/8'),
-    ('105', 'Royal Supply', 'in (UPDATE)', 'Ayman Rimawi', '2:30 PM', '13/8'),
-  ];
+  List<Map<String, dynamic>> allOrders = [];
+  List<Map<String, dynamic>> filteredOrders = [];
+  List<Map<String, dynamic>> onHoldOrders = [];
+  bool isLoading = true;
+  String searchQuery = '';
 
-  final onHold = const [
-    ('201', 'Al-Nassar', 'in (NEW)', 'Sender', '10:43 AM', '14/8'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadReceivesOrders();
+  }
+
+  String _formatTime(DateTime date) {
+    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = date.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}';
+  }
+
+  Future<void> _loadReceivesOrders() async {
+    setState(() => isLoading = true);
+
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      // Query for Receives tab: Accepted (same day), Rejected (same day), Updated, Hold
+      final response = await supabase
+          .from('supplier_order')
+          .select('''
+            order_id,
+            supplier_id,
+            order_date,
+            order_status,
+            last_tracing_by,
+            supplier:supplier_id (
+              name
+            )
+          ''')
+          .or('order_status.eq.Accepted,order_status.eq.Rejected,order_status.eq.Updated,order_status.eq.Hold')
+          .order('order_date', ascending: false);
+
+      final orders = (response as List).cast<Map<String, dynamic>>();
+
+      // Filter orders based on status and date
+      final List<Map<String, dynamic>> regularOrders = [];
+      final List<Map<String, dynamic>> holdOrders = [];
+
+      for (var order in orders) {
+        final orderDate = DateTime.parse(order['order_date']);
+        final orderDay = DateTime(orderDate.year, orderDate.month, orderDate.day);
+        final status = order['order_status'];
+
+        // For Hold status, always include
+        if (status == 'Hold') {
+          holdOrders.add(order);
+          continue;
+        }
+
+        // For Accepted and Rejected, only show if same day
+        if ((status == 'Accepted' || status == 'Rejected') && orderDay == today) {
+          regularOrders.add(order);
+          continue;
+        }
+
+        // For Updated, always include
+        if (status == 'Updated') {
+          regularOrders.add(order);
+        }
+      }
+
+      setState(() {
+        allOrders = regularOrders;
+        filteredOrders = regularOrders;
+        onHoldOrders = holdOrders;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading receives orders: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _filterOrders(String query) {
+    setState(() {
+      searchQuery = query;
+      if (query.isEmpty) {
+        filteredOrders = allOrders;
+      } else {
+        filteredOrders = allOrders.where((order) {
+          final supplierName = order['supplier']['name']?.toString().toLowerCase() ?? '';
+          return supplierName.startsWith(query.toLowerCase());
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +233,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                           width: 230,
                           child: _SearchField(
                             hint: 'Supplier Name',
-                            onChanged: (v) {},
+                            onChanged: _filterOrders,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -163,149 +252,181 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
 
                     // 🔹 Lists
                     Expanded(
-                      child: ListView(
-                        children: [
-                          // main list
-                          ...List.generate(orders.length, (i) {
-                            final o = orders[i];
-                            final even = int.tryParse(o.$1) ?? 0;
-                            final bg = even.isEven
-                                ? const Color(0xFF2D2D2D)
-                                : const Color(0xFF262626);
+                      child: isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF50B2E7),
+                              ),
+                            )
+                          : ListView(
+                              children: [
+                                // main list
+                                ...List.generate(filteredOrders.length, (i) {
+                                  final order = filteredOrders[i];
+                                  final orderId = order['order_id'].toString();
+                                  final supplierName = order['supplier']['name'] ?? 'Unknown';
+                                  final status = order['order_status'] ?? '';
+                                  final createdBy = order['last_tracing_by'] ?? 'System';
+                                  
+                                  final orderDate = DateTime.parse(order['order_date']);
+                                  final time = _formatTime(orderDate);
+                                  final date = _formatDate(orderDate);
+                                  
+                                  // Determine type based on status
+                                  String type = 'in (NEW)';
+                                  if (status == 'Updated') {
+                                    type = 'in (UPDATE)';
+                                  } else if (status == 'Rejected') {
+                                    type = 'in (REJECTED)';
+                                  } else if (status == 'Accepted') {
+                                    type = 'in (ACCEPTED)';
+                                  }
 
-                            return MouseRegion(
-                              onEnter: (_) => setState(() => hoveredIndex = i),
-                              onExit: (_) =>
-                                  setState(() => hoveredIndex = null),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: bg,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: hoveredIndex == i
-                                        ? const Color(0xFF50B2E7)
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$1, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(o.$2, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$3, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$4, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$5, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: Text(o.$6, style: _cellStyle()),
+                                  final even = int.tryParse(orderId) ?? 0;
+                                  final bg = even.isEven
+                                      ? const Color(0xFF2D2D2D)
+                                      : const Color(0xFF262626);
+
+                                  return MouseRegion(
+                                    onEnter: (_) => setState(() => hoveredIndex = i),
+                                    onExit: (_) => setState(() => hoveredIndex = null),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: bg,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: hoveredIndex == i
+                                              ? const Color(0xFF50B2E7)
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(orderId, style: _cellStyle()),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(supplierName, style: _cellStyle()),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(type, style: _cellStyle()),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(createdBy, style: _cellStyle()),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(time, style: _cellStyle()),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Align(
+                                              alignment: Alignment.centerRight,
+                                              child: Text(date, style: _cellStyle()),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
+                                  );
+                                }),
 
-                          const SizedBox(height: 20),
-                          const Text(
-                            'On Hold',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                                if (onHoldOrders.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    'On Hold',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // on hold list
+                                  ...List.generate(onHoldOrders.length, (i) {
+                                    final order = onHoldOrders[i];
+                                    final orderId = order['order_id'].toString();
+                                    final supplierName = order['supplier']['name'] ?? 'Unknown';
+                                    final createdBy = order['last_tracing_by'] ?? 'System';
+                                    
+                                    final orderDate = DateTime.parse(order['order_date']);
+                                    final time = _formatTime(orderDate);
+                                    final date = _formatDate(orderDate);
+
+                                    final even = int.tryParse(orderId) ?? 0;
+                                    final bg = even.isEven
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
+
+                                    return MouseRegion(
+                                      onEnter: (_) => setState(() => hoveredIndex = i + 1000),
+                                      onExit: (_) => setState(() => hoveredIndex = null),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: bg,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: hoveredIndex == i + 1000
+                                                ? const Color(0xFF50B2E7)
+                                                : Colors.transparent,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(orderId, style: _cellStyle()),
+                                            ),
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(supplierName, style: _cellStyle()),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text('in (HOLD)', style: _cellStyle()),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(createdBy, style: _cellStyle()),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(time, style: _cellStyle()),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment: Alignment.centerRight,
+                                                child: Text(date, style: _cellStyle()),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 10),
-
-                          // on hold list
-                          ...List.generate(onHold.length, (i) {
-                            final o = onHold[i];
-                            final even = int.tryParse(o.$1) ?? 0;
-                            final bg = even.isEven
-                                ? const Color(0xFF2D2D2D)
-                                : const Color(0xFF262626);
-
-                            return MouseRegion(
-                              onEnter: (_) =>
-                                  setState(() => hoveredIndex = i + 100),
-                              onExit: (_) =>
-                                  setState(() => hoveredIndex = null),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: bg,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: hoveredIndex == i + 100
-                                        ? const Color(0xFF50B2E7)
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$1, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(o.$2, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$3, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$4, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(o.$5, style: _cellStyle()),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: Text(o.$6, style: _cellStyle()),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
                     ),
                   ],
                 ),
