@@ -53,7 +53,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     final res = await supabase
         .from('customer')
         .select('customer_id, name, customer_city(name)')
-        .order('customer_id');
+        .order('customer_id', ascending: true);
 
     setState(() {
       customers
@@ -75,7 +75,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     final res = await supabase
         .from('sales_representative')
         .select('sales_rep_id, name, sales_rep_city(name)')
-        .order('sales_rep_id');
+        .order('sales_rep_id', ascending: true);
 
     setState(() {
       salesReps
@@ -97,7 +97,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     final res = await supabase
         .from('supplier')
         .select('supplier_id, name, supplier_category(name)')
-        .order('supplier_id');
+        .order('supplier_id', ascending: true);
 
     setState(() {
       suppliers
@@ -116,7 +116,10 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadBrands() async {
-    final res = await supabase.from('brand').select().order('brand_id');
+    final res = await supabase
+        .from('brand')
+        .select()
+        .order('brand_id', ascending: true);
 
     setState(() {
       brands
@@ -132,7 +135,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     final res = await supabase
         .from('product_category')
         .select()
-        .order('product_category_id');
+        .order('product_category_id', ascending: true);
 
     setState(() {
       categories
@@ -191,6 +194,25 @@ class _UsersManagementPageState extends State<UsersManagementPage>
             .toList();
       }
     });
+  }
+
+  // Sort original lists by id ascending (does not overwrite filtered lists)
+  void _sortOriginals() {
+    int compareId(Map a, Map b) {
+      final ai = a['id'] is int
+          ? a['id'] as int
+          : int.tryParse(a['id'].toString()) ?? 0;
+      final bi = b['id'] is int
+          ? b['id'] as int
+          : int.tryParse(b['id'].toString()) ?? 0;
+      return ai.compareTo(bi);
+    }
+
+    customers.sort(compareId);
+    salesReps.sort(compareId);
+    suppliers.sort(compareId);
+    brands.sort(compareId);
+    categories.sort(compareId);
   }
 
   // =============== INIT ===============
@@ -466,21 +488,84 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   // ============================
 
   void _openAddPopup() {
-    // if (_primary.index == 0) {
-    //   if (_usersTabs.index == 0) {
-    //     showCustomerPopup(context);
-    //   } else if (_usersTabs.index == 1) {
-    //     showSalesRepPopup(context);
-    //   } else {
-    //     showSupplierPopup(context);
-    //   }
-    // } else {
-    //   if (_productTabs.index == 0) {
-    //     showOneFieldPopup(context, "Add Brand", "Brand Name");
-    //   } else {
-    //     showOneFieldPopup(context, "Add Category", "Category Name");
-    //   }
-    // }
+    // Prepare a cities list from loaded data (fallback to a single default)
+    final citiesSet = <String>{};
+    for (final c in customers) {
+      final loc = c['location']?.toString() ?? '';
+      if (loc.isNotEmpty) citiesSet.add(loc);
+    }
+    for (final s in salesReps) {
+      final loc = s['location']?.toString() ?? '';
+      if (loc.isNotEmpty) citiesSet.add(loc);
+    }
+    for (final s in suppliers) {
+      final loc = s['category']?.toString() ?? '';
+      if (loc.isNotEmpty) citiesSet.add(loc);
+    }
+    final cities = citiesSet.isNotEmpty ? citiesSet.toList() : ['—'];
+
+    // USERS primary tab
+    if (_primary.index == 0) {
+      // Customer
+      if (_usersTabs.index == 0) {
+        showCustomerPopup(context, cities, (Map<String, dynamic> data) async {
+          Navigator.of(context).pop();
+          await loadCustomers();
+          _filterData(searchController.text);
+        });
+
+        return;
+      }
+
+      // Sales Rep
+      if (_usersTabs.index == 1) {
+        showSalesRepPopup(context, cities, (Map<String, dynamic> data) async {
+          Navigator.of(context).pop();
+          await loadSalesReps();
+          _filterData(searchController.text);
+        });
+
+        return;
+      }
+
+      // Supplier
+      if (_usersTabs.index == 2) {
+        showSupplierPopup(context, cities, (Map<String, dynamic> data) async {
+          Navigator.of(context).pop();
+          await loadSuppliers();
+          _filterData(searchController.text);
+        });
+
+        return;
+      }
+    }
+
+    // PRODUCT primary tab
+    if (_primary.index == 1) {
+      // Brand
+      if (_productTabs.index == 0) {
+        showOneFieldPopup(context, 'Add Brand', 'Brand Name', (String v) async {
+          Navigator.of(context).pop();
+          await loadBrands();
+          _filterData(searchController.text);
+        });
+
+        return;
+      }
+
+      // Category
+      if (_productTabs.index == 1) {
+        showOneFieldPopup(context, 'Add Category', 'Category Name', (
+          String v,
+        ) async {
+          Navigator.of(context).pop();
+          await loadCategories();
+          _filterData(searchController.text);
+        });
+
+        return;
+      }
+    }
   }
 
   // ============================
