@@ -55,7 +55,7 @@ class _OneFieldFormPopupState extends State<OneFieldFormPopup> {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 560, maxWidth: 820),
+      constraints: const BoxConstraints(minWidth: 400, maxWidth: 600),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +67,7 @@ class _OneFieldFormPopupState extends State<OneFieldFormPopup> {
                 widget.title,
                 style: GoogleFonts.roboto(
                   color: Colors.white,
-                  fontSize: 30,
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -77,18 +77,18 @@ class _OneFieldFormPopupState extends State<OneFieldFormPopup> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           Text(
             widget.label,
             style: GoogleFonts.roboto(
               color: const Color(0xFFB7A447),
-              fontSize: 15.5,
+              fontSize: 13.5,
               fontWeight: FontWeight.w600,
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
 
           Container(
             decoration: BoxDecoration(
@@ -108,34 +108,34 @@ class _OneFieldFormPopupState extends State<OneFieldFormPopup> {
               focusNode: _focusNode,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 15.5,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
               onChanged: (_) => _clearError(),
               decoration: InputDecoration(
                 hintText: 'Enter ${widget.label}',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+                  horizontal: 14,
+                  vertical: 8,
                 ),
               ),
             ),
           ),
           if (fieldError != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               fieldError!,
               style: const TextStyle(
                 color: Colors.red,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ],
 
-          const SizedBox(height: 25),
+          const SizedBox(height: 18),
 
           Align(
             alignment: Alignment.centerRight,
@@ -208,7 +208,7 @@ void showOneFieldPopup(
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
           insetPadding: const EdgeInsets.symmetric(
-            horizontal: 60,
+            horizontal: 120,
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(

@@ -14,7 +14,7 @@ class TwoColRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: left),
-        const SizedBox(width: 26),
+        const SizedBox(width: 18),
         Expanded(child: right ?? const SizedBox()),
       ],
     );
@@ -105,7 +105,7 @@ class _FieldInputState extends State<FieldInput> {
             maxLength: widget.maxLength,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 15.5,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
             onChanged: widget.onChanged != null
@@ -113,11 +113,11 @@ class _FieldInputState extends State<FieldInput> {
                 : null,
             decoration: InputDecoration(
               hintText: widget.hint,
-              hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+              hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 10,
+                horizontal: 12,
+                vertical: 7,
               ),
               counterText: widget.maxLength == null ? null : '',
               suffix: widget.suffix == null
@@ -284,17 +284,17 @@ class _AutocompleteCityQuarterState extends State<AutocompleteCityQuarter> {
                     focusNode: focusNode,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                     onChanged: (value) => widget.onChanged(value),
                     decoration: const InputDecoration(
                       hintText: 'Type to search city - quarter',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                      hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                        horizontal: 12,
+                        vertical: 8,
                       ),
                       suffixIcon: Icon(
                         Icons.arrow_drop_down,
@@ -469,17 +469,17 @@ class _AutocompleteCityState extends State<AutocompleteCity> {
                     focusNode: focusNode,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                     onChanged: (value) => widget.onChanged(value),
                     decoration: const InputDecoration(
                       hintText: 'Type to search city',
-                      hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                      hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                        horizontal: 12,
+                        vertical: 7,
                       ),
                       suffixIcon: Icon(
                         Icons.arrow_drop_down,
@@ -574,23 +574,23 @@ class SubmitButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 64,
+      height: 44,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFF9D949),
           foregroundColor: Colors.black,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(22),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           textStyle: const TextStyle(
             fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-            fontSize: 18,
+            letterSpacing: 1.0,
+            fontSize: 15,
           ),
         ),
         onPressed: onTap,
-        icon: Icon(icon, size: 26),
+        icon: Icon(icon, size: 22),
         label: Text(text),
       ),
     );

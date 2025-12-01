@@ -252,12 +252,12 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   String get _addButtonText {
     if (_primary.index == 0) {
       return [
-        'add customer',
-        'add sales rep',
-        'add supplier',
+        'Add customer',
+        'Add sales rep',
+        'Add supplier',
       ][_usersTabs.index];
     }
-    return ['add brand', 'add category'][_productTabs.index];
+    return ['Add brand', 'Add category'][_productTabs.index];
   }
 
   IconData get _addIcon {

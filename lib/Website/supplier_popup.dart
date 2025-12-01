@@ -138,7 +138,7 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
               'Add Supplier',
               style: GoogleFonts.roboto(
                 color: Colors.white,
-                fontSize: 30,
+                fontSize: 24,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -148,8 +148,8 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
+        const SizedBox(height: 6),
         TwoColRow(
           left: FieldInput(
             controller: id,
@@ -163,7 +163,7 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
           ),
           right: const SizedBox(),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 12),
 
         TwoColRow(
           left: FieldInput(
@@ -225,7 +225,7 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      height: 42,
+                      height: 38,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
@@ -236,8 +236,8 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
                         ),
                       ),
                       child: const SizedBox(
-                        height: 22,
-                        width: 22,
+                        height: 20,
+                        width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
                           valueColor: AlwaysStoppedAnimation(Color(0xFFB7A447)),
@@ -289,7 +289,7 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
           right: null,
         ),
 
-        const SizedBox(height: 25),
+        const SizedBox(height: 14),
 
         Align(
           alignment: Alignment.centerRight,
@@ -468,14 +468,14 @@ void showSupplierPopup(
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
           insetPadding: const EdgeInsets.symmetric(
-            horizontal: 60,
+            horizontal: 180,
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(20.0),
             child: SupplierFormPopup(cities: cities, onSubmit: onSubmit),
           ),
         ),
