@@ -7,6 +7,11 @@ import 'customer_popup.dart';
 import 'sales_rep_popup.dart';
 import 'supplier_popup.dart';
 import 'one_field_popup.dart';
+import 'customer_detail_popup.dart';
+import 'sales_rep_detail_popup.dart';
+import 'supplier_detail_popup.dart';
+import 'brand_detail_popup.dart';
+import 'category_detail_popup.dart';
 
 // 🔥 مهم
 import '../supabase_config.dart';
@@ -25,10 +30,14 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   static const panel = Color(0xFF2D2D2D);
   static const gold = Color(0xFFB7A447);
   static const yellowBtn = Color(0xFFF9D949);
+  static const blue = Color(0xFF50B2E7);
 
   late final TabController _primary; // Users | Product
   late TabController _usersTabs; // Customer | Sales Rep | Supplier
   late TabController _productTabs; // Brands | Category
+
+  // Hover state tracking
+  int? hoveredRow;
 
   // =============== DATA LISTS ===============
   final customers = <Map<String, dynamic>>[];
@@ -598,55 +607,118 @@ class _UsersManagementPageState extends State<UsersManagementPage>
 
           const Divider(color: Colors.white24),
 
-          for (final row in data)
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      "${row['id']}",
-                      style: const TextStyle(
-                        color: Colors.amberAccent,
-                        fontWeight: FontWeight.bold,
+          for (int i = 0; i < data.length; i++)
+            Builder(
+              builder: (context) {
+                final row = data[i];
+                final isHovered = hoveredRow == i;
+                return MouseRegion(
+                  onEnter: (_) => setState(() => hoveredRow = i),
+                  onExit: (_) => setState(() => hoveredRow = null),
+                  child: InkWell(
+                    onTap: () {
+                      final id = row['id'];
+                      if (id == null) return;
+
+                      // Determine which detail popup to show based on current tab
+                      if (_primary.index == 0) {
+                        if (_usersTabs.index == 0) {
+                          // Customer
+                          showCustomerDetailPopup(
+                            context,
+                            id,
+                            onUpdate: () async {
+                              await loadCustomers();
+                              _filterData(searchController.text);
+                            },
+                          );
+                        } else if (_usersTabs.index == 1) {
+                          // Sales Rep
+                          showSalesRepDetailPopup(
+                            context,
+                            id,
+                            onUpdate: () async {
+                              await loadSalesReps();
+                              _filterData(searchController.text);
+                            },
+                          );
+                        } else if (_usersTabs.index == 2) {
+                          // Supplier
+                          showSupplierDetailPopup(
+                            context,
+                            id,
+                            onUpdate: () async {
+                              await loadSuppliers();
+                              _filterData(searchController.text);
+                            },
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      "${row['name']}",
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        "${row[key]}",
-                        style: const TextStyle(
-                          color: gold,
-                          fontWeight: FontWeight.w600,
+                      decoration: BoxDecoration(
+                        color: panel,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isHovered ? blue : Colors.transparent,
+                          width: 1.5,
                         ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              "${row['id']}",
+                              style: const TextStyle(
+                                color: Colors.amberAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              "${row['name']}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                "${row[key]}",
+                                style: const TextStyle(
+                                  color: gold,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
         ],
       ),
@@ -668,42 +740,95 @@ class _UsersManagementPageState extends State<UsersManagementPage>
           ),
           const Divider(color: Colors.white24),
 
-          for (final it in list)
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      "${it['id']}",
-                      style: const TextStyle(
-                        color: Colors.amberAccent,
-                        fontWeight: FontWeight.bold,
+          for (int i = 0; i < list.length; i++)
+            Builder(
+              builder: (context) {
+                final it = list[i];
+                final isHovered = hoveredRow == i;
+                return MouseRegion(
+                  onEnter: (_) => setState(() => hoveredRow = i),
+                  onExit: (_) => setState(() => hoveredRow = null),
+                  child: InkWell(
+                    onTap: () {
+                      final id = it['id'];
+                      if (id == null) return;
+
+                      // Determine which detail popup to show based on current tab
+                      if (_primary.index == 1) {
+                        if (_productTabs.index == 0) {
+                          // Brand
+                          showBrandDetailPopup(
+                            context,
+                            id,
+                            onUpdate: () async {
+                              await loadBrands();
+                              _filterData(searchController.text);
+                            },
+                          );
+                        } else if (_productTabs.index == 1) {
+                          // Category
+                          showCategoryDetailPopup(
+                            context,
+                            id,
+                            onUpdate: () async {
+                              await loadCategories();
+                              _filterData(searchController.text);
+                            },
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: panel,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isHovered ? blue : Colors.transparent,
+                          width: 1.5,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              "${it['id']}",
+                              style: const TextStyle(
+                                color: Colors.amberAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 5,
+                            child: Text(
+                              "${it['name']}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  Expanded(
-                    flex: 5,
-                    child: Text(
-                      "${it['name']}",
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
         ],
       ),

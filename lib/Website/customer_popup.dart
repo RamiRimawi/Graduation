@@ -135,7 +135,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
               'Add Customer',
               style: GoogleFonts.roboto(
                 color: Colors.white,
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -145,8 +145,8 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
+        const SizedBox(height: 8),
         TwoColRow(
           left: FieldInput(
             controller: id,
@@ -160,7 +160,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
           ),
           right: const SizedBox(),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
 
         TwoColRow(
           left: FieldInput(
@@ -218,7 +218,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      height: 38,
+                      height: 42,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
@@ -229,8 +229,8 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                         ),
                       ),
                       child: const SizedBox(
-                        height: 20,
-                        width: 20,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
                           valueColor: AlwaysStoppedAnimation(Color(0xFFB7A447)),
@@ -485,14 +485,14 @@ void showCustomerPopup(
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
           insetPadding: const EdgeInsets.symmetric(
-            horizontal: 180,
+            horizontal: 120,
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(24.0),
             child: CustomerFormPopup(cities: cities, onSubmit: onSubmit),
           ),
         ),

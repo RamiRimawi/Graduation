@@ -267,6 +267,7 @@ class _AutocompleteCityQuarterState extends State<AutocompleteCityQuarter> {
               (context, controller, focusNode, onEditingComplete) {
                 _controller = controller;
                 return Container(
+                  height: 38,
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(10),
@@ -282,6 +283,7 @@ class _AutocompleteCityQuarterState extends State<AutocompleteCityQuarter> {
                   child: TextField(
                     controller: controller,
                     focusNode: focusNode,
+                    textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
@@ -292,10 +294,8 @@ class _AutocompleteCityQuarterState extends State<AutocompleteCityQuarter> {
                       hintText: 'Type to search city - quarter',
                       hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
                       suffixIcon: Icon(
                         Icons.arrow_drop_down,
                         color: Color(0xFFB7A447),
