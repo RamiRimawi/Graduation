@@ -49,7 +49,6 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
 
     try {
       // Query for Previous tab: Rejected (all days), Delivered
-      // First, get supplier orders with their details
       final ordersResponse = await supabase
           .from('supplier_order')
           .select('''
@@ -67,38 +66,37 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
 
       final orders = (ordersResponse as List).cast<Map<String, dynamic>>();
 
-      // Now get the batch information to find inventory
+      // الحصول على المخزن من batch إذا كان موجود، وإلا N/A
       for (var order in orders) {
+        String inventoryLocation = 'N/A';
+        
         try {
-          // First get the product_id from supplier_order_description
           final descriptionResponse = await supabase
               .from('supplier_order_description')
               .select('product_id')
               .eq('order_id', order['order_id'])
-              .limit(1);
+              .limit(1)
+              .maybeSingle();
 
-          if (descriptionResponse.isNotEmpty) {
-            final productId = descriptionResponse[0]['product_id'];
-            
-            // Then get the inventory from batch table
+          if (descriptionResponse != null && descriptionResponse['product_id'] != null) {
             final batchResponse = await supabase
                 .from('batch')
                 .select('inventory:inventory_id(inventory_location)')
-                .eq('product_id', productId)
-                .limit(1);
+                .eq('product_id', descriptionResponse['product_id'])
+                .limit(1)
+                .maybeSingle();
 
-            if (batchResponse.isNotEmpty && batchResponse[0]['inventory'] != null) {
-              order['inventory_name'] = batchResponse[0]['inventory']['inventory_location'] ?? '-';
-            } else {
-              order['inventory_name'] = '-';
+            if (batchResponse != null && 
+                batchResponse['inventory'] is Map &&
+                batchResponse['inventory']['inventory_location'] != null) {
+              inventoryLocation = batchResponse['inventory']['inventory_location'];
             }
-          } else {
-            order['inventory_name'] = '-';
           }
         } catch (e) {
-          print('Error loading inventory for order ${order['order_id']}: $e');
-          order['inventory_name'] = '-';
+          print('Error fetching inventory for order ${order['order_id']}: $e');
         }
+        
+        order['inventory_name'] = inventoryLocation;
       }
 
       setState(() {

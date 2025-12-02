@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'sidebar.dart'; // الملف عندك فيه class SideBar
+import 'package:flutter/services.dart';
+import 'sidebar.dart';
+import '../supabase_config.dart';
+import 'add_product_order.dart';
 
 class CreateStockOutPage extends StatefulWidget {
   const CreateStockOutPage({super.key});
@@ -9,9 +12,243 @@ class CreateStockOutPage extends StatefulWidget {
 }
 
 class _CreateStockOutPageState extends State<CreateStockOutPage> {
-  String? selectedCustomer;
+  String? selectedCustomerId;
+  Map<String, dynamic>? selectedCustomer;
   final TextEditingController discountController = TextEditingController();
-  int? hoveredIndex; // ✅ لتتبع الصف الذي عليه الماوس
+  int? hoveredIndex;
+  
+  List<Map<String, dynamic>> allCustomers = [];
+  List<Map<String, dynamic>> filteredCustomers = [];
+  List<Map<String, dynamic>> allProducts = [];
+  Set<int> selectedProductIds = {};
+  bool isLoadingCustomers = true;
+  bool isLoadingProducts = false;
+  
+  static const int taxPercent = 16;
+  
+  double get subtotal {
+    double sum = 0;
+    for (var product in allProducts) {
+      final price = product['selling_price'] ?? 0;
+      final quantity = product['quantity'] ?? 0;
+      sum += price * quantity;
+    }
+    return sum;
+  }
+  
+  double get taxAmount {
+    return subtotal * (taxPercent / 100);
+  }
+  
+  double get discount {
+    final discountPercent = double.tryParse(discountController.text) ?? 0;
+    return subtotal * (discountPercent / 100);
+  }
+  
+  double get totalPrice {
+    return subtotal + taxAmount - discount;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCustomers();
+    // لا نحمل المنتجات عند فتح الصفحة - الجدول يبدأ فاضي
+    discountController.addListener(() {
+      setState(() {}); // Rebuild when discount changes
+    });
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
+    );
+  }
+
+  void _changeQuantityForHovered(int delta) {
+    if (hoveredIndex == null || hoveredIndex == 0) {
+      _showMessage('Hover a product row to modify quantity');
+      return;
+    }
+    final int idx = hoveredIndex! - 1; // account for header row
+    if (idx < 0 || idx >= allProducts.length) return;
+    setState(() {
+      final product = allProducts[idx];
+      final int current = (product['quantity'] ?? 0) is int
+          ? product['quantity'] ?? 0
+          : int.tryParse(product['quantity'].toString()) ?? 0;
+      int updated = current + delta;
+      if (updated < 0) updated = 0;
+      product['quantity'] = updated;
+    });
+  }
+
+  Future<void> _loadCustomers() async {
+    setState(() => isLoadingCustomers = true);
+    try {
+      final response = await supabase
+          .from('customer')
+          .select('''
+            customer_id,
+            name,
+            address,
+            customer_city:customer_city(name)
+          ''')
+          .order('name');
+
+      setState(() {
+        allCustomers = List<Map<String, dynamic>>.from(response);
+        filteredCustomers = allCustomers;
+        isLoadingCustomers = false;
+      });
+    } catch (e) {
+      print('Error loading customers: $e');
+      setState(() => isLoadingCustomers = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAvailableProducts() async {
+    try {
+      final response = await supabase
+          .from('product')
+          .select('''
+            product_id,
+            name,
+            selling_price,
+            brand:brand_id(name),
+            unit:unit_id(unit_name),
+            total_quantity
+          ''')
+          .eq('is_active', true)
+          .order('name');
+
+      final allProductsFromDB = List<Map<String, dynamic>>.from(response);
+      
+      // فلتر المنتجات: إظهار فقط المنتجات غير الموجودة في الجدول
+      final availableProducts = allProductsFromDB.where((product) {
+        return !allProducts.any((p) => p['product_id'] == product['product_id']);
+      }).toList();
+      
+      return availableProducts;
+    } catch (e) {
+      print('Error loading products: $e');
+      return [];
+    }
+  }
+
+  Future<void> _sendOrder() async {
+    try {
+      // حساب المجاميع
+      final totalCost = subtotal;
+      final totalBalance = totalPrice;
+      
+      // إنشاء الطلب في customer_order
+      final orderResponse = await supabase
+          .from('customer_order')
+          .insert({
+            'customer_id': int.parse(selectedCustomerId!),
+            'total_cost': totalCost,
+            'tax_percent': taxPercent,
+            'total_balance': totalBalance,
+            'order_date': DateTime.now().toIso8601String(),
+            'order_status': 'Pinned',
+          })
+          .select('customer_order_id')
+          .single();
+      
+      final orderId = orderResponse['customer_order_id'];
+      
+      // إضافة تفاصيل المنتجات المحددة فقط في customer_order_description
+      for (var product in allProducts) {
+        if (selectedProductIds.contains(product['product_id'])) { // فقط المنتجات المحددة
+          final quantity = product['quantity'] ?? 0;
+          if (quantity > 0) {
+            await supabase.from('customer_order_description').insert({
+              'customer_order_id': orderId,
+              'product_id': product['product_id'],
+              'quantity': quantity,
+              'delivered_quantity': 0,
+              'total_price': (product['selling_price'] ?? 0) * quantity,
+            });
+          }
+        }
+      }
+      
+      if (mounted) {
+        _showMessage('Order sent successfully!');
+        // حذف المنتجات المرسلة من الجدول
+        setState(() {
+          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          selectedProductIds.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showMessage('Failed to send order: $e');
+      }
+      print('Error sending order: $e');
+    }
+  }
+
+  Future<void> _holdOrder() async {
+    try {
+      // حساب المجاميع
+      final totalCost = subtotal;
+      final totalBalance = totalPrice;
+      
+      // إنشاء الطلب في customer_order مع حالة Hold
+      final orderResponse = await supabase
+          .from('customer_order')
+          .insert({
+            'customer_id': int.parse(selectedCustomerId!),
+            'total_cost': totalCost,
+            'tax_percent': taxPercent,
+            'total_balance': totalBalance,
+            'order_date': DateTime.now().toIso8601String(),
+            'order_status': 'Hold',
+          })
+          .select('customer_order_id')
+          .single();
+      
+      final orderId = orderResponse['customer_order_id'];
+      
+      // إضافة تفاصيل المنتجات المحددة فقط في customer_order_description
+      for (var product in allProducts) {
+        if (selectedProductIds.contains(product['product_id'])) {
+          final quantity = product['quantity'] ?? 0;
+          if (quantity > 0) {
+            await supabase.from('customer_order_description').insert({
+              'customer_order_id': orderId,
+              'product_id': product['product_id'],
+              'quantity': quantity,
+              'delivered_quantity': 0,
+              'total_price': (product['selling_price'] ?? 0) * quantity,
+            });
+          }
+        }
+      }
+      
+      if (mounted) {
+        _showMessage('Order saved as Hold!');
+        // حذف المنتجات المحفوظة من الجدول
+        setState(() {
+          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          selectedProductIds.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showMessage('Failed to hold order: $e');
+      }
+      print('Error holding order: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    discountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +304,10 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                 const SizedBox(width: 8),
                                 Container(
                                   height: 38,
-                                  width: 200,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 200,
+                                    maxWidth: 400,
+                                  ),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
                                   ),
@@ -78,53 +318,53 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                     borderRadius: BorderRadius.circular(6),
                                     color: const Color(0xFF2D2D2D),
                                   ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      dropdownColor: const Color(0xFF2D2D2D),
-                                      value: selectedCustomer,
-                                      hint: const Text(
-                                        "Select Customer",
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      items: const [
-                                        DropdownMenuItem(
-                                          value: "Ahmad Nizar",
-                                          child: Text(
-                                            "Ahmad Nizar",
-                                            style: TextStyle(
-                                              color: Colors.white,
+                                  child: isLoadingCustomers
+                                      ? const Center(
+                                          child: SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFFB7A447),
+                                            ),
+                                          ),
+                                        )
+                                      : DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            dropdownColor: const Color(0xFF2D2D2D),
+                                            value: selectedCustomerId,
+                                            hint: const Text(
+                                              "Select Customer",
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            items: filteredCustomers.map((customer) {
+                                              return DropdownMenuItem<String>(
+                                                value: customer['customer_id'].toString(),
+                                                child: Text(
+                                                  customer['name'],
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                            onChanged: (value) {
+                                              setState(() {
+                                                selectedCustomerId = value;
+                                                selectedCustomer = filteredCustomers
+                                                    .firstWhere((c) => c['customer_id'].toString() == value);
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              color: Colors.white70,
                                             ),
                                           ),
                                         ),
-                                        DropdownMenuItem(
-                                          value: "Saed Rimawi",
-                                          child: Text(
-                                            "Saed Rimawi",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: "Nizar Fares",
-                                          child: Text(
-                                            "Nizar Fares",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                      onChanged: (value) {},
-                                      icon: const Icon(
-                                        Icons.keyboard_arrow_down_rounded,
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),
@@ -143,56 +383,63 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                     // ===== LOCATION / DATE / TAX =====
                     Padding(
                       padding: const EdgeInsets.only(right: 30.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: const [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Location : Ramallah , Beit Rema",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  selectedCustomer != null
+                                      ? "Location : ${selectedCustomer!['address'] ?? '-'}"
+                                      : "Location : -",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: 3),
-                              Text(
-                                "Quarter : maaser",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
+                                const SizedBox(height: 3),
+                                Text(
+                                  selectedCustomer != null
+                                      ? "Customer : ${selectedCustomer!['name'] ?? '-'}"
+                                      : "Customer : -",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(width: 220),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Date : 18-8-2026",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
+                              ],
+                            ),
+                            const SizedBox(width: 220),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Date : ${DateTime.now().day}-${DateTime.now().month}-${DateTime.now().year}",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: 3),
-                              Text(
-                                "Time : 11:00 AM",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
+                                const SizedBox(height: 3),
+                                Text(
+                                  "Time : ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(width: 220),
-                          Text(
-                            "Tax percent : 18%",
-                            style: TextStyle(color: Colors.white, fontSize: 15),
-                          ),
-                        ],
+                              ],
+                            ),
+                            const SizedBox(width: 220),
+                            Text(
+                              "Tax percent : $taxPercent%",
+                              style: const TextStyle(color: Colors.white, fontSize: 15),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -208,9 +455,25 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                           // ===== TABLE =====
                           Expanded(
                             flex: 10,
-                            child: ListView.builder(
-                              itemCount: demoData.length + 1,
-                              itemBuilder: (context, index) {
+                            child: isLoadingProducts
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFF50B2E7),
+                                    ),
+                                  )
+                                : allProducts.isEmpty
+                                    ? const Center(
+                                        child: Text(
+                                          'No products found',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        itemCount: allProducts.length + 1,
+                                        itemBuilder: (context, index) {
                                 if (index == 0) {
                                   return Column(
                                     children: [
@@ -258,53 +521,88 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   );
                                 }
 
-                                final row = demoData[index - 1];
-                                final bgColor = (index % 2 == 0)
-                                    ? const Color(0xFF2D2D2D)
-                                    : const Color(0xFF262626);
+                                final product = allProducts[index - 1];
+                                final productId = product['product_id'];
+                                final productName = product['name'] ?? 'Unknown';
+                                final brandName = product['brand']?['name'] ?? '-';
+                                final sellingPrice = product['selling_price'] ?? 0;
+                                final unitName = product['unit']?['unit_name'] ?? 'pcs';
+                                final quantity = product['quantity'] ?? 0;
+                                final totalProductPrice = sellingPrice * quantity;
+                                final isSelected = selectedProductIds.contains(productId);
+                                
+                                final bgColor = isSelected 
+                                    ? const Color(0xFF4D2D2D)
+                                    : (index % 2 == 0)
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
 
-                                // ✅ hover effect فقط
                                 return MouseRegion(
                                   onEnter: (_) =>
                                       setState(() => hoveredIndex = index),
                                   onExit: (_) =>
                                       setState(() => hoveredIndex = null),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: bgColor,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: hoveredIndex == index
-                                            ? const Color(0xFF50B2E7)
-                                            : Colors.transparent,
-                                        width: 2,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        if (isSelected) {
+                                          selectedProductIds.remove(productId);
+                                        } else {
+                                          selectedProductIds.add(productId);
+                                        }
+                                      });
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: bgColor,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? const Color(0xFFC34239)
+                                              : hoveredIndex == index
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                          width: 2,
+                                        ),
                                       ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 2,
-                                          child: Center(
-                                            child: Text(
-                                              "${row['id']}",
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (val) {
+                                              setState(() {
+                                                if (val == true) {
+                                                  selectedProductIds.add(productId);
+                                                } else {
+                                                  selectedProductIds.remove(productId);
+                                                }
+                                              });
+                                            },
+                                            activeColor: const Color(0xFFC34239),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Center(
+                                              child: Text(
+                                                productId.toString(),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
                                         Expanded(
                                           flex: 4,
                                           child: Center(
                                             child: Text(
-                                              row['name'],
+                                              productName,
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -316,7 +614,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                           flex: 3,
                                           child: Center(
                                             child: Text(
-                                              row['brand'],
+                                              brandName,
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -328,7 +626,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                           flex: 3,
                                           child: Center(
                                             child: Text(
-                                              "${row['price']}\$",
+                                              "\$${sellingPrice.toStringAsFixed(2)}",
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -343,28 +641,55 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 8,
+                                                    horizontal: 4,
                                                     vertical: 4,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFB7A447),
+                                                color: quantity > 0 
+                                                    ? const Color(0xFFB7A447)
+                                                    : const Color(0xFF6F6F6F),
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Text(
-                                                    "${row['qty']}",
-                                                    style: const TextStyle(
-                                                      color: Colors.black,
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                                  SizedBox(
+                                                    width: 40,
+                                                    child: TextFormField(
+                                                      key: ValueKey('quantity_$productId'),
+                                                      initialValue: quantity == 0 ? '' : quantity.toString(),
+                                                      keyboardType: TextInputType.number,
+                                                      inputFormatters: [
+                                                        FilteringTextInputFormatter.digitsOnly,
+                                                      ],
+                                                      textAlign: TextAlign.center,
+                                                      style: const TextStyle(
+                                                        color: Colors.black,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 14,
+                                                      ),
+                                                      decoration: const InputDecoration(
+                                                        border: InputBorder.none,
+                                                        contentPadding: EdgeInsets.zero,
+                                                        isDense: true,
+                                                        hintText: '0',
+                                                        hintStyle: TextStyle(
+                                                          color: Colors.black54,
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                      onChanged: (value) {
+                                                        setState(() {
+                                                          product['quantity'] = int.tryParse(value) ?? 0;
+                                                        });
+                                                      },
                                                     ),
                                                   ),
                                                   const SizedBox(width: 4),
                                                   Text(
-                                                    "cm",
+                                                    unitName,
                                                     style: TextStyle(
                                                       color: Colors.white
                                                           .withOpacity(0.9),
@@ -381,7 +706,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                           flex: 3,
                                           child: Center(
                                             child: Text(
-                                              "${row['total']}\$",
+                                              "\$${totalProductPrice.toStringAsFixed(2)}",
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.w600,
@@ -391,6 +716,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                         ),
                                       ],
                                     ),
+                                  ),
                                   ),
                                 );
                               },
@@ -414,6 +740,44 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   label: 'Add Product',
                                   textColor: Colors.black,
                                   width: 220,
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: true,
+                                      builder: (_) {
+                                        return AddProductPopup(
+                                          existingProducts: allProducts,
+                                          onClose: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                          onDone: (selectedProducts) {
+                                            setState(() {
+                                              for (var product in selectedProducts) {
+                                                final existingIndex = allProducts.indexWhere(
+                                                  (p) => p['product_id'] == product['product_id']
+                                                );
+                                                if (existingIndex >= 0) {
+                                                  // المنتج موجود - زيادة الكمية فقط
+                                                  allProducts[existingIndex]['quantity'] = 
+                                                    (allProducts[existingIndex]['quantity'] ?? 0) + (product['quantity'] ?? 0);
+                                                } else {
+                                                  // منتج جديد - إضافة للجدول (ليس للداتا بيس)
+                                                  allProducts.add({
+                                                    'product_id': product['product_id'],
+                                                    'name': product['name'],
+                                                    'brand': product['brand'],
+                                                    'selling_price': product['selling_price'] ?? 0,
+                                                    'unit': product['unit'] ?? {'unit_name': 'pcs'},
+                                                    'quantity': product['quantity'] ?? 0,
+                                                  });
+                                                }
+                                              }
+                                            });
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: 20),
                                 _ActionButton(
@@ -422,22 +786,45 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   label: 'Remove Product',
                                   textColor: Colors.white,
                                   width: 220,
+                                  onTap: () {
+                                    if (selectedProductIds.isEmpty) {
+                                      _showMessage('Select products to remove');
+                                      return;
+                                    }
+                                    setState(() {
+                                      allProducts.removeWhere((p) => 
+                                        selectedProductIds.contains(p['product_id'])
+                                      );
+                                      selectedProductIds.clear();
+                                    });
+                                  },
                                 ),
                                 const SizedBox(height: 20),
                                 _ActionButton(
-                                  color: const Color(0xFF4287AD),
+                                  color:
+                                      const Color(0xFF4287AD),
                                   icon: Icons.send_rounded,
                                   label: 'Send Order',
                                   textColor: Colors.black,
                                   width: 220,
+                                  onTap: (selectedCustomerId == null || selectedProductIds.isEmpty)
+                                      ? null
+                                      : () async {
+                                          await _sendOrder();
+                                        },
                                 ),
                                 const SizedBox(height: 20),
                                 _ActionButton(
-                                  color: const Color(0xFF6F6F6F),
+                                  color:  const Color(0xFF6F6F6F),
                                   icon: Icons.pause_circle_filled_rounded,
                                   label: 'Hold',
-                                  textColor: Colors.white,
+                                  textColor:  Colors.white,
                                   width: 220,
+                                  onTap: (selectedCustomerId == null || selectedProductIds.isEmpty)
+                                      ? null
+                                      : () async {
+                                          await _holdOrder();
+                                        },
                                 ),
                                 const SizedBox(height: 30),
                                 const Divider(color: Colors.white24),
@@ -459,12 +846,21 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                       height: 32,
                                       child: TextField(
                                         controller: discountController,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.digitsOnly,
+                                        ],
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 14,
                                         ),
                                         decoration: InputDecoration(
-                                          hintText: "%",
+                                          suffixText: "%",
+                                          suffixStyle: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                          ),
+                                          hintText: "0",
                                           hintStyle: const TextStyle(
                                             color: Colors.white54,
                                           ),
@@ -495,9 +891,9 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
-                                const Text(
-                                  'Total Price : 12,566\$',
-                                  style: TextStyle(
+                                Text(
+                                  'Total Price : \$${totalPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 16,
@@ -549,6 +945,7 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final double width;
+  final VoidCallback? onTap;
 
   const _ActionButton({
     required this.color,
@@ -556,92 +953,37 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.textColor,
     this.width = 260,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(40),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: textColor, size: 20),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(40),
+      child: Container(
+        width: width,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(40),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: textColor, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-
-// ====== DEMO DATA ======
-final List<Map<String, dynamic>> demoData = [
-  {
-    'id': 26,
-    'name': 'Ahmad Nizar',
-    'brand': 'GROHE',
-    'price': 26,
-    'qty': 234,
-    'total': 26,
-  },
-  {
-    'id': 27,
-    'name': 'Saed Rimawi',
-    'brand': 'Royal',
-    'price': 150,
-    'qty': 30,
-    'total': 150,
-  },
-  {
-    'id': 30,
-    'name': 'Akef Al Asmar',
-    'brand': 'GROHE',
-    'price': 200,
-    'qty': 100,
-    'total': 200,
-  },
-  {
-    'id': 29,
-    'name': 'Nizar Fares',
-    'brand': 'Royal',
-    'price': 25,
-    'qty': 29,
-    'total': 25,
-  },
-  {
-    'id': 31,
-    'name': 'Sameer Haj',
-    'brand': 'Royal',
-    'price': 10,
-    'qty': 32,
-    'total': 10,
-  },
-  {
-    'id': 28,
-    'name': 'Eyas Barghouthi',
-    'brand': 'GROHE',
-    'price': 30,
-    'qty': 28,
-    'total': 30,
-  },
-  {
-    'id': 20,
-    'name': 'Sami Jaber',
-    'brand': 'GROHE',
-    'price': 43,
-    'qty': 67,
-    'total': 43,
-  },
-];

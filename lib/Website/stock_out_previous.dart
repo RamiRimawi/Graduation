@@ -57,7 +57,11 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
       // Fetch orders with status 'Delivered'
       final data = await supabase
           .from('customer_order')
-          .select('customer_order_id, order_date, customer:customer_id(name), customer_order_description(product:product_id(batch(inventory:inventory_id(inventory_location))))')
+          .select('''
+            customer_order_id,
+            order_date,
+            customer:customer_id(name)
+          ''')
           .eq('order_status', 'Delivered')
           .order('order_date', ascending: false)
           .limit(100);
@@ -65,25 +69,38 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
       final ordersList = <OrderPreviousRow>[];
 
       for (final row in data) {
-        final id = (row['customer_order_id'] ?? '').toString();
+        final orderId = (row['customer_order_id'] ?? '').toString();
         final customerName = (row['customer'] is Map)
             ? (row['customer']['name'] ?? 'Unknown')
             : 'Unknown';
         
-        // Extract inventory from nested join
+        // الحصول على المخزن من batch إذا كان موجود، وإلا N/A
         String inventoryLocation = 'N/A';
-        if (row['customer_order_description'] is List && 
-            (row['customer_order_description'] as List).isNotEmpty) {
-          final firstDesc = (row['customer_order_description'] as List)[0];
-          if (firstDesc is Map && firstDesc['product'] is Map) {
-            final product = firstDesc['product'];
-            if (product['batch'] is List && (product['batch'] as List).isNotEmpty) {
-              final firstBatch = (product['batch'] as List)[0];
-              if (firstBatch is Map && firstBatch['inventory'] is Map) {
-                inventoryLocation = firstBatch['inventory']['inventory_location'] ?? 'N/A';
-              }
+        
+        try {
+          final descResponse = await supabase
+              .from('customer_order_description')
+              .select('product_id')
+              .eq('customer_order_id', row['customer_order_id'])
+              .limit(1)
+              .maybeSingle();
+          
+          if (descResponse != null && descResponse['product_id'] != null) {
+            final batchResponse = await supabase
+                .from('batch')
+                .select('inventory:inventory_id(inventory_location)')
+                .eq('product_id', descResponse['product_id'])
+                .limit(1)
+                .maybeSingle();
+            
+            if (batchResponse != null && 
+                batchResponse['inventory'] is Map &&
+                batchResponse['inventory']['inventory_location'] != null) {
+              inventoryLocation = batchResponse['inventory']['inventory_location'];
             }
           }
+        } catch (e) {
+          print('Error fetching inventory for order $orderId: $e');
         }
 
         final orderDate = row['order_date'] != null
@@ -92,7 +109,7 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
         final date = '${orderDate.day}/${orderDate.month}/${orderDate.year}';
 
         ordersList.add(OrderPreviousRow(
-          id: id,
+          id: orderId,
           customerName: customerName,
           inventory: inventoryLocation,
           date: date,

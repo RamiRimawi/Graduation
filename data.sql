@@ -244,7 +244,7 @@ INSERT INTO unit (unit_name) VALUES
 -- =====================================================
 
 INSERT INTO product
-(category_id, name, brand_id, wholesale_price, selling_price, minimum_profit_percent, unit_id, is_active, last_action_by)
+(category_id, name, brand_id, wholesale_price, selling_price, minimum_profit_percent, unit_id, is_active, last_action_by )
 VALUES
 ((SELECT product_category_id FROM product_category WHERE name = 'Shower Heads' LIMIT 1), 'GROHE Hand Shower 3-Flow', (SELECT brand_id FROM brand WHERE name = 'GROHE' LIMIT 1), 35, 49, 20, (SELECT unit_id FROM unit WHERE unit_name = 'pcs' LIMIT 1), TRUE, 'system'),
 ((SELECT product_category_id FROM product_category WHERE name = 'Shower Heads' LIMIT 1), 'Hansgrohe Rain Shower Head', (SELECT brand_id FROM brand WHERE name = 'Hansgrohe' LIMIT 1), 60, 85, 20, (SELECT unit_id FROM unit WHERE unit_name = 'pcs' LIMIT 1), TRUE, 'system'),
