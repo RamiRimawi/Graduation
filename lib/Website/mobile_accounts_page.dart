@@ -2,10 +2,14 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_config.dart';
 
 import 'sidebar.dart';
+import 'accounts_popups/add_customer_account_popup.dart';
+import 'accounts_popups/add_supplier_account_popup.dart';
+import 'accounts_popups/add_sales_rep_account_popup.dart';
+import 'accounts_popups/add_storage_staff_account_popup.dart';
+import 'accounts_popups/add_delivery_driver_account_popup.dart';
 
 class MobileAccountsPage extends StatefulWidget {
   const MobileAccountsPage({super.key});
@@ -61,9 +65,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
   Future<void> _loadAccounts() async {
     try {
       // Ensure Supabase is initialized (safe if already initialized)
-      if (Supabase.instance.client == null) {
-        await SupabaseConfig.initialize();
-      }
+      await SupabaseConfig.initialize();
 
       // Fetch names by role from corresponding tables
       final client = supabase;
@@ -72,32 +74,38 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
       final storageManagers = await client
           .from('storage_manager')
           .select(
-            'name,user_account_storage_manager!inner(is_active,profile_image)',
+            'storage_manager_id,name,mobile_number,telephone_number,address,user_account_storage_manager!inner(is_active,profile_image,added_by,added_time,password)',
           )
           .eq('user_account_storage_manager.is_active', 'yes');
       final storageStaff = await client
           .from('storage_staff')
           .select(
-            'name,user_account_storage_staff!inner(is_active,profile_image)',
+            'storage_staff_id,name,mobile_number,telephone_number,address,user_account_storage_staff!inner(is_active,profile_image,added_by,added_time,password)',
           )
           .eq('user_account_storage_staff.is_active', 'yes');
       final deliveryDrivers = await client
           .from('delivery_driver')
           .select(
-            'name,user_account_delivery_driver!inner(is_active,profile_image)',
+            'delivery_driver_id,name,mobile_number,telephone_number,address,user_account_delivery_driver!inner(is_active,profile_image,added_by,added_time,password)',
           )
           .eq('user_account_delivery_driver.is_active', 'yes');
       final customers = await client
           .from('customer')
-          .select('name,user_account_customer!inner(is_active,profile_image)')
+          .select(
+            'customer_id,name,email,mobile_number,telephone_number,address,user_account_customer!inner(is_active,profile_image,added_by,added_time,password)',
+          )
           .eq('user_account_customer.is_active', 'yes');
       final salesReps = await client
           .from('sales_representative')
-          .select('name,user_account_sales_rep!inner(is_active,profile_image)')
+          .select(
+            'sales_rep_id,name,email,mobile_number,telephone_number,user_account_sales_rep!inner(is_active,profile_image,added_by,added_time,password)',
+          )
           .eq('user_account_sales_rep.is_active', 'yes');
       final suppliers = await client
           .from('supplier')
-          .select('name,user_account_supplier!inner(is_active,profile_image)')
+          .select(
+            'supplier_id,name,email,mobile_number,telephone_number,address,user_account_supplier!inner(is_active,profile_image,added_by,added_time,password)',
+          )
           .eq('user_account_supplier.is_active', 'yes');
 
       setState(() {
@@ -136,10 +144,10 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
               final rel = r[key];
               if (rel is Map<String, dynamic>) {
                 img = rel['profile_image'] as String?;
-                if (img != null && img!.isNotEmpty) break;
+                if (img != null && img.isNotEmpty) break;
               }
             }
-            return _AccountItem(name: name ?? '', imageUrl: img);
+            return _AccountItem(name: name ?? '', imageUrl: img, rawData: r);
           })
           .where((i) => i.name.isNotEmpty)
           .toList();
@@ -309,6 +317,11 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                                         _AccountCard(
                                           name: item.name,
                                           imageUrl: item.imageUrl,
+                                          onTap: () => _showAccountDetails(
+                                            context,
+                                            item,
+                                            entry.key,
+                                          ),
                                         ),
                                       if (entry.value.isEmpty)
                                         const Text(
@@ -691,38 +704,23 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
     switch (type) {
       case _RoleFormType.customer:
         title = 'Customer';
-        form = const _SimpleThreeFieldForm(
-          firstLabel: 'Customer Name',
-          firstHint: 'Select Customer Name',
-        );
+        form = const SizedBox.shrink();
         break;
       case _RoleFormType.supplier:
         title = 'Supplier';
-        form = const _SimpleThreeFieldForm(
-          firstLabel: 'Supplier Name',
-          firstHint: 'Select Supplier Name',
-        );
+        form = const SizedBox.shrink();
         break;
       case _RoleFormType.salesRep:
         title = 'Sales Rep';
-        form = const _SimpleThreeFieldForm(
-          firstLabel: 'Sales Rep Name',
-          firstHint: 'Select Sales Rep Name',
-        );
+        form = const SizedBox.shrink();
         break;
       case _RoleFormType.deliveryDriver:
         title = 'Delivery Driver';
-        form = const _ExtendedStaffForm(
-          title: 'Delivery Driver',
-          nameLabel: 'Delivery Driver Name',
-        );
+        form = const SizedBox.shrink();
         break;
       case _RoleFormType.storageStaff:
         title = 'Storage Staff';
-        form = const _ExtendedStaffForm(
-          title: 'Storage Staff',
-          nameLabel: 'Storage Staff Name',
-        );
+        form = const SizedBox.shrink();
         break;
     }
 
@@ -743,69 +741,115 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
               ),
             ),
             Center(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  constraints: const BoxConstraints(
-                    maxWidth: 880,
-                    minWidth: 620,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 32,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black54,
-                        offset: Offset(0, 10),
-                        blurRadius: 24,
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 6,
-                          right: 8,
-                          left: 8,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              title,
-                              style: GoogleFonts.roboto(
-                                color: gold,
-                                fontSize: 30,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 26),
-                            form,
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: IconButton(
-                          splashRadius: 20,
-                          onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              child: Builder(
+                builder: (_) {
+                  switch (type) {
+                    case _RoleFormType.customer:
+                      return AddCustomerAccountPopup(
+                        onAccountCreated: () {
+                          setState(() {
+                            _loadAccounts();
+                          });
+                        },
+                      );
+                    case _RoleFormType.supplier:
+                      return AddSupplierAccountPopup(
+                        onAccountCreated: () {
+                          setState(() {
+                            _loadAccounts();
+                          });
+                        },
+                      );
+                    case _RoleFormType.salesRep:
+                      return AddSalesRepAccountPopup(
+                        onAccountCreated: () {
+                          setState(() {
+                            _loadAccounts();
+                          });
+                        },
+                      );
+                    case _RoleFormType.storageStaff:
+                      return AddStorageStaffAccountPopup(
+                        onAccountCreated: () {
+                          setState(() {
+                            _loadAccounts();
+                          });
+                        },
+                      );
+                    case _RoleFormType.deliveryDriver:
+                      return AddDeliveryDriverAccountPopup(
+                        onAccountCreated: () {
+                          setState(() {
+                            _loadAccounts();
+                          });
+                        },
+                      );
+                  }
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /* ----------------------- ACCOUNT DETAILS POPUP ----------------------- */
+
+  void _showAccountDetails(
+    BuildContext context,
+    _AccountItem item,
+    String role,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: Container(color: Colors.black.withOpacity(0.55)),
                 ),
               ),
+            ),
+            Center(
+              child: _AccountDetailsPopup(
+                item: item,
+                role: role,
+                onEdit: () {
+                  Navigator.of(ctx).pop();
+                  _openEditPopup(ctx, role, item);
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openEditPopup(BuildContext context, String role, _AccountItem item) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                  child: Container(color: Colors.black.withOpacity(0.55)),
+                ),
+              ),
+            ),
+            Center(
+              child: _EditAccountPopup(item: item, role: role),
             ),
           ],
         );
@@ -823,50 +867,545 @@ enum _RoleFormType {
   deliveryDriver,
 }
 
+/* ----------------------- EDIT ACCOUNT POPUP ----------------------- */
+
+class _EditAccountPopup extends StatefulWidget {
+  final _AccountItem item;
+  final String role;
+
+  const _EditAccountPopup({required this.item, required this.role});
+
+  @override
+  State<_EditAccountPopup> createState() => _EditAccountPopupState();
+}
+
+class _EditAccountPopupState extends State<_EditAccountPopup> {
+  final _formKey = GlobalKey<FormState>();
+  bool _loading = false;
+  bool _obscurePassword = true;
+
+  // Controllers for all possible fields
+  late TextEditingController _nameController;
+  late TextEditingController _idController;
+  late TextEditingController _emailController;
+  late TextEditingController _mobileController;
+  late TextEditingController _telephoneController;
+  late TextEditingController _addressController;
+  late TextEditingController _passwordController;
+
+  @override
+  void initState() {
+    super.initState();
+    final data = widget.item.rawData;
+
+    _nameController = TextEditingController(
+      text: data['name']?.toString() ?? '',
+    );
+    _emailController = TextEditingController(
+      text: data['email']?.toString() ?? '',
+    );
+    _mobileController = TextEditingController(
+      text: data['mobile_number']?.toString() ?? '',
+    );
+    _telephoneController = TextEditingController(
+      text: data['telephone_number']?.toString() ?? '',
+    );
+    _addressController = TextEditingController(
+      text: data['address']?.toString() ?? '',
+    );
+
+    // Get password from account data
+    final accountKeys = {
+      'Storage Manager': 'user_account_storage_manager',
+      'Storage Staff': 'user_account_storage_staff',
+      'Delivery Driver': 'user_account_delivery_driver',
+      'Customer': 'user_account_customer',
+      'Sales Rep': 'user_account_sales_rep',
+      'Supplier': 'user_account_supplier',
+    };
+    final accountKey = accountKeys[widget.role];
+    String? password;
+    if (accountKey != null && data[accountKey] is Map<String, dynamic>) {
+      final accountData = data[accountKey] as Map<String, dynamic>;
+      password = accountData['password']?.toString();
+    }
+    _passwordController = TextEditingController(text: password ?? '');
+
+    // Get ID based on role
+    final idKeys = {
+      'Storage Manager': 'storage_manager_id',
+      'Storage Staff': 'storage_staff_id',
+      'Delivery Driver': 'delivery_driver_id',
+      'Customer': 'customer_id',
+      'Sales Rep': 'sales_rep_id',
+      'Supplier': 'supplier_id',
+    };
+    final idKey = idKeys[widget.role];
+    _idController = TextEditingController(text: data[idKey]?.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _idController.dispose();
+    _emailController.dispose();
+    _mobileController.dispose();
+    _telephoneController.dispose();
+    _addressController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  bool _canEditAllInfo() {
+    return widget.role == 'Storage Manager' ||
+        widget.role == 'Storage Staff' ||
+        widget.role == 'Delivery Driver';
+  }
+
+  bool _canEditPasswordOnly() {
+    return widget.role == 'Customer' ||
+        widget.role == 'Sales Rep' ||
+        widget.role == 'Supplier';
+  }
+
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final data = widget.item.rawData;
+
+      if (_canEditAllInfo()) {
+        // Update main entity table
+        final tableNames = {
+          'Storage Manager': 'storage_manager',
+          'Storage Staff': 'storage_staff',
+          'Delivery Driver': 'delivery_driver',
+        };
+        final idKeys = {
+          'Storage Manager': 'storage_manager_id',
+          'Storage Staff': 'storage_staff_id',
+          'Delivery Driver': 'delivery_driver_id',
+        };
+
+        final tableName = tableNames[widget.role]!;
+        final idKey = idKeys[widget.role]!;
+        final id = data[idKey];
+
+        await supabase
+            .from(tableName)
+            .update({
+              'name': _nameController.text.trim(),
+              'mobile_number': _mobileController.text.trim(),
+              'telephone_number': _telephoneController.text.trim(),
+              'address': _addressController.text.trim(),
+              'last_action_by': 'current_user', // Replace with actual user
+              'last_action_time': DateTime.now().toIso8601String(),
+            })
+            .eq(idKey, id);
+
+        // Update password
+        final accountTables = {
+          'Storage Manager': 'user_account_storage_manager',
+          'Storage Staff': 'user_account_storage_staff',
+          'Delivery Driver': 'user_account_delivery_driver',
+        };
+        await supabase
+            .from(accountTables[widget.role]!)
+            .update({'password': _passwordController.text.trim()})
+            .eq(idKey, id);
+      } else if (_canEditPasswordOnly()) {
+        // Only update password
+        final accountTables = {
+          'Customer': 'user_account_customer',
+          'Sales Rep': 'user_account_sales_rep',
+          'Supplier': 'user_account_supplier',
+        };
+        final idKeys = {
+          'Customer': 'customer_id',
+          'Sales Rep': 'sales_rep_id',
+          'Supplier': 'supplier_id',
+        };
+
+        final accountTable = accountTables[widget.role]!;
+        final idKey = idKeys[widget.role]!;
+        final id = data[idKey];
+
+        await supabase
+            .from(accountTable)
+            .update({'password': _passwordController.text.trim()})
+            .eq(idKey, id);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Reload accounts
+        (context.findAncestorStateOfType<_MobileAccountsPageState>())
+            ?._loadAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating account: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        margin: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black54,
+              offset: Offset(0, 10),
+              blurRadius: 24,
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Edit ${widget.role}',
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Divider(color: Color(0xFF3D3D3D)),
+                const SizedBox(height: 20),
+
+                // ID (read-only)
+                _FormLabel('ID'),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF232427),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey, width: 1),
+                  ),
+                  child: TextFormField(
+                    controller: _idController,
+                    enabled: false,
+                    style: const TextStyle(color: Colors.white70),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Name (editable for all info roles)
+                if (_canEditAllInfo()) ...[
+                  _FormLabel('Name'),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF232427),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: MobileAccountsPage.borderGold,
+                        width: 1,
+                      ),
+                    ),
+                    child: TextFormField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Mobile Number (editable for all info roles)
+                if (_canEditAllInfo()) ...[
+                  _FormLabel('Mobile Number'),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF232427),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: MobileAccountsPage.borderGold,
+                        width: 1,
+                      ),
+                    ),
+                    child: TextFormField(
+                      controller: _mobileController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (v.trim().length != 10) return 'Must be 10 digits';
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Telephone Number (editable for all info roles)
+                if (_canEditAllInfo()) ...[
+                  _FormLabel('Telephone Number'),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF232427),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: MobileAccountsPage.borderGold,
+                        width: 1,
+                      ),
+                    ),
+                    child: TextFormField(
+                      controller: _telephoneController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Address (editable for all info roles)
+                if (_canEditAllInfo()) ...[
+                  _FormLabel('Address'),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF232427),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: MobileAccountsPage.borderGold,
+                        width: 1,
+                      ),
+                    ),
+                    child: TextFormField(
+                      controller: _addressController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      maxLines: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Password (editable for all)
+                _FormLabel('Password'),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF232427),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: MobileAccountsPage.borderGold,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Save Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _saveChanges,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF9D949),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : Text(
+                            'Save Changes',
+                            style: GoogleFonts.roboto(
+                              color: Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // الكرت في القائمة الرئيسية
 class _AccountCard extends StatelessWidget {
   final String name;
   final String? imageUrl;
+  final VoidCallback onTap;
 
-  const _AccountCard({required this.name, this.imageUrl});
+  const _AccountCard({required this.name, this.imageUrl, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, offset: Offset(0, 3), blurRadius: 6),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 15,
-            backgroundColor: Colors.grey.shade800,
-            backgroundImage: imageUrl != null && imageUrl!.isNotEmpty
-                ? NetworkImage(imageUrl!)
-                : null,
-            child: (imageUrl == null || imageUrl!.isEmpty)
-                ? const Icon(Icons.person, color: Colors.white, size: 16)
-                : null,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 180,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              offset: Offset(0, 3),
+              blurRadius: 6,
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 15,
+              backgroundColor: Colors.grey.shade800,
+              backgroundImage: imageUrl != null && imageUrl!.isNotEmpty
+                  ? NetworkImage(imageUrl!)
+                  : null,
+              child: (imageUrl == null || imageUrl!.isEmpty)
+                  ? const Icon(Icons.person, color: Colors.white, size: 16)
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -875,7 +1414,272 @@ class _AccountCard extends StatelessWidget {
 class _AccountItem {
   final String name;
   final String? imageUrl;
-  _AccountItem({required this.name, this.imageUrl});
+  final Map<String, dynamic> rawData;
+  _AccountItem({required this.name, this.imageUrl, required this.rawData});
+}
+
+/* ----------------------- ACCOUNT DETAILS POPUP ----------------------- */
+
+class _AccountDetailsPopup extends StatelessWidget {
+  final _AccountItem item;
+  final String role;
+  final VoidCallback onEdit;
+
+  const _AccountDetailsPopup({
+    required this.item,
+    required this.role,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = item.rawData;
+
+    // Extract account data from the appropriate joined table
+    Map<String, dynamic>? accountData;
+    String? accountIdKey;
+
+    final accountKeys = {
+      'Storage Manager': 'user_account_storage_manager',
+      'Storage Staff': 'user_account_storage_staff',
+      'Delivery Driver': 'user_account_delivery_driver',
+      'Customer': 'user_account_customer',
+      'Sales Rep': 'user_account_sales_rep',
+      'Supplier': 'user_account_supplier',
+    };
+
+    final idKeys = {
+      'Storage Manager': 'storage_manager_id',
+      'Storage Staff': 'storage_staff_id',
+      'Delivery Driver': 'delivery_driver_id',
+      'Customer': 'customer_id',
+      'Sales Rep': 'sales_rep_id',
+      'Supplier': 'supplier_id',
+    };
+
+    final accountKey = accountKeys[role];
+    accountIdKey = idKeys[role];
+
+    if (accountKey != null && data[accountKey] is Map<String, dynamic>) {
+      accountData = data[accountKey] as Map<String, dynamic>;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 600),
+        margin: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black54,
+              offset: Offset(0, 10),
+              blurRadius: 24,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with edit and close buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Account Details',
+                  style: GoogleFonts.roboto(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Color(0xFFF9D949)),
+                      onPressed: onEdit,
+                      tooltip: 'Edit',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: Color(0xFF3D3D3D)),
+            const SizedBox(height: 20),
+
+            // Profile Image
+            Center(
+              child: CircleAvatar(
+                radius: 60,
+                backgroundColor: Colors.grey.shade800,
+                backgroundImage:
+                    item.imageUrl != null && item.imageUrl!.isNotEmpty
+                    ? NetworkImage(item.imageUrl!)
+                    : null,
+                child: (item.imageUrl == null || item.imageUrl!.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.white, size: 50)
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Role Badge
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9D949).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFFF9D949),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  role,
+                  style: GoogleFonts.roboto(
+                    color: const Color(0xFFF9D949),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Information Fields
+            _InfoRow(label: 'Name', value: data['name']?.toString() ?? 'N/A'),
+            if (accountIdKey != null && data[accountIdKey] != null)
+              _InfoRow(
+                label: 'ID',
+                value: data[accountIdKey]?.toString() ?? 'N/A',
+              ),
+            if (data['email'] != null && data['email'].toString().isNotEmpty)
+              _InfoRow(
+                label: 'Email',
+                value: data['email']?.toString() ?? 'N/A',
+              ),
+            if (data['mobile_number'] != null)
+              _InfoRow(
+                label: 'Mobile Number',
+                value: data['mobile_number']?.toString() ?? 'N/A',
+              ),
+            if (data['telephone_number'] != null)
+              _InfoRow(
+                label: 'Telephone Number',
+                value: data['telephone_number']?.toString() ?? 'N/A',
+              ),
+            if (data['address'] != null &&
+                data['address'].toString().isNotEmpty)
+              _InfoRow(
+                label: 'Address',
+                value: data['address']?.toString() ?? 'N/A',
+              ),
+
+            // Account Information Section
+            if (accountData != null) ...[
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFF3D3D3D)),
+              const SizedBox(height: 16),
+              Text(
+                'Account Information',
+                style: GoogleFonts.roboto(
+                  color: const Color(0xFFB7A447),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _InfoRow(
+                label: 'Status',
+                value: accountData['is_active'] == 'yes'
+                    ? 'Active'
+                    : 'Inactive',
+                valueColor: accountData['is_active'] == 'yes'
+                    ? Colors.greenAccent
+                    : Colors.redAccent,
+              ),
+              if (accountData['added_by'] != null)
+                _InfoRow(
+                  label: 'Added By',
+                  value: accountData['added_by']?.toString() ?? 'N/A',
+                ),
+              if (accountData['added_time'] != null)
+                _InfoRow(
+                  label: 'Added Time',
+                  value: _formatDateTime(accountData['added_time']?.toString()),
+                ),
+            ],
+
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDateTime(String? dateTime) {
+    if (dateTime == null) return 'N/A';
+    try {
+      final dt = DateTime.parse(dateTime);
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateTime;
+    }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _InfoRow({required this.label, required this.value, this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              '$label:',
+              style: GoogleFonts.roboto(
+                color: const Color(0xFFB7A447),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.roboto(
+                color: valueColor ?? Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /* -------------------- Role Card داخل Popup -------------------- */
