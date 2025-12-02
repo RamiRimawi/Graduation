@@ -157,7 +157,7 @@ class _AddDeliveryDriverAccountPopupState
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: const Color(0xFF2D2D2D),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 120, vertical: 40),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 390, vertical: 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: Container(
         padding: const EdgeInsets.all(24.0),

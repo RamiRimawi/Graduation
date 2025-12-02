@@ -577,11 +577,11 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                     vertical: 32,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
+                    color: const Color(0xFF1E1E1E), 
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
                       BoxShadow(
-                        color: Colors.black54,
+                        color: const Color(0xFF3D3D3D),
                         offset: Offset(0, 10),
                         blurRadius: 24,
                       ),
@@ -1704,7 +1704,7 @@ class _RoleCard extends StatelessWidget {
         width: 210,
         height: 170,
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(18),
           boxShadow: const [
             BoxShadow(
