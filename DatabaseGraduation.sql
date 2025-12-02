@@ -337,7 +337,7 @@ CREATE TABLE public.user_account_accountant (
   added_by text,
   added_time timestamp without time zone,
   is_active USER-DEFINED NOT NULL DEFAULT 'yes'::yes_no_enum,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_accountant_pkey PRIMARY KEY (accountant_id),
   CONSTRAINT user_account_accountant_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accountant(accountant_id)
 );
@@ -347,7 +347,7 @@ CREATE TABLE public.user_account_customer (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_customer_pkey PRIMARY KEY (customer_id),
   CONSTRAINT user_account_customer_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id)
 );
@@ -357,7 +357,7 @@ CREATE TABLE public.user_account_delivery_driver (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_delivery_driver_pkey PRIMARY KEY (delivery_driver_id),
   CONSTRAINT user_account_delivery_driver_delivery_driver_id_fkey FOREIGN KEY (delivery_driver_id) REFERENCES public.delivery_driver(delivery_driver_id)
 );
@@ -367,7 +367,7 @@ CREATE TABLE public.user_account_sales_rep (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_sales_rep_pkey PRIMARY KEY (sales_rep_id),
   CONSTRAINT user_account_sales_rep_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id)
 );
@@ -377,7 +377,7 @@ CREATE TABLE public.user_account_storage_manager (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_storage_manager_pkey PRIMARY KEY (storage_manager_id),
   CONSTRAINT user_account_storage_manager_storage_manager_id_fkey FOREIGN KEY (storage_manager_id) REFERENCES public.storage_manager(storage_manager_id)
 );
@@ -387,7 +387,7 @@ CREATE TABLE public.user_account_storage_staff (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_storage_staff_pkey PRIMARY KEY (storage_staff_id),
   CONSTRAINT user_account_storage_staff_storage_staff_id_fkey FOREIGN KEY (storage_staff_id) REFERENCES public.storage_staff(storage_staff_id)
 );
@@ -397,7 +397,7 @@ CREATE TABLE public.user_account_supplier (
   is_active USER-DEFINED,
   added_by text,
   added_time timestamp without time zone,
-  profile_image text DEFAULT ' https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
+  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
   CONSTRAINT user_account_supplier_pkey PRIMARY KEY (supplier_id),
   CONSTRAINT user_account_supplier_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id)
 );

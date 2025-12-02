@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
 import 'report_product_detail.dart';
+import '../supabase_config.dart';
 
 class ReportPage extends StatelessWidget {
   const ReportPage({super.key});
@@ -10,7 +11,6 @@ class ReportPage extends StatelessWidget {
     return const ReportPageContent();
   }
 }
-
 
 // 🎨 الألوان
 class AppColors {
@@ -23,8 +23,75 @@ class AppColors {
   static const gold = Color(0xFFB7A447);
 }
 
-class ReportPageContent extends StatelessWidget {
+class ReportPageContent extends StatefulWidget {
   const ReportPageContent({super.key});
+
+  @override
+  State<ReportPageContent> createState() => _ReportPageContentState();
+}
+
+class _ReportPageContentState extends State<ReportPageContent> {
+  List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _filteredProducts = [];
+  bool _loading = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+    _searchController.addListener(_filterProducts);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      await SupabaseConfig.initialize();
+
+      final result = await supabase.from('product').select('''
+            product_id,
+            name,
+            selling_price,
+            total_quantity,
+            brand:brand_id(name),
+            category:category_id(name)
+          ''');
+
+      if (mounted) {
+        setState(() {
+          _products = List<Map<String, dynamic>>.from(result);
+          _filteredProducts = _products;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      print('Error loading products: $e');
+    }
+  }
+
+  void _filterProducts() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredProducts = _products;
+      } else {
+        _filteredProducts = _products.where((product) {
+          final name = product['name']?.toString().toLowerCase() ?? '';
+          return name.startsWith(query);
+        }).toList();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +157,7 @@ class ReportPageContent extends StatelessWidget {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.card,
+                          color: AppColors.cardAlt,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
@@ -100,8 +167,8 @@ class ReportPageContent extends StatelessWidget {
                             // 🔹 Title + Search bar
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: const [
-                                Text(
+                              children: [
+                                const Text(
                                   'Reports each product',
                                   style: TextStyle(
                                     color: AppColors.blue,
@@ -112,6 +179,7 @@ class ReportPageContent extends StatelessWidget {
                                 _SearchField(
                                   hint: 'Product Name',
                                   icon: Icons.manage_search_rounded,
+                                  controller: _searchController,
                                 ),
                               ],
                             ),
@@ -141,50 +209,55 @@ class ReportPageContent extends StatelessWidget {
 
                             // 🔹 Product Rows
                             Expanded(
-                              child: ListView(
-                                children: const [
-                                  _ProductRow(
-                                    id: '1',
-                                    name: 'Hand Shower',
-                                    brand: 'GROHE',
-                                    category: 'shower',
-                                    price: '26\$',
-                                    qty: '26',
-                                  ),
-                                  _ProductRow(
-                                    id: '2',
-                                    name: 'Wall-Hung Toilet',
-                                    brand: 'Royal',
-                                    category: 'Toilets',
-                                    price: '150\$',
-                                    qty: '30',
-                                  ),
-                                  _ProductRow(
-                                    id: '3',
-                                    name: 'Kitchen Sink',
-                                    brand: 'GROHE',
-                                    category: 'Extensions',
-                                    price: '200\$',
-                                    qty: '30',
-                                  ),
-                                  _ProductRow(
-                                    id: '4',
-                                    name: 'Towel Ring',
-                                    brand: 'Royal',
-                                    category: 'Extensions',
-                                    price: '25\$',
-                                    qty: '29',
-                                  ),
-                                  _ProductRow(
-                                    id: '5',
-                                    name: 'Freestanding Bathtub',
-                                    brand: 'Royal',
-                                    category: 'Extensions',
-                                    price: '10\$',
-                                    qty: '31',
-                                  ),
-                                ],
-                              ),
+                              child: _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                        color: AppColors.blue,
+                                      ),
+                                    )
+                                  : _filteredProducts.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'No products found',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: _filteredProducts.length,
+                                      itemBuilder: (context, index) {
+                                        final product =
+                                            _filteredProducts[index];
+                                        final brandData = product['brand'];
+                                        final categoryData =
+                                            product['category'];
+
+                                        return _ProductRow(
+                                          id: product['product_id'].toString(),
+                                          name:
+                                              product['name']?.toString() ??
+                                              'N/A',
+                                          brand: brandData is Map
+                                              ? (brandData['name']
+                                                        ?.toString() ??
+                                                    'N/A')
+                                              : 'N/A',
+                                          category: categoryData is Map
+                                              ? (categoryData['name']
+                                                        ?.toString() ??
+                                                    'N/A')
+                                              : 'N/A',
+                                          price:
+                                              '\$${product['selling_price']?.toString() ?? '0'}',
+                                          qty:
+                                              product['total_quantity']
+                                                  ?.toString() ??
+                                              '0',
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),
@@ -205,7 +278,12 @@ class ReportPageContent extends StatelessWidget {
 class _SearchField extends StatelessWidget {
   final String hint;
   final IconData icon;
-  const _SearchField({required this.hint, required this.icon});
+  final TextEditingController controller;
+  const _SearchField({
+    required this.hint,
+    required this.icon,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +295,7 @@ class _SearchField extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
       ),
       child: TextField(
+        controller: controller,
         style: const TextStyle(color: AppColors.white, fontSize: 13),
         decoration: InputDecoration(
           hintText: hint,
@@ -234,25 +313,116 @@ class _SearchField extends StatelessWidget {
 }
 
 // 🔹 Top/Lowest Selling Products Card
-class _SellingProductsCard extends StatelessWidget {
+class _SellingProductsCard extends StatefulWidget {
   final String title;
   final bool isTop;
   const _SellingProductsCard({required this.title, required this.isTop});
 
   @override
-  Widget build(BuildContext context) {
-    final data = isTop
-        ? [
-            ('Kareem Manasra', '100', '600'),
-            ('Ammar Shobaki', '50', '526'),
-            ('Ata Musleh', '33', '322'),
-          ]
-        : [
-            ('Kareem Manasra', '100', '2'),
-            ('Ammar Shobaki', '50', '4'),
-            ('Ata Musleh', '33', '6'),
-          ];
+  State<_SellingProductsCard> createState() => _SellingProductsCardState();
+}
 
+class _SellingProductsCardState extends State<_SellingProductsCard> {
+  List<Map<String, dynamic>> _products = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      await SupabaseConfig.initialize();
+
+      // Get current month start and end dates
+      final now = DateTime.now();
+      final monthStart = DateTime(now.year, now.month, 1);
+      final monthEnd = DateTime(
+        now.year,
+        now.month + 1,
+        1,
+      ).subtract(const Duration(days: 1));
+
+      // First, get all order descriptions for this month with customer orders
+      final orderDescriptions = await supabase
+          .from('customer_order_description')
+          .select('''
+            quantity,
+            product_id,
+            customer_order!inner(order_date)
+          ''')
+          .gte('customer_order.order_date', monthStart.toIso8601String())
+          .lte('customer_order.order_date', monthEnd.toIso8601String());
+
+      // Group by product_id and calculate totals
+      final Map<int, Map<String, dynamic>> productStats = {};
+
+      for (var item in orderDescriptions) {
+        final productId = item['product_id'] as int;
+        final quantity = item['quantity'] as int;
+
+        if (!productStats.containsKey(productId)) {
+          productStats[productId] = {
+            'product_id': productId,
+            'total_sold_qty': 0,
+            'num_of_sales': 0,
+          };
+        }
+
+        productStats[productId]!['total_sold_qty'] =
+            (productStats[productId]!['total_sold_qty'] as int) + quantity;
+        productStats[productId]!['num_of_sales'] =
+            (productStats[productId]!['num_of_sales'] as int) + 1;
+      }
+
+      // Get product details and combine with stats
+      final List<Map<String, dynamic>> productList = [];
+      for (var stats in productStats.values) {
+        final productId = stats['product_id'];
+        final product = await supabase
+            .from('product')
+            .select('name')
+            .eq('product_id', productId)
+            .single();
+
+        productList.add({
+          'product_id': productId,
+          'product_name': product['name'],
+          'total_sold_qty': stats['total_sold_qty'],
+          'num_of_sales': stats['num_of_sales'],
+        });
+      }
+
+      // Sort by total_sold_qty
+      productList.sort((a, b) {
+        final qtyA = a['total_sold_qty'] as int;
+        final qtyB = b['total_sold_qty'] as int;
+        return widget.isTop ? qtyB.compareTo(qtyA) : qtyA.compareTo(qtyB);
+      });
+
+      // Take top/lowest 3
+      final top3 = productList.take(3).toList();
+
+      if (mounted) {
+        setState(() {
+          _products = top3;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      print('Error loading products: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -266,7 +436,7 @@ class _SellingProductsCard extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(
-                  text: '$title ',
+                  text: '${widget.title} ',
                   style: const TextStyle(
                     color: AppColors.blue,
                     fontWeight: FontWeight.bold,
@@ -297,60 +467,81 @@ class _SellingProductsCard extends StatelessWidget {
           Container(height: 1, color: Colors.white.withOpacity(0.2)),
           const SizedBox(height: 10),
 
-          // Rows
-          ...List.generate(data.length, (i) {
-            final d = data[i];
-            final bg = i.isEven ? AppColors.dark : AppColors.cardAlt;
+          // Loading or Data Rows
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(color: AppColors.blue),
+              ),
+            )
+          else if (_products.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'No data available',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            )
+          else
+            ...List.generate(_products.length, (i) {
+              final product = _products[i];
+              final bg = i.isEven ? AppColors.dark : AppColors.cardAlt;
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Text(
-                      d.$1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
                       child: Text(
-                        d.$2,
+                        product['product_name']?.toString() ?? 'N/A',
                         style: const TextStyle(
-                          color: AppColors.blue,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        d.$3,
-                        style: const TextStyle(
-                          color: AppColors.blue,
-                          fontWeight: FontWeight.bold,
+                    Expanded(
+                      flex: 1,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          product['total_sold_qty']?.toString() ?? '0',
+                          style: const TextStyle(
+                            color: AppColors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    Expanded(
+                      flex: 1,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          product['num_of_sales']?.toString() ?? '0',
+                          style: const TextStyle(
+                            color: AppColors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );

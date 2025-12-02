@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'report_page.dart';
 import 'archive_table.dart';
+import '../supabase_config.dart';
 
 // ============================================================================
 // 🔹 Product Detail Dialog (Popup)
@@ -39,113 +40,116 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(12),
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: isWide ? 1400 : width - 40,
-          maxHeight: MediaQuery.of(context).size.height - 40,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.dark,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            // 🔹 Header with title and tabs
-            Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 8, 8),
-              decoration: BoxDecoration(
-                color: AppColors.dark,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: isWide ? 1400 : width - 40,
+            maxHeight: MediaQuery.of(context).size.height - 100,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.dark,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              // 🔹 Header with title and tabs
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 20, 8, 8),
+                decoration: BoxDecoration(
+                  color: AppColors.dark,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  // title + tabs
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // title
-                        Text.rich(
-                          TextSpan(
+                child: Row(
+                  children: [
+                    // title + tabs
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // title
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text:
+                                      '${widget.productName} (${widget.brand}) ',
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const TextSpan(
+                                  text: 'Report',
+                                  style: TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          // tabs
+                          Row(
                             children: [
-                              TextSpan(
-                                text:
-                                    '${widget.productName} (${widget.brand}) ',
-                                style: const TextStyle(
-                                  color: AppColors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                              _TabButton(
+                                label: 'Statistics',
+                                isActive: selectedTab == 'Statistics',
+                                onTap: () =>
+                                    setState(() => selectedTab = 'Statistics'),
                               ),
-                              const TextSpan(
-                                text: 'Report',
-                                style: TextStyle(
-                                  color: AppColors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400,
-                                ),
+                              const SizedBox(width: 18),
+                              _TabButton(
+                                label: 'Archive',
+                                isActive: selectedTab == 'Archive',
+                                onTap: () =>
+                                    setState(() => selectedTab = 'Archive'),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        // tabs
-                        Row(
-                          children: [
-                            _TabButton(
-                              label: 'Statistics',
-                              isActive: selectedTab == 'Statistics',
-                              onTap: () =>
-                                  setState(() => selectedTab = 'Statistics'),
-                            ),
-                            const SizedBox(width: 18),
-                            _TabButton(
-                              label: 'Archive',
-                              isActive: selectedTab == 'Archive',
-                              onTap: () =>
-                                  setState(() => selectedTab = 'Archive'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // close
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      color: AppColors.white,
-                      size: 24,
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 6),
-
-            // 🔹 Content
-            Expanded(
-              child: Container(
-                color: AppColors.dark,
-                child: selectedTab == 'Statistics'
-                    ? SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                        child: isWide
-                            ? _buildWideLayout()
-                            : _buildNarrowLayout(),
-                      )
-                    : SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                        child: const ArchiveTable(),
+                        ],
                       ),
+                    ),
+                    // close
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        color: AppColors.white,
+                        size: 24,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 6),
+
+              // 🔹 Content
+              Expanded(
+                child: Container(
+                  color: AppColors.dark,
+                  child: selectedTab == 'Statistics'
+                      ? SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                          child: isWide
+                              ? _buildWideLayout()
+                              : _buildNarrowLayout(),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                          child: const ArchiveTable(),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -162,17 +166,25 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
           children: [
             Expanded(
               flex: 3,
-              child: _SectionCard(
-                title: 'Product Stock in inventory',
-                child: _InventoryTable(),
+              child: SizedBox(
+                height: 260,
+                child: _SectionCard(
+                  title: 'Product Stock in inventory',
+                  child: SingleChildScrollView(child: _InventoryTable()),
+                ),
               ),
             ),
             const SizedBox(width: 18),
             Expanded(
               flex: 2,
-              child: _SectionCard(
-                title: 'Main Suppliers',
-                child: _SuppliersTable(),
+              child: SizedBox(
+                height: 260,
+                child: _SectionCard(
+                  title: 'Main Suppliers',
+                  child: SingleChildScrollView(
+                    child: _SuppliersTable(productId: widget.productId),
+                  ),
+                ),
               ),
             ),
           ],
@@ -184,9 +196,12 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
           children: [
             Expanded(
               flex: 2,
-              child: _SectionCard(
-                title: 'Top 5 Buying Customers',
-                child: _CustomersTable(),
+              child: SizedBox(
+                height: 365,
+                child: _SectionCard(
+                  title: 'Top 5 Buying Customers',
+                  child: _CustomersTable(productId: widget.productId),
+                ),
               ),
             ),
             const SizedBox(width: 18),
@@ -195,7 +210,9 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
               child: _SectionCard(
                 title: 'Total profit',
                 hideTitle: true,
-                child: _ProfitChart(), // العنوان موجود في _ProfitChart
+                child: _ProfitChart(
+                  productId: widget.productId,
+                ), // العنوان موجود في _ProfitChart
               ),
             ),
           ],
@@ -207,16 +224,33 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
   Widget _buildNarrowLayout() {
     return Column(
       children: [
-        _SectionCard(
-          title: 'Product Stock in inventory',
-          child: _InventoryTable(),
+        SizedBox(
+          height: 260,
+          child: _SectionCard(
+            title: 'Product Stock in inventory',
+            child: SingleChildScrollView(child: _InventoryTable()),
+          ),
         ),
         const SizedBox(height: 18),
-        _SectionCard(title: 'Main Suppliers', child: _SuppliersTable()),
+        SizedBox(
+          height: 260,
+          child: _SectionCard(
+            title: 'Main Suppliers',
+            child: SingleChildScrollView(
+              child: _SuppliersTable(productId: widget.productId),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
-        _SectionCard(title: 'Top 5 Buying Customers', child: _CustomersTable()),
+        _SectionCard(
+          title: 'Top 5 Buying Customers',
+          child: _CustomersTable(productId: widget.productId),
+        ),
         const SizedBox(height: 18),
-        _SectionCard(title: 'Total profit', child: _ProfitChart()),
+        _SectionCard(
+          title: 'Total profit',
+          child: _ProfitChart(productId: widget.productId),
+        ),
       ],
     );
   }
@@ -282,7 +316,7 @@ class _SectionCard extends StatelessWidget {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -295,7 +329,7 @@ class _SectionCard extends StatelessWidget {
                 fontSize: 18,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
           ],
           child,
         ],
@@ -326,38 +360,177 @@ class _InventoryTable extends StatelessWidget {
 }
 
 // 🔹 Suppliers Table
-class _SuppliersTable extends StatelessWidget {
+
+class _SuppliersTable extends StatefulWidget {
+  final String productId;
+  const _SuppliersTable({required this.productId});
+
+  @override
+  State<_SuppliersTable> createState() => _SuppliersTableState();
+}
+
+class _SuppliersTableState extends State<_SuppliersTable> {
+  List<List<String>> _rows = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSuppliers();
+  }
+
+  Future<void> _loadSuppliers() async {
+    try {
+      await SupabaseConfig.initialize();
+      // Query batch table for this product, group by supplier, count
+      final batches = await supabase
+          .from('batch')
+          .select('supplier_id, supplier:supplier_id(name)')
+          .eq('product_id', int.parse(widget.productId));
+
+      // Count occurrences per supplier
+      final Map<String, int> supplierCounts = {};
+      final Map<String, String> supplierNames = {};
+      for (final batch in batches) {
+        final supplierId = batch['supplier_id']?.toString() ?? '';
+        final supplierName = (batch['supplier'] is Map)
+            ? (batch['supplier']['name']?.toString() ?? 'Unknown')
+            : 'Unknown';
+        supplierNames[supplierId] = supplierName;
+        supplierCounts[supplierId] = (supplierCounts[supplierId] ?? 0) + 1;
+      }
+
+      // Sort suppliers by count descending
+      final sorted = supplierCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      final rows = [
+        for (final entry in sorted)
+          [supplierNames[entry.key] ?? 'Unknown', entry.value.toString()],
+      ];
+
+      if (mounted) {
+        setState(() {
+          _rows = rows;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      print('Error loading suppliers: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final suppliersData = [
-      ('Kareem Manasra', '600'),
-      ('Ammar Shobaki', '200'),
-      ('Ata Musleh', '12'),
-    ];
-
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return _TableWidget(
       headers: const ['Supplier Name', '# of order'],
-      rows: suppliersData.map((row) => [row.$1, row.$2]).toList(),
-      blueColumnIndex: 1, // # of order column should be blue
+      rows: _rows,
+      blueColumnIndex: 1,
     );
   }
 }
 
 // 🔹 Customers Table
-class _CustomersTable extends StatelessWidget {
+class _CustomersTable extends StatefulWidget {
+  final String productId;
+  const _CustomersTable({required this.productId});
+
+  @override
+  State<_CustomersTable> createState() => _CustomersTableState();
+}
+
+class _CustomersTableState extends State<_CustomersTable> {
+  List<List<String>> _rows = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTopCustomers();
+  }
+
+  Future<void> _loadTopCustomers() async {
+    try {
+      await SupabaseConfig.initialize();
+
+      // Query customer_order_description table for this product, join with customer
+      // Only include orders with status "delivered"
+      final orderItems = await supabase
+          .from('customer_order_description')
+          .select(
+            'quantity, customer_order:customer_order_id(customer_id, order_status, customer:customer_id(name))',
+          )
+          .eq('product_id', int.parse(widget.productId));
+
+      // Sum quantities per customer
+      final Map<String, int> customerQuantities = {};
+      final Map<String, String> customerNames = {};
+
+      for (final item in orderItems) {
+        if (item['customer_order'] is Map &&
+            item['customer_order']['customer'] is Map) {
+          // Check if order status is "delivered"
+          final orderStatus = item['customer_order']['order_status']
+              ?.toString()
+              .toLowerCase();
+          if (orderStatus != 'delivered') continue;
+
+          final customerId =
+              item['customer_order']['customer_id']?.toString() ?? '';
+          final customerName =
+              item['customer_order']['customer']['name']?.toString() ??
+              'Unknown';
+          final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+
+          customerNames[customerId] = customerName;
+          customerQuantities[customerId] =
+              (customerQuantities[customerId] ?? 0) + quantity;
+        }
+      }
+
+      // Sort by quantity descending and take top 5
+      final sorted = customerQuantities.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      final top5 = sorted.take(5);
+
+      final rows = [
+        for (final entry in top5)
+          [customerNames[entry.key] ?? 'Unknown', entry.value.toString()],
+      ];
+
+      if (mounted) {
+        setState(() {
+          _rows = rows;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+      print('Error loading top customers: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final customersData = [
-      ('Kareem Manasra', '851651'),
-      ('Ammar Shobaki', '595161'),
-      ('Ata Musleh', '565161'),
-      ('Ameer Yasin', '256519'),
-      ('Ahmad Nizar', '231651'),
-    ];
-
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return _TableWidget(
       headers: const ['Customer Name', 'Quantity Purchased'],
-      rows: customersData.map((row) => [row.$1, row.$2]).toList(),
+      rows: _rows,
       blueColumnIndex: 1, // Quantity Purchased column should be blue
     );
   }
@@ -366,16 +539,19 @@ class _CustomersTable extends StatelessWidget {
 // ===================  PROFIT CHART  ====================
 // 🔹 Total profit chart with animation + hover highlight + tooltip
 class _ProfitChart extends StatefulWidget {
+  final String productId;
+  const _ProfitChart({required this.productId});
+
   @override
   State<_ProfitChart> createState() => _ProfitChartState();
 }
 
 class _ProfitChartState extends State<_ProfitChart>
     with SingleTickerProviderStateMixin {
-  String selectedYear = '2026';
+  String selectedYear = '2024';
+  List<double> profitData = List.filled(12, 0);
+  bool _loading = true;
 
-  // القيم بوحدة K
-  final profitData = [13, 14, 14, 15, 16, 16, 17, 17, 16, 18, 18, 20]; // in K
   final months = [
     'Jan',
     'Feb',
@@ -414,8 +590,73 @@ class _ProfitChartState extends State<_ProfitChart>
       curve: Curves.easeOutCubic,
     );
 
-    // تشغيل الأنيميشن عند فتح الـ popup
-    _controller.forward(from: 0);
+    _loadProfitData();
+  }
+
+  Future<void> _loadProfitData() async {
+    try {
+      await SupabaseConfig.initialize();
+
+      // Get product wholesale price
+      final productData = await supabase
+          .from('product')
+          .select('wholesale_price')
+          .eq('product_id', int.parse(widget.productId))
+          .single();
+
+      final wholesalePrice =
+          (productData['wholesale_price'] as num?)?.toDouble() ?? 0;
+
+      // Query customer_order_description with delivered_date for this product
+      final orderItems = await supabase
+          .from('customer_order_description')
+          .select(
+            'quantity, total_price, delivered_date, customer_order:customer_order_id(order_status)',
+          )
+          .eq('product_id', int.parse(widget.productId));
+
+      // Initialize profit data for 12 months
+      final monthlyProfit = List.filled(12, 0.0);
+
+      for (final item in orderItems) {
+        // Only include delivered orders
+        if (item['customer_order'] is Map) {
+          final orderStatus = item['customer_order']['order_status']
+              ?.toString()
+              .toLowerCase();
+          if (orderStatus != 'delivered') continue;
+        }
+
+        final deliveredDate = item['delivered_date'] as String?;
+        if (deliveredDate == null) continue;
+
+        final date = DateTime.parse(deliveredDate);
+        if (date.year.toString() != selectedYear) continue;
+
+        final monthIndex = date.month - 1;
+        final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+        final totalPrice = (item['total_price'] as num?)?.toDouble() ?? 0;
+
+        // Profit = selling price - cost price
+        final profit = totalPrice - (wholesalePrice * quantity);
+        monthlyProfit[monthIndex] += profit;
+      }
+
+      if (mounted) {
+        setState(() {
+          profitData = monthlyProfit;
+          _loading = false;
+        });
+        _controller.forward(from: 0);
+      }
+    } catch (e) {
+      print('Error loading profit data: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -426,13 +667,20 @@ class _ProfitChartState extends State<_ProfitChart>
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     // أكبر قيمة في البيانات (مثلاً 20K)
-    final double maxData = profitData
-        .reduce((a, b) => a > b ? a : b)
-        .toDouble();
+    final double maxData = profitData.isEmpty
+        ? 0
+        : profitData.reduce((a, b) => a > b ? a : b);
 
     // نخلي السقف أقرب مضاعف لـ 5K عشان الشكل يكون أنظف
-    final double maxY = ((maxData / 5).ceil() * 5).toDouble();
+    // إذا كانت البيانات صفر، نستخدم قيمة افتراضية 20
+    final double maxY = maxData <= 0
+        ? 20.0
+        : ((maxData / 5).ceil() * 5).toDouble();
 
     return AnimatedBuilder(
       animation: _animation,
@@ -499,8 +747,9 @@ class _ProfitChartState extends State<_ProfitChart>
                       if (value != null) {
                         setState(() {
                           selectedYear = value;
-                          _controller.forward(from: 0);
+                          _loading = true;
                         });
+                        _loadProfitData();
                       }
                     },
                   ),
@@ -547,8 +796,17 @@ class _ProfitChartState extends State<_ProfitChart>
                           children: List.generate(_tickCount, (index) {
                             final step = maxY / (_tickCount - 1);
                             final value = index * step;
+                            String label;
+                            if (value == 0) {
+                              label = '0';
+                            } else if (value >= 1000) {
+                              label =
+                                  '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+                            } else {
+                              label = value.toStringAsFixed(0);
+                            }
                             return Text(
-                              value == 0 ? '0' : '${value.toInt()}K',
+                              label,
                               style: const TextStyle(
                                 color: AppColors.grey,
                                 fontSize: 10,
@@ -594,7 +852,7 @@ class _ProfitChartState extends State<_ProfitChart>
                                         setState(() => _hoveredIndex = null),
                                     child: Tooltip(
                                       message:
-                                          '${profitData[index]}K - ${months[index]}',
+                                          '${profitData[index].toStringAsFixed(2)} - ${months[index]}',
                                       waitDuration: const Duration(
                                         milliseconds: 150,
                                       ),
@@ -649,7 +907,10 @@ class _ProfitChartState extends State<_ProfitChart>
                                           Opacity(
                                             opacity: anim,
                                             child: Text(
-                                              '${profitData[index]}K',
+                                              profitData[index] >= 1000
+                                                  ? '${(profitData[index] / 1000).toStringAsFixed(1)}K'
+                                                  : profitData[index]
+                                                        .toStringAsFixed(0),
                                               style: TextStyle(
                                                 color: isHovered
                                                     ? AppColors.white
