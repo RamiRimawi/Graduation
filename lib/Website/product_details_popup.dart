@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../supabase_config.dart';
 
 class ProductDetailsPopup extends StatefulWidget {
@@ -40,6 +42,9 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
   bool isEditMode = false;
   bool isSaving = false;
   bool isLoadingEditData = false;
+  String? productImageUrl;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   
   // Edit data
   List<Map<String, dynamic>> brands = [];
@@ -67,7 +72,76 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
     minProfitController = TextEditingController(
       text: widget.minProfit.replaceAll(RegExp(r'[^0-9.]'), ''),
     );
+    _loadProductImage();
     // Auto-save disabled: changes are saved only when pressing Done
+  }
+
+  Future<void> _loadProductImage() async {
+    try {
+      final pid = int.tryParse(widget.productId);
+      if (pid == null) return;
+      
+      final response = await supabase
+          .from('product')
+          .select('product_image')
+          .eq('product_id', pid)
+          .single();
+      
+      if (mounted) {
+        setState(() {
+          productImageUrl = response['product_image'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error loading product image: $e');
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = image.name;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String? _convertImageToDataUrl() {
+    if (_selectedImageBytes == null || _selectedImageName == null) return null;
+    
+    try {
+      String mimeType = 'image/jpeg';
+      final extension = _selectedImageName!.toLowerCase().split('.').last;
+      if (extension == 'png') {
+        mimeType = 'image/png';
+      } else if (extension == 'gif') {
+        mimeType = 'image/gif';
+      } else if (extension == 'webp') {
+        mimeType = 'image/webp';
+      }
+      
+      final base64String = base64Encode(_selectedImageBytes!);
+      return 'data:$mimeType;base64,$base64String';
+    } catch (e) {
+      print('Error converting image: $e');
+      return null;
+    }
   }
 
   @override
@@ -160,14 +234,27 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
       final pid = int.tryParse(widget.productId);
       if (pid == null) throw 'Invalid product ID';
       
-      // Update product table
-      await supabase.from('product').update({
+      // Prepare product data
+      final Map<String, dynamic> productData = {
         'brand_id': selectedBrandId,
         'category_id': selectedCategoryId,
         'wholesale_price': double.tryParse(wholesalePriceController.text) ?? 0,
         'selling_price': double.tryParse(sellingPriceController.text) ?? 0,
         'minimum_profit_percent': double.tryParse(minProfitController.text) ?? 0,
-      }).eq('product_id', pid);
+      };
+      
+      // Add image if a new one was selected
+      if (_selectedImageBytes != null) {
+        final imageDataUrl = _convertImageToDataUrl();
+        if (imageDataUrl != null) {
+          productData['product_image'] = imageDataUrl;
+          // Update local state
+          productImageUrl = imageDataUrl;
+        }
+      }
+      
+      // Update product table
+      await supabase.from('product').update(productData).eq('product_id', pid);
       
       // Update storage locations for each batch
       for (final loc in storageLocations) {
@@ -179,6 +266,10 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
           'storage_location_descrption': newStorage,
         }).eq('batch_id', batchId);
       }
+      
+      // Clear selected image after saving
+      _selectedImageBytes = null;
+      _selectedImageName = null;
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -383,63 +474,92 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ◀ القسم اليسار: الصور
+                          // ◀ القسم اليسار: الصورة
                           Container(
                             width: 400,
-                            height: 600,
+                            height: 500,
                             margin: const EdgeInsets.only(right: 24),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Column(
+                            child: Stack(
                               children: [
-                                // الصورة الرئيسية
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Image.asset(
-                                      'assets/icons/hand_shower.png',
-                                      fit: BoxFit.contain,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                            return const Center(
-                                              child: Icon(
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Center(
+                                    child: _selectedImageBytes != null
+                                        ? Image.memory(
+                                            _selectedImageBytes!,
+                                            fit: BoxFit.contain,
+                                          )
+                                        : productImageUrl != null && productImageUrl!.isNotEmpty
+                                            ? Image.network(
+                                                productImageUrl!,
+                                                fit: BoxFit.contain,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return const Icon(
+                                                    Icons.image_not_supported,
+                                                    size: 100,
+                                                    color: Colors.grey,
+                                                  );
+                                                },
+                                                loadingBuilder: (context, child, loadingProgress) {
+                                                  if (loadingProgress == null) return child;
+                                                  return CircularProgressIndicator(
+                                                    value: loadingProgress.expectedTotalBytes != null
+                                                        ? loadingProgress.cumulativeBytesLoaded /
+                                                            loadingProgress.expectedTotalBytes!
+                                                        : null,
+                                                    color: const Color(0xFFFFE14D),
+                                                  );
+                                                },
+                                              )
+                                            : const Icon(
                                                 Icons.image_not_supported,
                                                 size: 100,
                                                 color: Colors.grey,
                                               ),
-                                            );
-                                          },
-                                    ),
                                   ),
                                 ),
-                                // صورة إضافية / زوم
-                                Container(
-                                  height: 200,
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(
-                                        color: Colors.grey,
-                                        width: 1,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Image.asset(
-                                    'assets/icons/hand_shower.png',
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return const Center(
-                                        child: Icon(
-                                          Icons.image_not_supported,
-                                          size: 80,
-                                          color: Colors.grey,
+                                // Edit button overlay
+                                if (isEditMode)
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: Column(
+                                      children: [
+                                        FloatingActionButton(
+                                          heroTag: 'upload_image',
+                                          mini: true,
+                                          backgroundColor: const Color(0xFFFFE14D),
+                                          onPressed: _pickImage,
+                                          child: const Icon(
+                                            Icons.edit,
+                                            color: Colors.black87,
+                                          ),
                                         ),
-                                      );
-                                    },
+                                        if (_selectedImageName != null) ...[
+                                          const SizedBox(height: 8),
+                                          FloatingActionButton(
+                                            heroTag: 'clear_image',
+                                            mini: true,
+                                            backgroundColor: Colors.red,
+                                            onPressed: () {
+                                              setState(() {
+                                                _selectedImageBytes = null;
+                                                _selectedImageName = null;
+                                              });
+                                            },
+                                            child: const Icon(
+                                              Icons.close,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

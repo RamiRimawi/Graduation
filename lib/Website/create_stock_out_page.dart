@@ -22,7 +22,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
   List<Map<String, dynamic>> allProducts = [];
   Set<int> selectedProductIds = {};
   bool isLoadingCustomers = true;
-  bool isLoadingProducts = false;
   
   static const int taxPercent = 16;
   
@@ -65,24 +64,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
     );
   }
 
-  void _changeQuantityForHovered(int delta) {
-    if (hoveredIndex == null || hoveredIndex == 0) {
-      _showMessage('Hover a product row to modify quantity');
-      return;
-    }
-    final int idx = hoveredIndex! - 1; // account for header row
-    if (idx < 0 || idx >= allProducts.length) return;
-    setState(() {
-      final product = allProducts[idx];
-      final int current = (product['quantity'] ?? 0) is int
-          ? product['quantity'] ?? 0
-          : int.tryParse(product['quantity'].toString()) ?? 0;
-      int updated = current + delta;
-      if (updated < 0) updated = 0;
-      product['quantity'] = updated;
-    });
-  }
-
   Future<void> _loadCustomers() async {
     setState(() => isLoadingCustomers = true);
     try {
@@ -104,35 +85,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
     } catch (e) {
       print('Error loading customers: $e');
       setState(() => isLoadingCustomers = false);
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _loadAvailableProducts() async {
-    try {
-      final response = await supabase
-          .from('product')
-          .select('''
-            product_id,
-            name,
-            selling_price,
-            brand:brand_id(name),
-            unit:unit_id(unit_name),
-            total_quantity
-          ''')
-          .eq('is_active', true)
-          .order('name');
-
-      final allProductsFromDB = List<Map<String, dynamic>>.from(response);
-      
-      // فلتر المنتجات: إظهار فقط المنتجات غير الموجودة في الجدول
-      final availableProducts = allProductsFromDB.where((product) {
-        return !allProducts.any((p) => p['product_id'] == product['product_id']);
-      }).toList();
-      
-      return availableProducts;
-    } catch (e) {
-      print('Error loading products: $e');
-      return [];
     }
   }
 
@@ -158,27 +110,25 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
       
       final orderId = orderResponse['customer_order_id'];
       
-      // إضافة تفاصيل المنتجات المحددة فقط في customer_order_description
+      // إضافة تفاصيل جميع المنتجات في الجدول
       for (var product in allProducts) {
-        if (selectedProductIds.contains(product['product_id'])) { // فقط المنتجات المحددة
-          final quantity = product['quantity'] ?? 0;
-          if (quantity > 0) {
-            await supabase.from('customer_order_description').insert({
-              'customer_order_id': orderId,
-              'product_id': product['product_id'],
-              'quantity': quantity,
-              'delivered_quantity': 0,
-              'total_price': (product['selling_price'] ?? 0) * quantity,
-            });
-          }
+        final quantity = product['quantity'] ?? 0;
+        if (quantity > 0) {
+          await supabase.from('customer_order_description').insert({
+            'customer_order_id': orderId,
+            'product_id': product['product_id'],
+            'quantity': quantity,
+            'delivered_quantity': 0,
+            'total_price': (product['selling_price'] ?? 0) * quantity,
+          });
         }
       }
       
       if (mounted) {
         _showMessage('Order sent successfully!');
-        // حذف المنتجات المرسلة من الجدول
+        // حذف جميع المنتجات من الجدول
         setState(() {
-          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          allProducts.clear();
           selectedProductIds.clear();
         });
       }
@@ -212,27 +162,25 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
       
       final orderId = orderResponse['customer_order_id'];
       
-      // إضافة تفاصيل المنتجات المحددة فقط في customer_order_description
+      // إضافة تفاصيل جميع المنتجات في الجدول
       for (var product in allProducts) {
-        if (selectedProductIds.contains(product['product_id'])) {
-          final quantity = product['quantity'] ?? 0;
-          if (quantity > 0) {
-            await supabase.from('customer_order_description').insert({
-              'customer_order_id': orderId,
-              'product_id': product['product_id'],
-              'quantity': quantity,
-              'delivered_quantity': 0,
-              'total_price': (product['selling_price'] ?? 0) * quantity,
-            });
-          }
+        final quantity = product['quantity'] ?? 0;
+        if (quantity > 0) {
+          await supabase.from('customer_order_description').insert({
+            'customer_order_id': orderId,
+            'product_id': product['product_id'],
+            'quantity': quantity,
+            'delivered_quantity': 0,
+            'total_price': (product['selling_price'] ?? 0) * quantity,
+          });
         }
       }
       
       if (mounted) {
         _showMessage('Order saved as Hold!');
-        // حذف المنتجات المحفوظة من الجدول
+        // حذف جميع المنتجات من الجدول
         setState(() {
-          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          allProducts.clear();
           selectedProductIds.clear();
         });
       }
@@ -455,13 +403,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                           // ===== TABLE =====
                           Expanded(
                             flex: 10,
-                            child: isLoadingProducts
-                                ? const Center(
-                                    child: CircularProgressIndicator(
-                                      color: Color(0xFF50B2E7),
-                                    ),
-                                  )
-                                : allProducts.isEmpty
+                            child: allProducts.isEmpty
                                     ? const Center(
                                         child: Text(
                                           'No products found',
@@ -725,8 +667,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
                           const SizedBox(width: 40),
 
-                          const SizedBox(width: 40),
-
                           // ===== BUTTONS COLUMN =====
                           Expanded(
                             flex: 3,
@@ -807,7 +747,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   label: 'Send Order',
                                   textColor: Colors.black,
                                   width: 220,
-                                  onTap: (selectedCustomerId == null || selectedProductIds.isEmpty)
+                                  onTap: selectedCustomerId == null
                                       ? null
                                       : () async {
                                           await _sendOrder();
@@ -820,7 +760,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   label: 'Hold',
                                   textColor:  Colors.white,
                                   width: 220,
-                                  onTap: (selectedCustomerId == null || selectedProductIds.isEmpty)
+                                  onTap: selectedCustomerId == null
                                       ? null
                                       : () async {
                                           await _holdOrder();

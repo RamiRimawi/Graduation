@@ -13,14 +13,14 @@ CREATE TABLE public.accountant (
 );
 CREATE TABLE public.batch (
   batch_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  product_id integer,
+  product_id integer NOT NULL,
   supplier_id integer,
   quantity integer,
   inventory_id integer,
   storage_location_descrption character varying,
   last_action_by text,
   last_action_time timestamp without time zone,
-  CONSTRAINT batch_pkey PRIMARY KEY (batch_id),
+  CONSTRAINT batch_pkey PRIMARY KEY (batch_id, product_id),
   CONSTRAINT batch_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id),
   CONSTRAINT batch_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
   CONSTRAINT batch_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
@@ -185,6 +185,7 @@ CREATE TABLE public.product (
   last_action_by text,
   last_action_time timestamp without time zone,
   total_quantity integer,
+  product_image text,
   CONSTRAINT product_pkey PRIMARY KEY (product_id),
   CONSTRAINT product_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(product_category_id),
   CONSTRAINT product_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES public.brand(brand_id),

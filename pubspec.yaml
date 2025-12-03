@@ -30,13 +30,15 @@ dependencies:
 
   # لأيقونات إضافية وجميلة (اختياري)
   font_awesome_flutter: ^10.7.0
+  
+  # Image picker for uploading product images
+  image_picker: ^1.1.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^5.0.0
-  image_picker: ^1.1.1
 flutter:
   uses-material-design: true
 

@@ -13,7 +13,6 @@ class InventoryPage extends StatefulWidget {
 }
 
 class _InventoryPageState extends State<InventoryPage> {
-  int? selectedRow;
   int selectedTab = 0; // 0: Total, 1: Inventory #1, 2: Inventory #2
   bool showAddProductPopup = false;
   bool showAddInventoryPopup = false;
@@ -110,10 +109,7 @@ class _InventoryPageState extends State<InventoryPage> {
           final productId = batch['product_id'] as int;
           final quantity = batch['quantity'] as int? ?? 0;
           productQuantities[productId] = (productQuantities[productId] ?? 0) + quantity;
-          print('Inventory $inventoryId - Product $productId: batch qty = $quantity, total = ${productQuantities[productId]}');
         }
-        
-        print('ProductQuantities map: $productQuantities');
         
         // Show only products that exist in this inventory (quantity > 0)
         setState(() {
@@ -122,14 +118,11 @@ class _InventoryPageState extends State<InventoryPage> {
               .map((product) {
             final productId = product['product_id'] as int;
             final qty = productQuantities[productId] ?? 0;
-            print('Adding product $productId with inventory_quantity = $qty');
             return {
               ...product,
               'inventory_quantity': qty,
             };
           }).toList();
-          
-          print('Total products for inventory $inventoryId: ${products.length}');
         });
         
       } catch (e) {
@@ -240,11 +233,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 onChanged: _filterProducts,
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            _RoundIconButton(
-                              icon: Icons.filter_alt_rounded,
-                              onTap: () {},
-                            ),
+
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -280,12 +269,7 @@ class _InventoryPageState extends State<InventoryPage> {
                               final bg = i.isEven
                                   ? const Color(0xFF2D2D2D)
                                   : const Color(0xFF262626);
-                              return MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                onEnter: (_) => setState(() => selectedRow = i),
-                                onExit: (_) =>
-                                    setState(() => selectedRow = null),
-                                child: Material(
+                              return Material(
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: () {
@@ -301,12 +285,6 @@ class _InventoryPageState extends State<InventoryPage> {
                                       decoration: BoxDecoration(
                                         color: bg,
                                         borderRadius: BorderRadius.circular(14),
-                                        border: selectedRow == i
-                                            ? Border.all(
-                                                color: const Color(0xFF50B2E7),
-                                                width: 2,
-                                              )
-                                            : null,
                                       ),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -379,8 +357,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
+                                  );
                               },
                             ),
                         ),
@@ -730,32 +707,4 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-// 🔹 Filter Button
-class _RoundIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _RoundIconButton({required this.icon, required this.onTap});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2D2D2D), width: 3),
-      ),
-      child: Material(
-        color: const Color(0xFF2D2D2D),
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(icon, size: 20, color: const Color(0xFFB7A447)),
-          ),
-        ),
-      ),
-    );
-  }
-}

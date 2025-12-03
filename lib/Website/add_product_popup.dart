@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../supabase_config.dart';
 
 class AddProductPopup extends StatefulWidget {
@@ -34,6 +36,9 @@ class _AddProductPopupState extends State<AddProductPopup> {
   
   bool isLoading = true;
   bool isSaving = false;
+  
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
 
   @override
   void initState() {
@@ -91,8 +96,20 @@ class _AddProductPopupState extends State<AddProductPopup> {
     setState(() => isSaving = true);
 
     try {
+      // Convert image to data URL if selected
+      String? imageDataUrl;
+      if (_selectedImageBytes != null) {
+        print('Image selected, converting...');
+        imageDataUrl = _convertImageToDataUrl();
+        if (imageDataUrl != null) {
+          print('Image converted successfully');
+        }
+      } else {
+        print('No image selected');
+      }
+      
       // Insert the product
-      final productResponse = await supabase.from('product').insert({
+      final productData = {
         'name': _productNameController.text.trim(),
         'brand_id': _selectedBrandId,
         'category_id': _selectedCategoryId,
@@ -102,7 +119,13 @@ class _AddProductPopupState extends State<AddProductPopup> {
         'unit_id': _selectedUnitId,
         'is_active': true,
         'total_quantity': 0,
-      }).select('product_id').single();
+      };
+      
+      if (imageDataUrl != null) {
+        productData['product_image'] = imageDataUrl;
+      }
+      
+      final productResponse = await supabase.from('product').insert(productData).select('product_id').single();
 
       // If a specific inventory is selected, create a batch entry
       if (widget.selectedInventoryId != null) {
@@ -136,6 +159,60 @@ class _AddProductPopupState extends State<AddProductPopup> {
       if (mounted) {
         setState(() => isSaving = false);
       }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = image.name;
+        });
+      }
+    } catch (e) {
+      _showError('Error picking image: $e');
+    }
+  }
+
+  String? _convertImageToDataUrl() {
+    if (_selectedImageBytes == null || _selectedImageName == null) return null;
+    
+    try {
+      print('Converting image to base64...');
+      
+      // Determine MIME type from file extension
+      String mimeType = 'image/jpeg';
+      final extension = _selectedImageName!.toLowerCase().split('.').last;
+      if (extension == 'png') {
+        mimeType = 'image/png';
+      } else if (extension == 'gif') {
+        mimeType = 'image/gif';
+      } else if (extension == 'webp') {
+        mimeType = 'image/webp';
+      }
+      
+      // Convert bytes to base64
+      final base64String = base64Encode(_selectedImageBytes!);
+      final dataUrl = 'data:$mimeType;base64,$base64String';
+      
+      print('Image converted successfully');
+      return dataUrl;
+    } catch (e) {
+      print('Error converting image: $e');
+      if (mounted) {
+        _showError('Failed to process image: $e');
+      }
+      return null;
     }
   }
 
@@ -330,6 +407,64 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                             onChanged: (v) =>
                                                 setState(() => _selectedUnitId = v),
                                           ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 230,
+                                  child: FormFieldWrapper(
+                                    label: 'Product Image',
+                                    child: InkWell(
+                                      onTap: _pickImage,
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1E1E1E),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: const Color(0xFF3D3D3D),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.upload_file,
+                                              color: Color(0xFFFFE14D),
+                                              size: 22,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                _selectedImageName ?? 'Upload Image',
+                                                style: TextStyle(
+                                                  color: _selectedImageName != null
+                                                      ? Colors.white
+                                                      : Colors.white54,
+                                                  fontSize: 15,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (_selectedImageName != null)
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.close,
+                                                  color: Colors.white54,
+                                                  size: 18,
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _selectedImageBytes = null;
+                                                    _selectedImageName = null;
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
