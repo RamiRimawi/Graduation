@@ -22,7 +22,7 @@ class _PaymentPageState extends State<PaymentPage> {
       backgroundColor: AppColors.dark,
       body: Row(
         children: [
-          const Sidebar(activeIndex: 4), // السايدبار
+          const Sidebar(activeIndex: 4),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
@@ -94,10 +94,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       _TopTab(
                         label: 'Statistics',
                         isActive: activeTab == 0,
-                        onTap: () {
-                          setState(() => activeTab = 0);
-                          // إنت أصلاً في الصفحة نفسها، ما في تنقّل
-                        },
+                        onTap: () => setState(() => activeTab = 0),
                       ),
                       const SizedBox(width: 24),
                       _TopTab(
@@ -139,10 +136,9 @@ class _PaymentPageState extends State<PaymentPage> {
                         children: [
                           // ================== الصف العلوي ==================
                           SizedBox(
-                            height: 260,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: const [
+                            height: 280,
+                            child: const Row(
+                              children: [
                                 Expanded(flex: 3, child: _UpcomingChecksCard()),
                                 SizedBox(width: 18),
                                 Expanded(flex: 2, child: _TopStatsCards()),
@@ -154,10 +150,9 @@ class _PaymentPageState extends State<PaymentPage> {
 
                           // ================== الصف السفلي ==================
                           SizedBox(
-                            height: 330,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: const [
+                            height: 440,
+                            child: const Row(
+                              children: [
                                 Expanded(flex: 2, child: _MostDebtorsCard()),
                                 SizedBox(width: 18),
                                 Expanded(flex: 5, child: _TotalProfitCard()),
@@ -235,7 +230,6 @@ class _TopTab extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------
 // Card: Upcoming Checks  (zebra + scroll + check status أزرق)
 // ------------------------------------------------------------------
 class _UpcomingChecksCard extends StatelessWidget {
@@ -299,7 +293,7 @@ class _UpcomingChecksCard extends StatelessWidget {
                     margin: const EdgeInsets.only(top: 4),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 8,
+                      vertical: 12,
                     ),
                     decoration: BoxDecoration(
                       color: rowColor,
@@ -383,13 +377,13 @@ class _TopStatsCards extends StatelessWidget {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/doller.png',
-              width: 60,
-              height: 60,
+              width: 40,
+              height: 40,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.autorenew_rounded,
                 color: AppColors.blue,
-                size: 40,
+                size: 28,
               ),
             ),
             number: '9',
@@ -402,13 +396,13 @@ class _TopStatsCards extends StatelessWidget {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/dontcheck.png',
-              width: 50,
-              height: 50,
+              width: 36,
+              height: 36,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.block_rounded,
                 color: AppColors.blue,
-                size: 40,
+                size: 28,
               ),
             ),
             number: '5',
@@ -444,13 +438,13 @@ class _SingleStatCard extends StatelessWidget {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(24),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // 🔹 الأيقونة الزرقاء في الأعلى
-          SizedBox(width: 60, height: 60, child: Center(child: icon)),
-          const SizedBox(height: 5),
+          SizedBox(width: 44, height: 44, child: Center(child: icon)),
+          const SizedBox(height: 4),
 
           // 🔹 الرقم الكبير
           Text(
@@ -472,7 +466,7 @@ class _SingleStatCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
 
           // 🔹 النص الأزرق في الأسفل
           Column(
@@ -633,7 +627,7 @@ class _MostDebtorsCard extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 4),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 8,
+                    vertical: 16,
                   ),
                   decoration: BoxDecoration(
                     color: rowColor,
@@ -647,7 +641,7 @@ class _MostDebtorsCard extends StatelessWidget {
                           owner,
                           style: const TextStyle(
                             color: AppColors.white,
-                            fontSize: 12,
+                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -727,7 +721,7 @@ class _ProfitChartState extends State<_ProfitChart>
   ];
 
   static const double _maxY = 20;
-  static const double _barMaxHeight = 180;
+  static const double _barMaxHeight = 230;
   static const int _tickCount = 5;
 
   int? _hoveredIndex;
@@ -896,7 +890,7 @@ class _ProfitChartState extends State<_ProfitChart>
                                   final barHeight = isHovered
                                       ? baseHeight + 12
                                       : baseHeight;
-                                  final barWidth = isHovered ? 30.0 : 26.0;
+                                  final barWidth = isHovered ? 38.0 : 32.0;
                                   final opacity = isHovered ? 1.0 : 0.85;
 
                                   return MouseRegion(
@@ -914,6 +908,27 @@ class _ProfitChartState extends State<_ProfitChart>
                                         mainAxisAlignment:
                                             MainAxisAlignment.end,
                                         children: [
+                                          // Profit label ABOVE the bar
+                                          Opacity(
+                                            opacity: anim,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 6,
+                                              ),
+                                              child: Text(
+                                                '${profitData[index]}K',
+                                                style: TextStyle(
+                                                  color: isHovered
+                                                      ? AppColors.white
+                                                      : AppColors.white
+                                                            .withOpacity(0.9),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          // The bar itself
                                           AnimatedContainer(
                                             duration: const Duration(
                                               milliseconds: 250,
@@ -944,22 +959,8 @@ class _ProfitChartState extends State<_ProfitChart>
                                                   : [],
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Opacity(
-                                            opacity: anim,
-                                            child: Text(
-                                              '${profitData[index]}K',
-                                              style: TextStyle(
-                                                color: isHovered
-                                                    ? AppColors.white
-                                                    : AppColors.white
-                                                          .withOpacity(0.9),
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
+                                          const SizedBox(height: 6),
+                                          // Month label under the bar
                                           Text(
                                             months[index],
                                             style: const TextStyle(

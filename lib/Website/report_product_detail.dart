@@ -144,7 +144,7 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
                         )
                       : SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                          child: const ArchiveTable(),
+                          child: ArchiveTable(productId: widget.productId),
                         ),
                 ),
               ),
