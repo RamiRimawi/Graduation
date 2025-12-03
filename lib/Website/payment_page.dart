@@ -3,6 +3,8 @@ import 'sidebar.dart';
 import 'checks_page.dart';
 import 'archive_payment_page.dart';
 import 'choose_payment.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../supabase_config.dart';
 
 /// صفحة الـ Payment Dashboard
 class PaymentPage extends StatefulWidget {
@@ -22,7 +24,7 @@ class _PaymentPageState extends State<PaymentPage> {
       backgroundColor: AppColors.dark,
       body: Row(
         children: [
-          const Sidebar(activeIndex: 4), // السايدبار
+          const Sidebar(activeIndex: 4),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
@@ -94,10 +96,7 @@ class _PaymentPageState extends State<PaymentPage> {
                       _TopTab(
                         label: 'Statistics',
                         isActive: activeTab == 0,
-                        onTap: () {
-                          setState(() => activeTab = 0);
-                          // إنت أصلاً في الصفحة نفسها، ما في تنقّل
-                        },
+                        onTap: () => setState(() => activeTab = 0),
                       ),
                       const SizedBox(width: 24),
                       _TopTab(
@@ -139,10 +138,9 @@ class _PaymentPageState extends State<PaymentPage> {
                         children: [
                           // ================== الصف العلوي ==================
                           SizedBox(
-                            height: 260,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: const [
+                            height: 280,
+                            child: const Row(
+                              children: [
                                 Expanded(flex: 3, child: _UpcomingChecksCard()),
                                 SizedBox(width: 18),
                                 Expanded(flex: 2, child: _TopStatsCards()),
@@ -154,10 +152,9 @@ class _PaymentPageState extends State<PaymentPage> {
 
                           // ================== الصف السفلي ==================
                           SizedBox(
-                            height: 330,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: const [
+                            height: 440,
+                            child: const Row(
+                              children: [
                                 Expanded(flex: 2, child: _MostDebtorsCard()),
                                 SizedBox(width: 18),
                                 Expanded(flex: 5, child: _TotalProfitCard()),
@@ -235,22 +232,140 @@ class _TopTab extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------
 // Card: Upcoming Checks  (zebra + scroll + check status أزرق)
 // ------------------------------------------------------------------
-class _UpcomingChecksCard extends StatelessWidget {
+class _UpcomingChecksCard extends StatefulWidget {
   const _UpcomingChecksCard();
 
   @override
-  Widget build(BuildContext context) {
-    final rows = <List<String>>[
-      ['Kareem Manasra', '1000\$', '19/10/2025', 'Company Box'],
-      ['Ammar Shobaki', '2000\$', '22/8/2025', 'Company Box'],
-      ['Ata Musleh', '500\$', '22/8/2025', 'Endorsed'],
-      ['Ameer Yasin', '3000\$', '23/9/2025', 'Endorsed'],
-      ['Ahmad Nizar', '7000\$', '25/8/2025', 'Company Box'],
-    ];
+  State<_UpcomingChecksCard> createState() => _UpcomingChecksCardState();
+}
 
+class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
+  List<Map<String, dynamic>> upcomingChecks = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUpcomingChecks();
+  }
+
+  Future<void> _fetchUpcomingChecks() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Calculate date range - next 7 days
+      final now = DateTime.now();
+      final oneWeekFromNow = now.add(const Duration(days: 7));
+
+      // Format dates for SQL query
+      final startDate = now.toIso8601String().split('T')[0];
+      final endDate = oneWeekFromNow.toIso8601String().split('T')[0];
+
+      // Fetch customer checks with status "Company Box" or "Endorsed"
+      final customerChecksResponse = await supabase
+          .from('customer_checks')
+          .select('''
+            check_id,
+            exchange_rate,
+            exchange_date,
+            status,
+            customer_id,
+            customer:customer_id (
+              name
+            )
+          ''')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate)
+          .inFilter('status', ['Company Box', 'Endorsed']);
+
+      // Fetch supplier checks with status "pending"
+      final supplierChecksResponse = await supabase
+          .from('supplier_checks')
+          .select('''
+            check_id,
+            exchange_rate,
+            exchange_date,
+            status,
+            supplier_id,
+            supplier:supplier_id (
+              name
+            )
+          ''')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate)
+          .eq('status', 'Pending');
+
+      // Combine both lists
+      final List<Map<String, dynamic>> combinedChecks = [];
+
+      // Add customer checks
+      if (customerChecksResponse is List) {
+        for (var check in customerChecksResponse) {
+          combinedChecks.add({
+            'owner': check['customer']?['name'] ?? 'Unknown',
+            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+            'date': _formatDate(check['exchange_date']),
+            'status': _capitalizeStatus(check['status']),
+            'type': 'customer',
+          });
+        }
+      }
+
+      // Add supplier checks
+      if (supplierChecksResponse is List) {
+        for (var check in supplierChecksResponse) {
+          combinedChecks.add({
+            'owner': check['supplier']?['name'] ?? 'Unknown',
+            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+            'date': _formatDate(check['exchange_date']),
+            'status': _capitalizeStatus(check['status']),
+            'type': 'supplier',
+          });
+        }
+      }
+
+      // Sort by date
+      combinedChecks.sort((a, b) {
+        final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime.now();
+        final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
+        return dateA.compareTo(dateB);
+      });
+
+      setState(() {
+        upcomingChecks = combinedChecks;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching upcoming checks: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  String _capitalizeStatus(String? status) {
+    if (status == null) return '';
+    return status
+        .split(' ')
+        .map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1);
+        })
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -272,96 +387,129 @@ class _UpcomingChecksCard extends StatelessWidget {
 
           // الهيدر
           const _TableHeaderBar(
-            titles: ['Check owner', 'Price', 'Caching Date', 'Check Status'],
+            titles: [
+              'Check owner',
+              'Price',
+              'Caching Date',
+              'Type',
+              'Check Status',
+            ],
             blueIndex: 3,
-            flexes: [3, 1, 1, 2],
+            flexes: [3, 1, 1, 1, 2],
           ),
           const SizedBox(height: 6),
 
           // 🔹 Scroll داخلي لتفادي overflow
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: rows.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final row = entry.value;
-                  final owner = row[0];
-                  final price = row[1];
-                  final date = row[2];
-                  final status = row[3];
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.blue),
+                  )
+                : upcomingChecks.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No upcoming checks',
+                      style: TextStyle(color: AppColors.grey, fontSize: 14),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      children: upcomingChecks.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final check = entry.value;
+                        final owner = check['owner'] ?? '';
+                        final price = check['price'] ?? '';
+                        final date = check['date'] ?? '';
+                        final status = check['status'] ?? '';
+                        final type = check['type'] ?? '';
 
-                  final bool isEven = index.isEven;
-                  final Color rowColor = isEven
-                      ? AppColors.dark
-                      : AppColors.cardAlt;
+                        final bool isEven = index.isEven;
+                        final Color rowColor = isEven
+                            ? AppColors.dark
+                            : AppColors.cardAlt;
 
-                  return Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: rowColor,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            owner,
-                            style: const TextStyle(
-                              color: AppColors.white,
-                              fontSize: 13,
-                            ),
+                        return Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              price,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 13,
+                          decoration: BoxDecoration(
+                            color: rowColor,
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  owner,
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              date,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 13,
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    price,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              status,
-                              style: const TextStyle(
-                                color: AppColors.blue, // 🔹 الكل أزرق
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    date,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    type == 'customer'
+                                        ? 'Customer'
+                                        : 'Supplier',
+                                    style: const TextStyle(
+                                      color: AppColors.blue,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    status,
+                                    style: const TextStyle(
+                                      color: AppColors.blue, // 🔹 الكل أزرق
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
+                  ),
           ),
         ],
       ),
@@ -372,8 +520,63 @@ class _UpcomingChecksCard extends StatelessWidget {
 // ------------------------------------------------------------------
 // الكروت الصغيرة Endorsed / Returned
 // ------------------------------------------------------------------
-class _TopStatsCards extends StatelessWidget {
+class _TopStatsCards extends StatefulWidget {
   const _TopStatsCards();
+
+  @override
+  State<_TopStatsCards> createState() => _TopStatsCardsState();
+}
+
+class _TopStatsCardsState extends State<_TopStatsCards> {
+  int endorsedCount = 0;
+  int returnedCount = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCheckStats();
+  }
+
+  Future<void> _fetchCheckStats() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Fetch endorsed checks count (customer checks only)
+      final endorsedResponse = await supabase
+          .from('customer_checks')
+          .select('check_id')
+          .eq('status', 'Endorsed');
+
+      // Calculate this month's date range
+      final now = DateTime.now();
+      final firstDayOfMonth = DateTime(now.year, now.month, 1);
+      final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+
+      final startDate = firstDayOfMonth.toIso8601String().split('T')[0];
+      final endDate = lastDayOfMonth.toIso8601String().split('T')[0];
+
+      // Fetch returned checks count for this month (customer checks)
+      final returnedResponse = await supabase
+          .from('customer_checks')
+          .select('check_id')
+          .eq('status', 'Returned')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate);
+
+      print('Endorsed response: $endorsedResponse');
+      print('Returned response: $returnedResponse');
+
+      setState(() {
+        endorsedCount = endorsedResponse is List ? endorsedResponse.length : 0;
+        returnedCount = returnedResponse is List ? returnedResponse.length : 0;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching check stats: $e');
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -383,16 +586,16 @@ class _TopStatsCards extends StatelessWidget {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/doller.png',
-              width: 60,
-              height: 60,
+              width: 40,
+              height: 40,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.autorenew_rounded,
                 color: AppColors.blue,
-                size: 40,
+                size: 28,
               ),
             ),
-            number: '9',
+            number: isLoading ? '-' : endorsedCount.toString(),
             label: 'Check',
             bottomMain: 'Endorsed',
           ),
@@ -402,16 +605,16 @@ class _TopStatsCards extends StatelessWidget {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/dontcheck.png',
-              width: 50,
-              height: 50,
+              width: 36,
+              height: 36,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.block_rounded,
                 color: AppColors.blue,
-                size: 40,
+                size: 28,
               ),
             ),
-            number: '5',
+            number: isLoading ? '-' : returnedCount.toString(),
             label: 'Check',
             bottomMain: 'Returned',
             bottomSmall: 'this month',
@@ -444,13 +647,13 @@ class _SingleStatCard extends StatelessWidget {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(24),
       ),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // 🔹 الأيقونة الزرقاء في الأعلى
-          SizedBox(width: 60, height: 60, child: Center(child: icon)),
-          const SizedBox(height: 5),
+          SizedBox(width: 44, height: 44, child: Center(child: icon)),
+          const SizedBox(height: 4),
 
           // 🔹 الرقم الكبير
           Text(
@@ -472,7 +675,7 @@ class _SingleStatCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
 
           // 🔹 النص الأزرق في الأسفل
           Column(
@@ -633,7 +836,7 @@ class _MostDebtorsCard extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 4),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 8,
+                    vertical: 16,
                   ),
                   decoration: BoxDecoration(
                     color: rowColor,
@@ -647,7 +850,7 @@ class _MostDebtorsCard extends StatelessWidget {
                           owner,
                           style: const TextStyle(
                             color: AppColors.white,
-                            fontSize: 12,
+                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -727,7 +930,7 @@ class _ProfitChartState extends State<_ProfitChart>
   ];
 
   static const double _maxY = 20;
-  static const double _barMaxHeight = 180;
+  static const double _barMaxHeight = 230;
   static const int _tickCount = 5;
 
   int? _hoveredIndex;
@@ -896,7 +1099,7 @@ class _ProfitChartState extends State<_ProfitChart>
                                   final barHeight = isHovered
                                       ? baseHeight + 12
                                       : baseHeight;
-                                  final barWidth = isHovered ? 30.0 : 26.0;
+                                  final barWidth = isHovered ? 38.0 : 32.0;
                                   final opacity = isHovered ? 1.0 : 0.85;
 
                                   return MouseRegion(
@@ -914,6 +1117,27 @@ class _ProfitChartState extends State<_ProfitChart>
                                         mainAxisAlignment:
                                             MainAxisAlignment.end,
                                         children: [
+                                          // Profit label ABOVE the bar
+                                          Opacity(
+                                            opacity: anim,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 6,
+                                              ),
+                                              child: Text(
+                                                '${profitData[index]}K',
+                                                style: TextStyle(
+                                                  color: isHovered
+                                                      ? AppColors.white
+                                                      : AppColors.white
+                                                            .withOpacity(0.9),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          // The bar itself
                                           AnimatedContainer(
                                             duration: const Duration(
                                               milliseconds: 250,
@@ -944,22 +1168,8 @@ class _ProfitChartState extends State<_ProfitChart>
                                                   : [],
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Opacity(
-                                            opacity: anim,
-                                            child: Text(
-                                              '${profitData[index]}K',
-                                              style: TextStyle(
-                                                color: isHovered
-                                                    ? AppColors.white
-                                                    : AppColors.white
-                                                          .withOpacity(0.9),
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
+                                          const SizedBox(height: 6),
+                                          // Month label under the bar
                                           Text(
                                             months[index],
                                             style: const TextStyle(

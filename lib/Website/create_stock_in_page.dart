@@ -22,7 +22,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
   List<Map<String, dynamic>> allProducts = [];
   Set<int> selectedProductIds = {};
   bool isLoadingSuppliers = true;
-  bool isLoadingProducts = false;
   
   static const int taxPercent = 16;
   
@@ -63,24 +62,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
     );
-  }
-
-  void _changeQuantityForHovered(int delta) {
-    if (hoveredIndex == null || hoveredIndex == 0) {
-      _showMessage('Hover a product row to modify quantity');
-      return;
-    }
-    final int idx = hoveredIndex! - 1; // header row offset
-    if (idx < 0 || idx >= allProducts.length) return;
-    setState(() {
-      final product = allProducts[idx];
-      final int current = (product['quantity'] ?? 0) is int
-          ? product['quantity'] ?? 0
-          : int.tryParse(product['quantity'].toString()) ?? 0;
-      int updated = current + delta;
-      if (updated < 0) updated = 0;
-      product['quantity'] = updated;
-    });
   }
 
   Future<void> _loadSuppliers() async {
@@ -176,27 +157,25 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       
       final orderId = orderResponse['order_id'];
       
-      // إضافة تفاصيل المنتجات المحددة فقط في supplier_order_description
+      // إضافة تفاصيل جميع المنتجات في الجدول
       for (var product in allProducts) {
-        if (selectedProductIds.contains(product['product_id'])) { // فقط المنتجات المحددة
-          final quantity = product['quantity'] ?? 0;
-          if (quantity > 0) {
-            await supabase.from('supplier_order_description').insert({
-              'order_id': orderId,
-              'product_id': product['product_id'],
-              'quantity': quantity,
-              'receipt_quantity': 0,
-              'price_per_product': product['wholesale_price'] ?? 0,
-            });
-          }
+        final quantity = product['quantity'] ?? 0;
+        if (quantity > 0) {
+          await supabase.from('supplier_order_description').insert({
+            'order_id': orderId,
+            'product_id': product['product_id'],
+            'quantity': quantity,
+            'receipt_quantity': 0,
+            'price_per_product': product['wholesale_price'] ?? 0,
+          });
         }
       }
       
       if (mounted) {
         _showMessage('Order sent successfully!');
-        // حذف المنتجات المرسلة من الجدول
+        // حذف جميع المنتجات من الجدول
         setState(() {
-          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          allProducts.clear();
           selectedProductIds.clear();
         });
       }
@@ -230,27 +209,25 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       
       final orderId = orderResponse['order_id'];
       
-      // إضافة تفاصيل المنتجات المحددة فقط في supplier_order_description
+      // إضافة تفاصيل جميع المنتجات في الجدول
       for (var product in allProducts) {
-        if (selectedProductIds.contains(product['product_id'])) {
-          final quantity = product['quantity'] ?? 0;
-          if (quantity > 0) {
-            await supabase.from('supplier_order_description').insert({
-              'order_id': orderId,
-              'product_id': product['product_id'],
-              'quantity': quantity,
-              'receipt_quantity': 0,
-              'price_per_product': product['wholesale_price'] ?? 0,
-            });
-          }
+        final quantity = product['quantity'] ?? 0;
+        if (quantity > 0) {
+          await supabase.from('supplier_order_description').insert({
+            'order_id': orderId,
+            'product_id': product['product_id'],
+            'quantity': quantity,
+            'receipt_quantity': 0,
+            'price_per_product': product['wholesale_price'] ?? 0,
+          });
         }
       }
       
       if (mounted) {
         _showMessage('Order saved as Hold!');
-        // حذف المنتجات المحفوظة من الجدول
+        // حذف جميع المنتجات من الجدول
         setState(() {
-          allProducts.removeWhere((p) => selectedProductIds.contains(p['product_id']));
+          allProducts.clear();
           selectedProductIds.clear();
         });
       }
@@ -474,13 +451,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                           // ===== TABLE =====
                           Expanded(
                             flex: 10,
-                            child: isLoadingProducts
-                                ? const Center(
-                                    child: CircularProgressIndicator(
-                                      color: Color(0xFF50B2E7),
-                                    ),
-                                  )
-                                : allProducts.isEmpty
+                            child: allProducts.isEmpty
                                     ? const Center(
                                         child: Text(
                                           'No products found',
@@ -833,7 +804,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                   label: 'Send Order',
                                   textColor: Colors.black,
                                   width: 220,
-                                  onTap: (selectedSupplierId == null || selectedProductIds.isEmpty)
+                                  onTap: selectedSupplierId == null
                                       ? null
                                       : () async {
                                           await _sendOrder();
@@ -846,7 +817,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                   label: 'Hold',
                                   textColor: Colors.white,
                                   width: 220,
-                                  onTap: (selectedSupplierId == null || selectedProductIds.isEmpty)
+                                  onTap: selectedSupplierId == null
                                       ? null
                                       : () async {
                                           await _holdOrder();
@@ -1015,5 +986,3 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
-
-

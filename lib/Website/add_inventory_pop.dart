@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import '../supabase_config.dart';
 
 class AddInventoryPopup extends StatefulWidget {
   final VoidCallback onClose;
-  const AddInventoryPopup({super.key, required this.onClose});
+  final VoidCallback? onInventoryAdded;
+  const AddInventoryPopup({
+    super.key,
+    required this.onClose,
+    this.onInventoryAdded,
+  });
 
   @override
   State<AddInventoryPopup> createState() => _AddInventoryPopupState();
@@ -10,14 +16,67 @@ class AddInventoryPopup extends StatefulWidget {
 
 class _AddInventoryPopupState extends State<AddInventoryPopup> {
   final _formKey = GlobalKey<FormState>();
-  final _inventoryNumberController = TextEditingController();
   final _inventoryLocationController = TextEditingController();
+  bool _isSaving = false;
 
   @override
   void dispose() {
-    _inventoryNumberController.dispose();
     _inventoryLocationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveInventory() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final location = _inventoryLocationController.text.trim();
+
+      if (location.isEmpty) {
+        _showError('Please enter inventory location');
+        setState(() => _isSaving = false);
+        return;
+      }
+
+      // Insert inventory into database (inventory_id is auto-generated)
+      await supabase.from('inventory').insert({
+        'inventory_location': location,
+      });
+
+      if (mounted) {
+        _showSuccess('Inventory added successfully');
+        widget.onInventoryAdded?.call();
+        await Future.delayed(const Duration(milliseconds: 500));
+        widget.onClose();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error adding inventory: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   @override
@@ -89,21 +148,10 @@ class _AddInventoryPopupState extends State<AddInventoryPopup> {
                             SizedBox(
                               width: 360,
                               child: FormFieldWrapper(
-                                label: 'Inventory Number',
-                                child: _textField(
-                                  controller: _inventoryNumberController,
-                                  hint: '',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: 360,
-                              child: FormFieldWrapper(
                                 label: 'Inventory Location',
                                 child: _textField(
                                   controller: _inventoryLocationController,
-                                  hint: '',
+                                  hint: 'Enter warehouse location name',
                                 ),
                               ),
                             ),
@@ -112,38 +160,42 @@ class _AddInventoryPopupState extends State<AddInventoryPopup> {
                               width: 280,
                               height: 58,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  if (_formKey.currentState!.validate()) {
-                                    // Handle form submission
-                                    // You can add your logic here
-                                    widget.onClose();
-                                  }
-                                },
+                                onPressed: _isSaving ? null : _saveInventory,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFFFE14D),
+                                  disabledBackgroundColor: const Color(0xFFFFE14D).withOpacity(0.5),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                 ),
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2_rounded,
-                                      color: Colors.black87,
-                                      size: 26,
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'Submit',
-                                      style: TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 20,
+                                child: _isSaving
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black87),
+                                        ),
+                                      )
+                                    : const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.inventory_2_rounded,
+                                            color: Colors.black87,
+                                            size: 26,
+                                          ),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'Submit',
+                                            style: TextStyle(
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 20,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
                             const SizedBox(height: 24),

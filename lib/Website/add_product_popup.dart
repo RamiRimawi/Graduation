@@ -1,8 +1,19 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import '../supabase_config.dart';
 
 class AddProductPopup extends StatefulWidget {
   final VoidCallback onClose;
-  const AddProductPopup({super.key, required this.onClose});
+  final VoidCallback? onProductAdded;
+  final int? selectedInventoryId;
+  const AddProductPopup({
+    super.key,
+    required this.onClose,
+    this.onProductAdded,
+    this.selectedInventoryId,
+  });
 
   @override
   State<AddProductPopup> createState() => _AddProductPopupState();
@@ -15,9 +26,205 @@ class _AddProductPopupState extends State<AddProductPopup> {
   final _sellingPriceController = TextEditingController();
   final _minProfitController = TextEditingController();
 
-  String? _selectedBrand;
-  String? _selectedCategory;
-  String? _selectedUnit;
+  int? _selectedBrandId;
+  int? _selectedCategoryId;
+  int? _selectedUnitId;
+  
+  List<Map<String, dynamic>> brands = [];
+  List<Map<String, dynamic>> categories = [];
+  List<Map<String, dynamic>> units = [];
+  
+  bool isLoading = true;
+  bool isSaving = false;
+  
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => isLoading = true);
+    try {
+      // Load brands
+      final brandsResp = await supabase
+          .from('brand')
+          .select('brand_id, name')
+          .order('name');
+      brands = List<Map<String, dynamic>>.from(brandsResp);
+
+      // Load categories
+      final categoriesResp = await supabase
+          .from('product_category')
+          .select('product_category_id, name')
+          .order('name');
+      categories = List<Map<String, dynamic>>.from(categoriesResp);
+
+      // Load units
+      final unitsResp = await supabase
+          .from('unit')
+          .select('unit_id, unit_name')
+          .order('unit_id');
+      units = List<Map<String, dynamic>>.from(unitsResp);
+
+      setState(() => isLoading = false);
+    } catch (e) {
+      print('Error loading data: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _saveProduct() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    if (_selectedBrandId == null) {
+      _showError('Please select a brand');
+      return;
+    }
+    if (_selectedCategoryId == null) {
+      _showError('Please select a category');
+      return;
+    }
+    if (_selectedUnitId == null) {
+      _showError('Please select a unit');
+      return;
+    }
+
+    setState(() => isSaving = true);
+
+    try {
+      // Convert image to data URL if selected
+      String? imageDataUrl;
+      if (_selectedImageBytes != null) {
+        print('Image selected, converting...');
+        imageDataUrl = _convertImageToDataUrl();
+        if (imageDataUrl != null) {
+          print('Image converted successfully');
+        }
+      } else {
+        print('No image selected');
+      }
+      
+      // Insert the product
+      final productData = {
+        'name': _productNameController.text.trim(),
+        'brand_id': _selectedBrandId,
+        'category_id': _selectedCategoryId,
+        'wholesale_price': double.parse(_wholesalePriceController.text),
+        'selling_price': double.parse(_sellingPriceController.text),
+        'minimum_profit_percent': double.parse(_minProfitController.text),
+        'unit_id': _selectedUnitId,
+        'is_active': true,
+        'total_quantity': 0,
+      };
+      
+      if (imageDataUrl != null) {
+        productData['product_image'] = imageDataUrl;
+      }
+      
+      final productResponse = await supabase.from('product').insert(productData).select('product_id').single();
+
+      // If a specific inventory is selected, create a batch entry
+      if (widget.selectedInventoryId != null) {
+        final productId = productResponse['product_id'] as int;
+        await supabase.from('batch').insert({
+          'product_id': productId,
+          'inventory_id': widget.selectedInventoryId,
+          'quantity': 0,
+          'supplier_id': null,
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.selectedInventoryId == null 
+                ? 'Product added successfully'
+                : 'Product added to inventory successfully'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        widget.onProductAdded?.call();
+        widget.onClose();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error adding product: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = image.name;
+        });
+      }
+    } catch (e) {
+      _showError('Error picking image: $e');
+    }
+  }
+
+  String? _convertImageToDataUrl() {
+    if (_selectedImageBytes == null || _selectedImageName == null) return null;
+    
+    try {
+      print('Converting image to base64...');
+      
+      // Determine MIME type from file extension
+      String mimeType = 'image/jpeg';
+      final extension = _selectedImageName!.toLowerCase().split('.').last;
+      if (extension == 'png') {
+        mimeType = 'image/png';
+      } else if (extension == 'gif') {
+        mimeType = 'image/gif';
+      } else if (extension == 'webp') {
+        mimeType = 'image/webp';
+      }
+      
+      // Convert bytes to base64
+      final base64String = base64Encode(_selectedImageBytes!);
+      final dataUrl = 'data:$mimeType;base64,$base64String';
+      
+      print('Image converted successfully');
+      return dataUrl;
+    } catch (e) {
+      print('Error converting image: $e');
+      if (mounted) {
+        _showError('Failed to process image: $e');
+      }
+      return null;
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -96,6 +303,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                     child: _textField(
                                       controller: _productNameController,
                                       hint: 'Product Name',
+                                      validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                                     ),
                                   ),
                                 ),
@@ -103,31 +311,36 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                   width: 230,
                                   child: FormFieldWrapper(
                                     label: 'Brand Name',
-                                    child: _dropdownField(
-                                      hint: 'Brand Name',
-                                      value: _selectedBrand,
-                                      items: ['GROHE', 'Royal', 'Other'],
-                                      onChanged: (v) =>
-                                          setState(() => _selectedBrand = v),
-                                    ),
+                                    child: isLoading
+                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        : _dropdownFieldInt(
+                                            hint: 'Brand Name',
+                                            value: _selectedBrandId,
+                                            items: brands.map((b) => {
+                                              'id': b['brand_id'],
+                                              'name': b['name'].toString(),
+                                            }).toList(),
+                                            onChanged: (v) =>
+                                                setState(() => _selectedBrandId = v),
+                                          ),
                                   ),
                                 ),
                                 SizedBox(
                                   width: 230,
                                   child: FormFieldWrapper(
                                     label: 'Category',
-                                    child: _dropdownField(
-                                      hint: 'Category Name',
-                                      value: _selectedCategory,
-                                      items: [
-                                        'shower',
-                                        'Toilets',
-                                        'Extensions',
-                                        'Other',
-                                      ],
-                                      onChanged: (v) =>
-                                          setState(() => _selectedCategory = v),
-                                    ),
+                                    child: isLoading
+                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        : _dropdownFieldInt(
+                                            hint: 'Category Name',
+                                            value: _selectedCategoryId,
+                                            items: categories.map((c) => {
+                                              'id': c['product_category_id'],
+                                              'name': c['name'].toString(),
+                                            }).toList(),
+                                            onChanged: (v) =>
+                                                setState(() => _selectedCategoryId = v),
+                                          ),
                                   ),
                                 ),
                                 SizedBox(
@@ -136,8 +349,13 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                     label: 'Wholesale Price',
                                     child: _textField(
                                       controller: _wholesalePriceController,
-                                      hint: 'Entre Value',
+                                      hint: 'Enter Value',
                                       type: TextInputType.number,
+                                      validator: (v) {
+                                        if (v?.isEmpty ?? true) return 'Required';
+                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        return null;
+                                      },
                                     ),
                                   ),
                                 ),
@@ -147,8 +365,13 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                     label: 'Selling  Price',
                                     child: _textField(
                                       controller: _sellingPriceController,
-                                      hint: 'Entre Value',
+                                      hint: 'Enter Value',
                                       type: TextInputType.number,
+                                      validator: (v) {
+                                        if (v?.isEmpty ?? true) return 'Required';
+                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        return null;
+                                      },
                                     ),
                                   ),
                                 ),
@@ -158,8 +381,13 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                     label: 'Minimum Profit %',
                                     child: _textField(
                                       controller: _minProfitController,
-                                      hint: 'Entre Percent',
+                                      hint: 'Enter Percent',
                                       type: TextInputType.number,
+                                      validator: (v) {
+                                        if (v?.isEmpty ?? true) return 'Required';
+                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        return null;
+                                      },
                                     ),
                                   ),
                                 ),
@@ -167,12 +395,75 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                   width: 230,
                                   child: FormFieldWrapper(
                                     label: 'Unit',
-                                    child: _dropdownField(
-                                      hint: 'cm,pcs,kg..etc',
-                                      value: _selectedUnit,
-                                      items: ['cm', 'pcs', 'kg', 'etc'],
-                                      onChanged: (v) =>
-                                          setState(() => _selectedUnit = v),
+                                    child: isLoading
+                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        : _dropdownFieldInt(
+                                            hint: 'cm, pcs, kg..etc',
+                                            value: _selectedUnitId,
+                                            items: units.map((u) => {
+                                              'id': u['unit_id'],
+                                              'name': u['unit_name'].toString(),
+                                            }).toList(),
+                                            onChanged: (v) =>
+                                                setState(() => _selectedUnitId = v),
+                                          ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 230,
+                                  child: FormFieldWrapper(
+                                    label: 'Product Image',
+                                    child: InkWell(
+                                      onTap: _pickImage,
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF1E1E1E),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: const Color(0xFF3D3D3D),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.upload_file,
+                                              color: Color(0xFFFFE14D),
+                                              size: 22,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                _selectedImageName ?? 'Upload Image',
+                                                style: TextStyle(
+                                                  color: _selectedImageName != null
+                                                      ? Colors.white
+                                                      : Colors.white54,
+                                                  fontSize: 15,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (_selectedImageName != null)
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.close,
+                                                  color: Colors.white54,
+                                                  size: 18,
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _selectedImageBytes = null;
+                                                    _selectedImageName = null;
+                                                  });
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -185,36 +476,41 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                 width: 280,
                                 height: 58,
                                 child: ElevatedButton(
-                                  onPressed: () {
-                                    if (_formKey.currentState!.validate()) {
-                                      widget.onClose();
-                                    }
-                                  },
+                                  onPressed: isSaving ? null : _saveProduct,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFFFFE14D),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(50),
                                     ),
                                   ),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.add_box_rounded,
-                                        color: Colors.black87,
-                                        size: 26,
-                                      ),
-                                      SizedBox(width: 10),
-                                      Text(
-                                        'Submit',
-                                        style: TextStyle(
-                                          color: Colors.black87,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 20,
+                                  child: isSaving
+                                      ? const SizedBox(
+                                          height: 26,
+                                          width: 26,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.black87,
+                                            strokeWidth: 3,
+                                          ),
+                                        )
+                                      : const Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.add_box_rounded,
+                                              color: Colors.black87,
+                                              size: 26,
+                                            ),
+                                            SizedBox(width: 10),
+                                            Text(
+                                              'Submit',
+                                              style: TextStyle(
+                                                color: Colors.black87,
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 20,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               ),
                             ),
@@ -238,72 +534,93 @@ class _AddProductPopupState extends State<AddProductPopup> {
     required TextEditingController controller,
     required String hint,
     TextInputType? type,
+    String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: type,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
-        filled: true,
-        fillColor: const Color(0xFF2D2D2D),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 1.8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
+    return MouseRegion(
+      cursor: SystemMouseCursors.text,
+      child: TextFormField(
+        controller: controller,
+        keyboardType: type,
+        validator: validator,
+        inputFormatters: type == TextInputType.number
+            ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]
+            : null,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
+          filled: true,
+          fillColor: const Color(0xFF1E1E1E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
         ),
       ),
     );
   }
 
-  // 🟡 Dropdown Field Style
-  Widget _dropdownField({
+  // 🟡 Dropdown Field Style for Int IDs
+  Widget _dropdownFieldInt({
     required String hint,
-    required List<String> items,
-    required String? value,
-    required Function(String?) onChanged,
+    required List<Map<String, dynamic>> items,
+    required int? value,
+    required Function(int?) onChanged,
   }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      dropdownColor: const Color(0xFF2D2D2D),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
-        suffixIcon: const Icon(Icons.arrow_drop_down, color: Color(0xFFFFE14D)),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: DropdownButtonFormField<int>(
+        value: value,
+        isExpanded: true,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+        dropdownColor: const Color(0xFF1E1E1E),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
+          suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+          filled: true,
+          fillColor: const Color(0xFF1E1E1E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 1.8),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
-        ),
+        items: items.map((item) {
+          return DropdownMenuItem<int>(
+            value: item['id'] as int,
+            child: Text(
+              item['name'].toString(),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          );
+        }).toList(),
+        onChanged: onChanged,
       ),
-      items: items
-          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-          .toList(),
-      onChanged: onChanged,
     );
   }
 }
