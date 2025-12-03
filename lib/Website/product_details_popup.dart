@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../supabase_config.dart';
 
-class ProductDetailsPopup extends StatelessWidget {
+class ProductDetailsPopup extends StatefulWidget {
   final String productId;
   final String productName;
   final String brandName;
@@ -9,6 +11,10 @@ class ProductDetailsPopup extends StatelessWidget {
   final String sellingPrice;
   final String minProfit;
   final VoidCallback onClose;
+  final VoidCallback? onDataChanged;
+  final int? inventoryIdFilter; // null => show all inventories (Total)
+  final int? brandId;
+  final int? categoryId;
 
   const ProductDetailsPopup({
     super.key,
@@ -20,7 +26,267 @@ class ProductDetailsPopup extends StatelessWidget {
     required this.sellingPrice,
     required this.minProfit,
     required this.onClose,
+    this.onDataChanged,
+    this.inventoryIdFilter,
+    this.brandId,
+    this.categoryId,
   });
+
+  @override
+  State<ProductDetailsPopup> createState() => _ProductDetailsPopupState();
+}
+
+class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
+  bool isEditMode = false;
+  bool isSaving = false;
+  bool isLoadingEditData = false;
+  
+  // Edit data
+  List<Map<String, dynamic>> brands = [];
+  List<Map<String, dynamic>> categories = [];
+  List<Map<String, dynamic>> storageLocations = []; // {batch_id, inventory_id, inventory_location, storage_location_descrption}
+  
+  int? selectedBrandId;
+  int? selectedCategoryId;
+  late TextEditingController wholesalePriceController;
+  late TextEditingController sellingPriceController;
+  late TextEditingController minProfitController;
+  Map<int, TextEditingController> storageControllers = {}; // inventory_id -> controller
+
+  @override
+  void initState() {
+    super.initState();
+    selectedBrandId = widget.brandId;
+    selectedCategoryId = widget.categoryId;
+    wholesalePriceController = TextEditingController(
+      text: widget.wholesalePrice.replaceAll(RegExp(r'[^0-9.]'), ''),
+    );
+    sellingPriceController = TextEditingController(
+      text: widget.sellingPrice.replaceAll(RegExp(r'[^0-9.]'), ''),
+    );
+    minProfitController = TextEditingController(
+      text: widget.minProfit.replaceAll(RegExp(r'[^0-9.]'), ''),
+    );
+    // Auto-save disabled: changes are saved only when pressing Done
+  }
+
+  @override
+  void dispose() {
+    wholesalePriceController.dispose();
+    sellingPriceController.dispose();
+    minProfitController.dispose();
+    for (var ctrl in storageControllers.values) {
+      ctrl.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadEditData() async {
+    setState(() => isLoadingEditData = true);
+    
+    try {
+      // Load brands
+      final brandsResp = await supabase
+          .from('brand')
+          .select('brand_id, name')
+          .order('name');
+      brands = List<Map<String, dynamic>>.from(brandsResp);
+
+      // Load categories
+      final categoriesResp = await supabase
+          .from('product_category')
+          .select('product_category_id, name')
+          .order('name');
+      categories = List<Map<String, dynamic>>.from(categoriesResp);
+
+      // Load storage locations for this product
+      final pid = int.tryParse(widget.productId);
+      if (pid != null) {
+        var batchQuery = supabase
+            .from('batch')
+            .select('''
+              batch_id,
+              inventory_id,
+              storage_location_descrption,
+              inventory:inventory_id(inventory_location)
+            ''')
+            .eq('product_id', pid);
+        
+        if (widget.inventoryIdFilter != null) {
+          batchQuery = batchQuery.eq('inventory_id', widget.inventoryIdFilter!);
+        }
+        
+        final batchResp = await batchQuery;
+        final rows = List<Map<String, dynamic>>.from(batchResp);
+        
+        // Group by inventory_id - pick first batch per inventory for editing
+        Map<int, Map<String, dynamic>> byInventory = {};
+        for (final row in rows) {
+          final invId = row['inventory_id'] as int?;
+          if (invId == null) continue;
+          if (!byInventory.containsKey(invId)) {
+            byInventory[invId] = {
+              'batch_id': row['batch_id'],
+              'inventory_id': invId,
+              'inventory_location': ((row['inventory'] as Map?)?['inventory_location'] ?? 'Inventory #$invId').toString(),
+              'storage_location_descrption': (row['storage_location_descrption'] ?? '').toString(),
+            };
+          }
+        }
+        
+        storageLocations = byInventory.values.toList();
+        
+        // Initialize controllers for each inventory (no auto-save listeners)
+        for (final loc in storageLocations) {
+          final invId = loc['inventory_id'] as int;
+          final controller = TextEditingController(
+            text: loc['storage_location_descrption'] ?? '',
+          );
+          storageControllers[invId] = controller;
+        }
+      }
+      
+      setState(() => isLoadingEditData = false);
+    } catch (e) {
+      print('Error loading edit data: $e');
+      setState(() => isLoadingEditData = false);
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    setState(() => isSaving = true);
+    
+    try {
+      final pid = int.tryParse(widget.productId);
+      if (pid == null) throw 'Invalid product ID';
+      
+      // Update product table
+      await supabase.from('product').update({
+        'brand_id': selectedBrandId,
+        'category_id': selectedCategoryId,
+        'wholesale_price': double.tryParse(wholesalePriceController.text) ?? 0,
+        'selling_price': double.tryParse(sellingPriceController.text) ?? 0,
+        'minimum_profit_percent': double.tryParse(minProfitController.text) ?? 0,
+      }).eq('product_id', pid);
+      
+      // Update storage locations for each batch
+      for (final loc in storageLocations) {
+        final batchId = loc['batch_id'] as int;
+        final invId = loc['inventory_id'] as int;
+        final newStorage = storageControllers[invId]?.text ?? '';
+        
+        await supabase.from('batch').update({
+          'storage_location_descrption': newStorage,
+        }).eq('batch_id', batchId);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Product updated successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+          ),
+        );
+        widget.onDataChanged?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isSaving = false);
+      }
+    }
+  }
+
+  // Auto-save removed: saving occurs only in _saveChanges when pressing Done
+
+  // Per-field storage updates removed: storage locations saved with other changes in _saveChanges
+
+  void _toggleEditMode() async {
+    if (isEditMode) {
+      // Exit edit mode and save changes
+      await _saveChanges();
+      if (mounted) {
+        setState(() => isEditMode = false);
+      }
+    } else {
+      // Enter edit mode
+      await _loadEditData();
+      setState(() => isEditMode = true);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchInventoryData() async {
+    final pid = int.tryParse(widget.productId);
+    if (pid == null) return [];
+
+    try {
+        // 1) Get inventories (all or a specific one) to ensure listing even when quantity is 0
+          var invQuery = supabase
+            .from('inventory')
+            .select('inventory_id, inventory_location');
+          if (widget.inventoryIdFilter != null) {
+          invQuery = invQuery.eq('inventory_id', widget.inventoryIdFilter!);
+          }
+          final invResp = await invQuery.order('inventory_id');
+      final allInventories = List<Map<String, dynamic>>.from(invResp);
+
+        // 2) Get batch rows for this product (all or a specific inventory)
+        var batchQuery = supabase
+          .from('batch')
+          .select('inventory_id, quantity, storage_location_descrption')
+          .eq('product_id', pid);
+        if (widget.inventoryIdFilter != null) {
+          batchQuery = batchQuery.eq('inventory_id', widget.inventoryIdFilter!);
+        }
+        final batchResp = await batchQuery;
+      final rows = List<Map<String, dynamic>>.from(batchResp);
+
+      // 3) Aggregate batch data per inventory
+      final Map<int, Map<String, dynamic>> byInventory = {};
+      for (final row in rows) {
+        final invId = row['inventory_id'] as int?;
+        if (invId == null) continue;
+        final qty = (row['quantity'] as int?) ?? 0;
+        final stor = (row['storage_location_descrption'] ?? '').toString();
+
+        final entry = byInventory.putIfAbsent(invId, () => {
+              'quantity': 0,
+              'storage_locations': <String>[]
+            });
+        entry['quantity'] = (entry['quantity'] as int) + qty;
+        if (stor.trim().isNotEmpty) {
+          final list = entry['storage_locations'] as List<String>;
+          if (!list.contains(stor)) list.add(stor);
+        }
+      }
+
+      // 4) Merge: include all inventories, fill missing with zeros
+      final List<Map<String, dynamic>> merged = [];
+      for (final inv in allInventories) {
+        final invId = inv['inventory_id'] as int;
+        final invLoc = (inv['inventory_location'] ?? 'Inventory #$invId').toString();
+        final agg = byInventory[invId];
+        merged.add({
+          'inventory_location': invLoc,
+          'quantity': (agg?['quantity'] as int?) ?? 0,
+          'storage_locations': (agg?['storage_locations'] as List<String>?) ?? <String>[],
+        });
+      }
+
+      return merged;
+    } catch (_) {
+      return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +296,7 @@ class ProductDetailsPopup extends StatelessWidget {
         // خلفية غامقة لإغلاق الـ popup عند الكبس خارجها
         Positioned.fill(
           child: GestureDetector(
-            onTap: onClose,
+            onTap: widget.onClose,
             child: Container(color: Colors.black54),
           ),
         ),
@@ -60,7 +326,7 @@ class ProductDetailsPopup extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            productName,
+                            widget.productName,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 30,
@@ -72,16 +338,14 @@ class ProductDetailsPopup extends StatelessWidget {
                         Row(
                           children: [
                             ElevatedButton.icon(
-                              onPressed: () {
-                                // TODO: Edit product
-                              },
-                              icon: const Icon(
-                                Icons.edit,
+                              onPressed: isSaving ? null : _toggleEditMode,
+                              icon: Icon(
+                                isEditMode ? Icons.check : Icons.edit,
                                 color: Colors.black87,
                               ),
-                              label: const Text(
-                                'Edit Product',
-                                style: TextStyle(
+                              label: Text(
+                                isEditMode ? 'Done' : 'Edit Product',
+                                style: const TextStyle(
                                   color: Colors.black87,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -103,7 +367,7 @@ class ProductDetailsPopup extends StatelessWidget {
                                 Icons.close,
                                 color: Colors.white,
                               ),
-                              onPressed: onClose,
+                              onPressed: widget.onClose,
                             ),
                           ],
                         ),
@@ -182,31 +446,79 @@ class ProductDetailsPopup extends StatelessWidget {
 
                           // ▶ القسم اليمين: التفاصيل (مثل الصورة الثانية)
                           Expanded(
-                            child: Column(
+                            child: isLoadingEditData
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFFFFE14D),
+                                    ),
+                                  )
+                                : Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // الصف الأول: id / brand / category
                                 Row(
                                   children: [
                                     Expanded(
+                                      flex: 1,
                                       child: _DetailField(
                                         label: 'Product id#',
-                                        value: productId,
+                                        value: widget.productId,
                                       ),
                                     ),
                                     const SizedBox(width: 16),
+                                    
                                     Expanded(
-                                      child: _DetailField(
-                                        label: 'Brand Name',
-                                        value: brandName,
-                                      ),
+                                      flex: 1,
+                                      child: isEditMode
+                                          ? (brands.isEmpty
+                                              ? _DetailField(
+                                                  label: 'Brand Name',
+                                                  value: widget.brandName,
+                                                )
+                                              : _buildDropdownField(
+                                                  label: 'Brand Name',
+                                                  value: selectedBrandId,
+                                                  items: brands.map((b) {
+                                                    return DropdownMenuItem<int>(
+                                                      value: b['brand_id'] as int,
+                                                      child: Text(b['name'].toString()),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (val) {
+                                                    setState(() => selectedBrandId = val);
+                                                  },
+                                                ))
+                                          : _DetailField(
+                                              label: 'Brand Name',
+                                              value: widget.brandName,
+                                            ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
-                                      child: _DetailField(
-                                        label: 'Category',
-                                        value: category,
-                                      ),
+                                      flex: 1,
+                                      child: isEditMode
+                                          ? (categories.isEmpty
+                                              ? _DetailField(
+                                                  label: 'Category',
+                                                  value: widget.category,
+                                                )
+                                              : _buildDropdownField(
+                                                  label: 'Category',
+                                                  value: selectedCategoryId,
+                                                  items: categories.map((c) {
+                                                    return DropdownMenuItem<int>(
+                                                      value: c['product_category_id'] as int,
+                                                      child: Text(c['name'].toString()),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (val) {
+                                                    setState(() => selectedCategoryId = val);
+                                                  },
+                                                ))
+                                          : _DetailField(
+                                              label: 'Category',
+                                              value: widget.category,
+                                            ),
                                     ),
                                   ],
                                 ),
@@ -216,70 +528,162 @@ class ProductDetailsPopup extends StatelessWidget {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: _DetailField(
-                                        label: 'Wholesale Price',
-                                        value: wholesalePrice,
-                                      ),
+                                      child: isEditMode
+                                          ? _buildTextField(
+                                              label: 'Wholesale Price',
+                                              controller: wholesalePriceController,
+                                              prefix: '\$',
+                                            )
+                                          : _DetailField(
+                                              label: 'Wholesale Price',
+                                              value: widget.wholesalePrice,
+                                            ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
-                                      child: _DetailField(
-                                        label: 'Selling  Price',
-                                        value: sellingPrice,
-                                      ),
+                                      child: isEditMode
+                                          ? _buildTextField(
+                                              label: 'Selling Price',
+                                              controller: sellingPriceController,
+                                              prefix: '\$',
+                                            )
+                                          : _DetailField(
+                                              label: 'Selling  Price',
+                                              value: widget.sellingPrice,
+                                            ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
-                                      child: _DetailField(
-                                        label: 'Minimum Profit %',
-                                        value: minProfit,
-                                      ),
+                                      child: isEditMode
+                                          ? _buildTextField(
+                                              label: 'Minimum Profit %',
+                                              controller: minProfitController,
+                                              suffix: '%',
+                                            )
+                                          : _DetailField(
+                                              label: 'Minimum Profit %',
+                                              value: widget.minProfit,
+                                            ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 30),
 
-                                // 🔹 الكمية
-                                const Text(
-                                  'Quantity',
-                                  style: TextStyle(
-                                    color: Color(0xFFB7A447),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                const _InlineDetailRow(
-                                  label: 'Inventory #1',
-                                  value: '5000 pcs',
-                                ),
-                                const SizedBox(height: 12),
-                                const _InlineDetailRow(
-                                  label: 'Inventory #2',
-                                  value: '30000 pcs',
-                                ),
-                                const SizedBox(height: 30),
+                                // 🔹 البيانات الديناميكية: الكمية + مواقع التخزين
+                                FutureBuilder<List<Map<String, dynamic>>>(
+                                  future: _fetchInventoryData(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState == ConnectionState.waiting) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        child: SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: const CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFFFFE14D),
+                                          ),
+                                        ),
+                                      );
+                                    }
 
-                                // 🔹 موقع التخزين
-                                const Text(
-                                  'Storage Location',
-                                  style: TextStyle(
-                                    color: Color(0xFFB7A447),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                    final data = snapshot.data ?? [];
+
+                                    Widget buildQuantitySection() {
+                                      final children = <Widget>[
+                                        const Text(
+                                          'Quantity',
+                                          style: TextStyle(
+                                            color: Color(0xFFB7A447),
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ];
+
+                                      if (data.isEmpty) {
+                                        children.add(const _InlineDetailRow(label: 'N/A', value: 'N/A'));
+                                      } else {
+                                        for (int i = 0; i < data.length; i++) {
+                                          final item = data[i];
+                                          final label = (item['inventory_location'] ?? 'Inventory').toString();
+                                          final qty = (item['quantity'] ?? 0).toString();
+                                          children.add(_InlineDetailRow(label: label, value: '$qty pcs'));
+                                          if (i != data.length - 1) children.add(const SizedBox(height: 12));
+                                        }
+                                      }
+
+                                      children.add(const SizedBox(height: 30));
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: children,
+                                      );
+                                    }
+
+                                    Widget buildStorageSection() {
+                                      final children = <Widget>[
+                                        const Text(
+                                          'Storage Location',
+                                          style: TextStyle(
+                                            color: Color(0xFFB7A447),
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ];
+
+                                      if (data.isEmpty) {
+                                        children.add(const _InlineDetailRow(label: 'N/A', value: 'N/A'));
+                                      } else {
+                                        for (int i = 0; i < data.length; i++) {
+                                          final item = data[i];
+                                          final label = (item['inventory_location'] ?? 'Inventory').toString();
+                                          final storList = (item['storage_locations'] as List?)?.cast<String>() ?? const <String>[];
+                                          final storValue = storList.isEmpty ? 'N/A' : storList.join(', ');
+                                          
+                                          // Check if this location has a batch (can be edited)
+                                          final existingLoc = storageLocations.firstWhere(
+                                            (loc) => loc['inventory_location'] == label,
+                                            orElse: () => {},
+                                          );
+                                          final canEdit = isEditMode && existingLoc.isNotEmpty && storValue != 'N/A';
+                                          
+                                          if (canEdit) {
+                                            // Editable row with same design as view mode
+                                            final invId = existingLoc['inventory_id'] as int;
+                                            children.add(
+                                              _EditableInlineDetailRow(
+                                                label: label,
+                                                controller: storageControllers[invId]!,
+                                              ),
+                                            );
+                                          } else {
+                                            // Read-only row
+                                            children.add(_InlineDetailRow(label: label, value: storValue));
+                                          }
+                                          
+                                          if (i != data.length - 1) children.add(const SizedBox(height: 12));
+                                        }
+                                      }
+
+                                      children.add(const SizedBox(height: 24));
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: children,
+                                      );
+                                    }
+
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        buildQuantitySection(),
+                                        buildStorageSection(),
+                                      ],
+                                    );
+                                  },
                                 ),
-                                const SizedBox(height: 12),
-                                const _InlineDetailRow(
-                                  label: 'Inventory #1',
-                                  value: 'Floor 2, Aisle 5, Shelf 3',
-                                ),
-                                const SizedBox(height: 12),
-                                const _InlineDetailRow(
-                                  label: 'Inventory #2',
-                                  value: 'Floor 2, Aisle 2, Shelf 5',
-                                ),
-                                const SizedBox(height: 24),
                               ],
                             ),
                           ),
@@ -295,6 +699,135 @@ class ProductDetailsPopup extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    String? prefix,
+    String? suffix,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFFB7A447),
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white, fontSize: 15.5),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF1E1E1E),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
+            ),
+            prefixText: prefix,
+            suffixText: suffix,
+            hintText: hint,
+            hintStyle: const TextStyle(color: Colors.white38),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          keyboardType: (prefix == '\$' || suffix == '%') ? TextInputType.number : TextInputType.text,
+          inputFormatters: (prefix == '\$' || suffix == '%')
+              ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]
+              : null,
+        ),
+      ],
+    );
+  }
+
+   Widget _buildDropdownField({
+  required String label,
+  required int? value,
+  required List<DropdownMenuItem<int>> items,
+  required ValueChanged<int?> onChanged,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFFB7A447),
+          fontSize: 15.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      const SizedBox(height: 6),
+
+      DropdownButtonFormField<int>(
+        value: value,
+        items: items.map((item) {
+          return DropdownMenuItem<int>(
+            value: item.value,
+            child: Text(
+              (item.child as Text).data ?? '',
+              overflow: TextOverflow.ellipsis,     // 🔥 يمنع overflow
+              maxLines: 1,
+            ),
+          );
+        }).toList(),
+        onChanged: onChanged,
+
+        isExpanded: true,                         // توسعة لملء العرض وتجنب overflow
+        menuMaxHeight: 300,
+
+        // 🔥 يجعل العنصر المختار نفسه يقص النص
+        selectedItemBuilder: (context) {
+          return items.map((item) {
+            return Text(
+              (item.child as Text).data ?? '',
+              overflow: TextOverflow.ellipsis,     // 🔥 أيضا هنا
+              maxLines: 1,
+            );
+          }).toList();
+        },
+
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color(0xFF1E1E1E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF3D3D3D)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
+        ),
+        dropdownColor: const Color(0xFF1E1E1E),
+        style: const TextStyle(color: Colors.white, fontSize: 15.5),
+        icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+        isDense: true,
+      ),
+    ],
+  );
+}
+
 }
 
 // 🔹 عنصر عرض حقل التفاصيل (لصفوف الثلاثية فوق)
@@ -375,6 +908,57 @@ class _InlineDetailRow extends StatelessWidget {
                 fontSize: 15.5,
                 fontWeight: FontWeight.w500,
               ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// 🔹 Editable Row على شكل:  Inventory #1  [editable field]
+class _EditableInlineDetailRow extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+
+  const _EditableInlineDetailRow({
+    required this.label,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: TextFormField(
+            controller: controller,
+            style: const TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w500),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xFF1E1E1E),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF3D3D3D), width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFFFFE14D), width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
           ),
         ),
