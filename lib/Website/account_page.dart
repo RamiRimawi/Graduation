@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
+import '../supabase_config.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -9,8 +10,66 @@ class AppColors {
   static const red = Color(0xFFED4B49);
 }
 
-class ProfilePageContent extends StatelessWidget {
+class ProfilePageContent extends StatefulWidget {
   const ProfilePageContent({super.key});
+
+  @override
+  State<ProfilePageContent> createState() => _ProfilePageContentState();
+}
+
+class _ProfilePageContentState extends State<ProfilePageContent> {
+  bool isLoading = true;
+  String name = '';
+  String mobileNumber = '';
+  String telephoneNumber = '';
+  String address = '';
+  String? profileImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccountantData();
+  }
+
+  Future<void> _loadAccountantData() async {
+    try {
+      // For now, using accountant_id = 401234567 as example
+      // You should replace this with actual logged-in user ID
+      const accountantId = 401234567;
+      
+      final response = await supabase
+          .from('user_account_accountant')
+          .select('''
+            accountant_id,
+            profile_image,
+            accountant:accountant_id(
+              name,
+              mobile_number,
+              telephone_number,
+              address
+            )
+          ''')
+          .eq('accountant_id', accountantId)
+          .single();
+
+      if (mounted) {
+        final accountantData = response['accountant'] as Map<String, dynamic>;
+        setState(() {
+          name = accountantData['name'] ?? 'N/A';
+          mobileNumber = accountantData['mobile_number'] ?? 'N/A';
+          telephoneNumber = accountantData['telephone_number'] ?? 'N/A';
+          address = accountantData['address'] ?? 'N/A';
+          profileImage = response['profile_image'] as String?;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading accountant data: $e');
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +80,13 @@ class ProfilePageContent extends StatelessWidget {
         children: [
           const Sidebar(activeIndex: 0),
           Expanded(
-            child: SafeArea(
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.yellow,
+                    ),
+                  )
+                : SafeArea(
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: width > 900 ? 60 : 28,
@@ -80,21 +145,21 @@ class ProfilePageContent extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const _ProfileAvatar(),
+                        _ProfileAvatar(imageUrl: profileImage),
                         const SizedBox(width: 40),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text(
-                              'Ayman Al Asmar',
-                              style: TextStyle(
+                              name,
+                              style: const TextStyle(
                                 color: AppColors.white,
                                 fontSize: 42,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            SizedBox(height: 8),
-                            Text(
+                            const SizedBox(height: 8),
+                            const Text(
                               'Accountant',
                               style: TextStyle(
                                 color: AppColors.white,
@@ -115,14 +180,14 @@ class ProfilePageContent extends StatelessWidget {
                         Expanded(
                           child: _InfoCard(
                             title: 'Mobile Number',
-                            value: '0597390235',
+                            value: mobileNumber,
                           ),
                         ),
                         const SizedBox(width: 24),
                         Expanded(
                           child: _InfoCard(
                             title: 'Telephone Number',
-                            value: '022860183',
+                            value: telephoneNumber,
                           ),
                         ),
                       ],
@@ -135,9 +200,9 @@ class ProfilePageContent extends StatelessWidget {
                       alignment: Alignment.center,
                       child: SizedBox(
                         width: width > 900 ? 520 : double.infinity,
-                        child: const _AddressCard(
+                        child: _AddressCard(
                           title: 'Address',
-                          value: 'Ramallah - BeitRima',
+                          value: address,
                         ),
                       ),
                     ),
@@ -248,7 +313,9 @@ class _InfoCard extends StatelessWidget {
 }
 
 class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar();
+  final String? imageUrl;
+  
+  const _ProfileAvatar({this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -280,14 +347,16 @@ class _ProfileAvatar extends StatelessWidget {
           radius: 110,
           backgroundColor: AppColors.card,
           child: ClipOval(
-            child: Image.asset(
-              'assets/images/ramadan.jpg',
-              fit: BoxFit.cover,
-              width: 220,
-              height: 220,
-              errorBuilder: (_, __, ___) =>
-                  const Icon(Icons.person, size: 110, color: AppColors.white),
-            ),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    width: 220,
+                    height: 220,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.person, size: 110, color: AppColors.white),
+                  )
+                : const Icon(Icons.person, size: 110, color: AppColors.white),
           ),
         ),
 
