@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'Supplier/supplier_bottom_nav.dart';
+import 'Supplier/supplier_home_page.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -13,7 +15,7 @@ class _AccountPageState extends State<AccountPage> {
   final ImagePicker _picker = ImagePicker();
   XFile? _photo;
 
-  bool _isPressed = false; // حالة الضغط على الصورة
+  bool _isPressed = false;
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
@@ -28,6 +30,7 @@ class _AccountPageState extends State<AccountPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF202020),
+
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -35,19 +38,12 @@ class _AccountPageState extends State<AccountPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ================== PROFILE AVATAR ==================
                 Stack(
                   children: [
                     GestureDetector(
-                      onTapDown: (_) {
-                        setState(() => _isPressed = true);
-                      },
-                      onTapUp: (_) {
-                        setState(() => _isPressed = false);
-                      },
-                      onTapCancel: () {
-                        setState(() => _isPressed = false);
-                      },
+                      onTapDown: (_) => setState(() => _isPressed = true),
+                      onTapUp: (_) => setState(() => _isPressed = false),
+                      onTapCancel: () => setState(() => _isPressed = false),
                       child: AnimatedScale(
                         scale: _isPressed ? 1.1 : 1.0,
                         duration: const Duration(milliseconds: 180),
@@ -59,41 +55,28 @@ class _AccountPageState extends State<AccountPage> {
                             gradient: LinearGradient(
                               colors: _isPressed
                                   ? const [
-                                      Color(0xFF50B2E7), // أزرق فاتح عند الضغط
-                                      Color(0xFF3A8FC9), // أزرق أغمق
+                                      Color(0xFF50B2E7),
+                                      Color(0xFF3A8FC9),
                                     ]
                                   : const [
-                                      Color(0xFFFFE14D), // ذهب فاتح
-                                      Color(0xFFB7A447), // ذهب أغمق
+                                      Color(0xFFFFE14D),
+                                      Color(0xFFB7A447),
                                     ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            boxShadow: _isPressed
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.blueAccent.withOpacity(
-                                        0.45,
-                                      ),
-                                      blurRadius: 30,
-                                      spreadRadius: 5,
-                                      offset: const Offset(0, 0),
-                                    ),
-                                  ]
-                                : [],
                           ),
                           child: CircleAvatar(
                             radius: 95,
                             backgroundImage: _photo != null
-                                ? FileImage(File(_photo!.path)) as ImageProvider
-                                : const AssetImage('assets/images/ramadan.jpg'),
-                            backgroundColor: Colors.transparent,
+                                ? FileImage(File(_photo!.path))
+                                : const AssetImage('assets/images/ramadan.jpg')
+                                    as ImageProvider,
                           ),
                         ),
                       ),
                     ),
 
-                    // زر تعديل الصورة
                     Positioned(
                       right: 0,
                       bottom: 0,
@@ -104,18 +87,9 @@ class _AccountPageState extends State<AccountPage> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFB7A447),
                             borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.25),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
-                          child: const Icon(
-                            Icons.edit,
-                            color: Color(0xFF202020),
-                          ),
+                          child: const Icon(Icons.edit,
+                              color: Color(0xFF202020)),
                         ),
                       ),
                     ),
@@ -132,6 +106,7 @@ class _AccountPageState extends State<AccountPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
+
                 _buildLabelAndBox('ID #', '14135849'),
                 _buildLabelAndBox('Role', 'Storage Staff'),
                 _buildLabelAndBox('Address', 'Hebron - thahrea'),
@@ -141,13 +116,12 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ),
 
-          // ========= EXIT BUTTON =========
           Positioned(
             top: 40,
             right: 12,
             child: GestureDetector(
               onTap: () {
-                Navigator.pop(context); // log out OR return
+                Navigator.pop(context);
               },
               child: Container(
                 width: 52,
@@ -156,11 +130,24 @@ class _AccountPageState extends State<AccountPage> {
                   color: const Color(0xFFE74C3C),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.logout, color: Colors.white, size: 28),
+                child: const Icon(Icons.logout,
+                    color: Colors.white, size: 28),
               ),
             ),
           ),
         ],
+      ),
+
+      bottomNavigationBar: SupplierBottomNav(
+        currentIndex: 1,
+        onTap: (i) {
+          if (i == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const SupplierHomePage()),
+            );
+          }
+        },
       ),
     );
   }
@@ -171,18 +158,17 @@ class _AccountPageState extends State<AccountPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 22,
-            ),
-          ),
+          Text(label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 22,
+              )),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(12),
