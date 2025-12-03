@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../supabase_config.dart';
 
 class Sidebar extends StatelessWidget {
 
@@ -201,6 +203,64 @@ class _HoverProfileImage extends StatefulWidget {
 
 class _HoverProfileImageState extends State<_HoverProfileImage> {
   bool _isHovered = false;
+  String? _profileImage;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileImage();
+  }
+
+  Future<void> _loadProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Check if image is already cached
+      final cachedImage = prefs.getString('profile_image');
+      if (cachedImage != null && cachedImage.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _profileImage = cachedImage;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+      
+      // If not cached, fetch from database
+      final accountantId = prefs.getInt('accountant_id');
+      if (accountantId != null) {
+        final response = await supabase
+            .from('user_account_accountant')
+            .select('profile_image')
+            .eq('accountant_id', accountantId)
+            .single();
+        
+        final imageUrl = response['profile_image'] as String?;
+        
+        // Cache the image URL
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          await prefs.setString('profile_image', imageUrl);
+        }
+        
+        if (mounted) {
+          setState(() {
+            _profileImage = imageUrl;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,19 +279,42 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
           height: _isHovered ? 67 : 52,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            image: const DecorationImage(
-              image: AssetImage('assets/images/rami.jpg'),
-              fit: BoxFit.cover,
-            ),
+            color: const Color(0xFF2D2D2D),
             boxShadow: [
               BoxShadow(
-                color: const Color(
-                  0xFF50B2E7,
-                ).withOpacity(_isHovered ? 0.35 : 0.1),
+                color: const Color(0xFF50B2E7).withOpacity(_isHovered ? 0.35 : 0.1),
                 blurRadius: _isHovered ? 22 : 10,
                 spreadRadius: _isHovered ? 3 : 1,
               ),
             ],
+          ),
+          child: ClipOval(
+            child: _isLoading
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF50B2E7),
+                      ),
+                    ),
+                  )
+                : _profileImage != null && _profileImage!.isNotEmpty
+                    ? Image.network(
+                        _profileImage!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 28,
+                      ),
           ),
         ),
       ),

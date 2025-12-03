@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'sidebar.dart';
 import '../supabase_config.dart';
 
@@ -19,23 +22,53 @@ class ProfilePageContent extends StatefulWidget {
 
 class _ProfilePageContentState extends State<ProfilePageContent> {
   bool isLoading = true;
+  bool isEditMode = false;
+  bool isSaving = false;
+  int? accountantId;
   String name = '';
   String mobileNumber = '';
   String telephoneNumber = '';
   String address = '';
   String? profileImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+  
+  late TextEditingController nameController;
+  late TextEditingController mobileController;
+  late TextEditingController telephoneController;
+  late TextEditingController addressController;
 
   @override
   void initState() {
     super.initState();
+    nameController = TextEditingController();
+    mobileController = TextEditingController();
+    telephoneController = TextEditingController();
+    addressController = TextEditingController();
     _loadAccountantData();
+  }
+  
+  @override
+  void dispose() {
+    nameController.dispose();
+    mobileController.dispose();
+    telephoneController.dispose();
+    addressController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAccountantData() async {
     try {
-      // For now, using accountant_id = 401234567 as example
-      // You should replace this with actual logged-in user ID
-      const accountantId = 401234567;
+      // Get accountant ID from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      accountantId = prefs.getInt('accountant_id');
+      
+      if (accountantId == null) {
+        if (mounted) {
+          setState(() => isLoading = false);
+        }
+        return;
+      }
       
       final response = await supabase
           .from('user_account_accountant')
@@ -49,11 +82,12 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
               address
             )
           ''')
-          .eq('accountant_id', accountantId)
+          .eq('accountant_id', accountantId!)
           .single();
 
       if (mounted) {
         final accountantData = response['accountant'] as Map<String, dynamic>;
+        
         setState(() {
           name = accountantData['name'] ?? 'N/A';
           mobileNumber = accountantData['mobile_number'] ?? 'N/A';
@@ -64,9 +98,167 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
         });
       }
     } catch (e) {
-      print('Error loading accountant data: $e');
       if (mounted) {
         setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = image.name;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<String?> _uploadImageToStorage() async {
+    if (_selectedImageBytes == null || _selectedImageName == null || accountantId == null) return null;
+    
+    try {
+      final extension = _selectedImageName!.toLowerCase().split('.').last;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'accountant_${accountantId}_$timestamp.$extension';
+      
+      // Upload to Supabase Storage
+      await supabase.storage
+          .from('images')
+          .uploadBinary(fileName, _selectedImageBytes!);
+      
+      // Get public URL
+      final publicUrl = supabase.storage
+          .from('images')
+          .getPublicUrl(fileName);
+      
+      return publicUrl;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
+  void _toggleEditMode() {
+    if (isEditMode) {
+      // Save changes
+      _saveChanges();
+    } else {
+      // Enter edit mode
+      setState(() {
+        isEditMode = true;
+        nameController.text = name;
+        mobileController.text = mobileNumber;
+        telephoneController.text = telephoneNumber;
+        addressController.text = address;
+      });
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    // Check if any data has changed
+    bool hasChanges = nameController.text.trim() != name ||
+        mobileController.text.trim() != mobileNumber ||
+        telephoneController.text.trim() != telephoneNumber ||
+        addressController.text.trim() != address ||
+        _selectedImageBytes != null;
+    
+    // If no changes, just exit edit mode without saving
+    if (!hasChanges) {
+      setState(() {
+        isEditMode = false;
+      });
+      return;
+    }
+    
+    setState(() => isSaving = true);
+    
+    try {
+      if (accountantId == null) {
+        throw 'No accountant ID found';
+      }
+      
+      // Prepare accountant data
+      final Map<String, dynamic> accountantData = {
+        'name': nameController.text.trim(),
+        'mobile_number': mobileController.text.trim(),
+        'telephone_number': telephoneController.text.trim(),
+        'address': addressController.text.trim(),
+      };
+      
+      // Update accountant table
+      await supabase
+          .from('accountant')
+          .update(accountantData)
+          .eq('accountant_id', accountantId!);
+      
+      // Update profile image if changed
+      if (_selectedImageBytes != null) {
+        final imageUrl = await _uploadImageToStorage();
+        if (imageUrl != null) {
+          await supabase
+              .from('user_account_accountant')
+              .update({'profile_image': imageUrl})
+              .eq('accountant_id', accountantId!);
+          profileImage = imageUrl;
+          
+          // Update cached profile image
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('profile_image', imageUrl);
+        }
+      }
+      
+      // Update local state
+      setState(() {
+        name = nameController.text.trim();
+        mobileNumber = mobileController.text.trim();
+        telephoneNumber = telephoneController.text.trim();
+        address = addressController.text.trim();
+        isEditMode = false;
+        isSaving = false;
+        _selectedImageBytes = null;
+        _selectedImageName = null;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -100,15 +292,15 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         _TopButton(
-                          label: 'Edit Profile',
-                          icon: Icons.edit,
-                          background: AppColors.card,
+                          label: isEditMode ? 'Save' : 'Edit Profile',
+                          icon: isEditMode ? Icons.check : Icons.edit,
+                          background: isEditMode ? Colors.green : AppColors.card,
                           textColor: AppColors.white,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 22,
                             vertical: 16,
                           ),
-                          onTap: () {},
+                          onTap: isSaving ? () {} : _toggleEditMode,
                         ),
                         const SizedBox(width: 12),
                         _TopButton(
@@ -120,7 +312,13 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                             horizontal: 26,
                             vertical: 14,
                           ),
-                          onTap: () {},
+                          onTap: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.remove('accountant_id');
+                            if (context.mounted) {
+                              Navigator.pushReplacementNamed(context, '/login');
+                            }
+                          },
                         ),
                         const SizedBox(width: 16),
                         Container(
@@ -145,29 +343,60 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _ProfileAvatar(imageUrl: profileImage),
+                        _ProfileAvatar(
+                          imageUrl: profileImage,
+                          selectedImageBytes: _selectedImageBytes,
+                          isEditMode: isEditMode,
+                          onEditPressed: _pickImage,
+                        ),
                         const SizedBox(width: 40),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 42,
-                                fontWeight: FontWeight.w800,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              isEditMode
+                                  ? IntrinsicHeight(
+                                      child: TextFormField(
+                                        controller: nameController,
+                                        style: const TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: 42,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                        decoration: InputDecoration(
+                                          border: UnderlineInputBorder(
+                                            borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                                          ),
+                                          focusedBorder: const UnderlineInputBorder(
+                                            borderSide: BorderSide(color: AppColors.yellow, width: 2),
+                                          ),
+                                          enabledBorder: UnderlineInputBorder(
+                                            borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                                          ),
+                                          contentPadding: EdgeInsets.zero,
+                                          isDense: true,
+                                        ),
+                                      ),
+                                    )
+                                  : Text(
+                                      name,
+                                      style: const TextStyle(
+                                        color: AppColors.white,
+                                        fontSize: 42,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Accountant',
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Accountant',
-                              style: TextStyle(
-                                color: AppColors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -178,16 +407,20 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                     Row(
                       children: [
                         Expanded(
-                          child: _InfoCard(
+                          child: _EditableInfoCard(
                             title: 'Mobile Number',
                             value: mobileNumber,
+                            controller: mobileController,
+                            isEditMode: isEditMode,
                           ),
                         ),
                         const SizedBox(width: 24),
                         Expanded(
-                          child: _InfoCard(
+                          child: _EditableInfoCard(
                             title: 'Telephone Number',
                             value: telephoneNumber,
+                            controller: telephoneController,
+                            isEditMode: isEditMode,
                           ),
                         ),
                       ],
@@ -200,9 +433,11 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                       alignment: Alignment.center,
                       child: SizedBox(
                         width: width > 900 ? 520 : double.infinity,
-                        child: _AddressCard(
+                        child: _EditableAddressCard(
                           title: 'Address',
                           value: address,
+                          controller: addressController,
+                          isEditMode: isEditMode,
                         ),
                       ),
                     ),
@@ -271,11 +506,18 @@ class _TopButton extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
+class _EditableInfoCard extends StatelessWidget {
   final String title;
   final String value;
+  final TextEditingController controller;
+  final bool isEditMode;
 
-  const _InfoCard({required this.title, required this.value});
+  const _EditableInfoCard({
+    required this.title,
+    required this.value,
+    required this.controller,
+    required this.isEditMode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -297,14 +539,46 @@ class _InfoCard extends StatelessWidget {
               letterSpacing: 0.4,
             ),
           ),
-
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.yellow,
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
+          Expanded(
+            child: isEditMode
+                ? TextFormField(
+                    controller: controller,
+                    textAlign: TextAlign.right,
+                    keyboardType: TextInputType.number,
+                    maxLength: 9,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(9),
+                    ],
+                    style: const TextStyle(
+                      color: AppColors.yellow,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow, width: 2),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      counterText: '',
+                      isDense: true,
+                    ),
+                  )
+                : Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: AppColors.yellow,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -314,8 +588,16 @@ class _InfoCard extends StatelessWidget {
 
 class _ProfileAvatar extends StatelessWidget {
   final String? imageUrl;
+  final Uint8List? selectedImageBytes;
+  final bool isEditMode;
+  final VoidCallback? onEditPressed;
   
-  const _ProfileAvatar({this.imageUrl});
+  const _ProfileAvatar({
+    this.imageUrl,
+    this.selectedImageBytes,
+    this.isEditMode = false,
+    this.onEditPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -347,34 +629,45 @@ class _ProfileAvatar extends StatelessWidget {
           radius: 110,
           backgroundColor: AppColors.card,
           child: ClipOval(
-            child: imageUrl != null && imageUrl!.isNotEmpty
-                ? Image.network(
-                    imageUrl!,
+            child: selectedImageBytes != null
+                ? Image.memory(
+                    selectedImageBytes!,
                     fit: BoxFit.cover,
                     width: 220,
                     height: 220,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.person, size: 110, color: AppColors.white),
                   )
-                : const Icon(Icons.person, size: 110, color: AppColors.white),
+                : imageUrl != null && imageUrl!.isNotEmpty
+                    ? Image.network(
+                        imageUrl!,
+                        fit: BoxFit.cover,
+                        width: 220,
+                        height: 220,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.person, size: 110, color: AppColors.white),
+                      )
+                    : const Icon(Icons.person, size: 110, color: AppColors.white),
           ),
         ),
 
-        // Badge صغير يوضح الدور
+        // Badge/Camera button
         Positioned(
           bottom: 12,
           right: 18,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: AppColors.yellow, width: 1.4),
-            ),
-            child: const Icon(
-              Icons.star_rounded,
-              size: 20,
-              color: AppColors.yellow,
+          child: InkWell(
+            onTap: isEditMode ? onEditPressed : null,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: AppColors.yellow, width: 1.4),
+              ),
+              child: Icon(
+                isEditMode ? Icons.camera_alt : Icons.star_rounded,
+                size: 20,
+                color: AppColors.yellow,
+              ),
             ),
           ),
         ),
@@ -383,11 +676,18 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
-class _AddressCard extends StatelessWidget {
+class _EditableAddressCard extends StatelessWidget {
   final String title;
   final String value;
+  final TextEditingController controller;
+  final bool isEditMode;
 
-  const _AddressCard({required this.title, required this.value});
+  const _EditableAddressCard({
+    required this.title,
+    required this.value,
+    required this.controller,
+    required this.isEditMode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -408,14 +708,39 @@ class _AddressCard extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.yellow,
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-            ),
+          Expanded(
+            child: isEditMode
+                ? TextFormField(
+                    controller: controller,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: AppColors.yellow,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                      ),
+                      focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow, width: 2),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                    ),
+                  )
+                : Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: AppColors.yellow,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
         ],
       ),

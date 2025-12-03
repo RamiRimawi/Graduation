@@ -71,7 +71,6 @@ class _AddProductPopupState extends State<AddProductPopup> {
 
       setState(() => isLoading = false);
     } catch (e) {
-      print('Error loading data: $e');
       setState(() => isLoading = false);
     }
   }
@@ -95,19 +94,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
     setState(() => isSaving = true);
 
     try {
-      // Upload image to Supabase storage if selected
-      String? imageUrl;
-      if (_selectedImageBytes != null) {
-        print('Image selected, uploading...');
-        imageUrl = await _uploadImageToSupabase();
-        if (imageUrl != null) {
-          print('Image uploaded successfully');
-        }
-      } else {
-        print('No image selected');
-      }
-
-      // Insert the product
+      // Insert the product first without image
       final productData = {
         'name': _productNameController.text.trim(),
         'brand_id': _selectedBrandId,
@@ -120,19 +107,28 @@ class _AddProductPopupState extends State<AddProductPopup> {
         'total_quantity': 0,
       };
 
-      if (imageUrl != null) {
-        productData['product_image'] = imageUrl;
-      }
-
       final productResponse = await supabase
           .from('product')
           .insert(productData)
           .select('product_id')
           .single();
 
+      final productId = productResponse['product_id'] as int;
+
+      // Upload image with product ID if selected
+      if (_selectedImageBytes != null) {
+        final imageUrl = await _uploadImageToSupabase(productId);
+        if (imageUrl != null) {
+          // Update product with image URL
+          await supabase
+              .from('product')
+              .update({'product_image': imageUrl})
+              .eq('product_id', productId);
+        }
+      }
+
       // If a specific inventory is selected, create a batch entry
       if (widget.selectedInventoryId != null) {
-        final productId = productResponse['product_id'] as int;
         await supabase.from('batch').insert({
           'product_id': productId,
           'inventory_id': widget.selectedInventoryId,
@@ -189,16 +185,14 @@ class _AddProductPopupState extends State<AddProductPopup> {
     }
   }
 
-  Future<String?> _uploadImageToSupabase() async {
+  Future<String?> _uploadImageToSupabase(int productId) async {
     if (_selectedImageBytes == null || _selectedImageName == null) return null;
 
     try {
-      print('Uploading image to Supabase...');
-
-      // Generate a unique filename using timestamp
+      // Generate filename with product ID and timestamp: product_{id}_{timestamp}.ext
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final extension = _selectedImageName!.toLowerCase().split('.').last;
-      final fileName = 'product_new_$timestamp.$extension';
+      final fileName = 'product_${productId}_$timestamp.$extension';
 
       // Upload to Supabase storage in 'images' bucket
       await supabase.storage
@@ -208,10 +202,8 @@ class _AddProductPopupState extends State<AddProductPopup> {
       // Get the public URL
       final publicUrl = supabase.storage.from('images').getPublicUrl(fileName);
 
-      print('Image uploaded successfully: $publicUrl');
       return publicUrl;
     } catch (e) {
-      print('Error uploading image to Supabase: $e');
       if (mounted) {
         _showError('Failed to upload image: $e');
       }

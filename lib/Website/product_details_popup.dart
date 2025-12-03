@@ -74,7 +74,6 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
       text: widget.minProfit.replaceAll(RegExp(r'[^0-9.]'), ''),
     );
     _loadProductImage();
-    // Auto-save disabled: changes are saved only when pressing Done
   }
 
   Future<void> _loadProductImage() async {
@@ -153,22 +152,6 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
         );
       }
       return null;
-    }
-  }
-
-  String _getContentType(String extension) {
-    switch (extension.toLowerCase()) {
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'image/jpeg';
     }
   }
 
@@ -260,6 +243,38 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
   }
 
   Future<void> _saveChanges() async {
+    // Check if any data has changed
+    bool hasProductChanges = 
+        selectedBrandId != widget.brandId ||
+        selectedCategoryId != widget.categoryId ||
+        wholesalePriceController.text.replaceAll(RegExp(r'[^0-9.]'), '') !=
+            widget.wholesalePrice.replaceAll(RegExp(r'[^0-9.]'), '') ||
+        sellingPriceController.text.replaceAll(RegExp(r'[^0-9.]'), '') !=
+            widget.sellingPrice.replaceAll(RegExp(r'[^0-9.]'), '') ||
+        minProfitController.text.replaceAll(RegExp(r'[^0-9.]'), '') !=
+            widget.minProfit.replaceAll(RegExp(r'[^0-9.]'), '') ||
+        _selectedImageBytes != null;
+
+    // Check if any storage location has changed
+    bool hasStorageChanges = false;
+    for (final loc in storageLocations) {
+      final invId = loc['inventory_id'] as int;
+      final originalStorage = (loc['storage_location_descrption'] ?? '').toString();
+      final newStorage = storageControllers[invId]?.text ?? '';
+      if (originalStorage != newStorage) {
+        hasStorageChanges = true;
+        break;
+      }
+    }
+
+    // If no changes, just exit edit mode without saving
+    if (!hasProductChanges && !hasStorageChanges) {
+      setState(() {
+        isEditMode = false;
+      });
+      return;
+    }
+
     setState(() => isSaving = true);
 
     try {
@@ -327,10 +342,6 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
       }
     }
   }
-
-  // Auto-save removed: saving occurs only in _saveChanges when pressing Done
-
-  // Per-field storage updates removed: storage locations saved with other changes in _saveChanges
 
   void _toggleEditMode() async {
     if (isEditMode) {
@@ -464,7 +475,7 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                             ElevatedButton.icon(
                               onPressed: isSaving ? null : _toggleEditMode,
                               icon: Icon(
-                                isEditMode ? Icons.check : Icons.edit,
+                                isEditMode ? Icons.done_all : Icons.edit,
                                 color: Colors.black87,
                               ),
                               label: Text(

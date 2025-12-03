@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -56,6 +57,11 @@ class _LoginPageState extends State<LoginPage> {
         });
         return;
       }
+
+      // Store accountant ID in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('accountant_id', int.parse(id));
+      print('Stored accountant_id: $id');
 
       Navigator.pushReplacementNamed(context, "/dashboard");
     } catch (e) {

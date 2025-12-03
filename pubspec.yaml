@@ -33,6 +33,9 @@ dependencies:
   
   # Image picker for uploading product images
   image_picker: ^1.1.1
+  
+  # Shared preferences for storing user session
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
