@@ -577,7 +577,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                     vertical: 32,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E), 
+                    color: const Color(0xFF1E1E1E),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
                       BoxShadow(

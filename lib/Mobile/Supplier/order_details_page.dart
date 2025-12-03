@@ -243,7 +243,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         children: [
           // Product name
           Expanded(
-            flex: 4,
+            flex: 3,
             child: Text(
               p['name'],
               style: const TextStyle(
@@ -251,12 +251,15 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
+          const SizedBox(width: 8),
+
           // Brand
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               p['brand'],
               style: const TextStyle(
@@ -264,46 +267,46 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
+          const SizedBox(width: 8),
+
           // Editable quantity (EXACT STAFF STYLE)
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => _editQuantity(index),
-                  child: Container(
-                    width: 55,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFB7A447), // الأصفر
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${p['quantity']}',
-                      style: const TextStyle(
-                        color: Color(0xFF202020),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => _editQuantity(index),
+                child: Container(
+                  width: 55,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFB7A447), // الأصفر
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${p['quantity']}',
+                    style: const TextStyle(
+                      color: Color(0xFF202020),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                const Text(
-                  'cm',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'cm',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
