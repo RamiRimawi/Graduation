@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'sidebar.dart';
+import 'order_detail_popup.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -11,6 +12,7 @@ class DashboardPage extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
+          // 🔵 الزر الأول (الـ Home) هو الفعّال في هاي الصفحة
           const Sidebar(activeIndex: 0),
           Expanded(
             child: Padding(
@@ -30,8 +32,9 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-/* ------------------------- باقي محتوى الصفحة بدون تعديل -------------------------- */
-
+/* -------------------------------------------------------------------------- */
+/*                          TOP STEPS ROW (الكروت الأربعة)                   */
+/* -------------------------------------------------------------------------- */
 class _TopStepsRow extends StatelessWidget {
   const _TopStepsRow();
 
@@ -62,7 +65,7 @@ class _TopStepsRow extends StatelessWidget {
 
 class _ArrowSpacer extends StatelessWidget {
   final double width;
-  const _ArrowSpacer({required this.width});
+  const _ArrowSpacer({super.key, required this.width});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +86,7 @@ class _ArrowSpacer extends StatelessWidget {
 class _StepCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  const _StepCard({required this.title, required this.icon});
+  const _StepCard({super.key, required this.title, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +131,8 @@ class _StepCard extends StatelessWidget {
 }
 
 /* -------------------------------------------------------------------------- */
-
+/*                             MAIN CONTENT AREA                              */
+/* -------------------------------------------------------------------------- */
 class _MainContent extends StatelessWidget {
   const _MainContent();
 
@@ -147,8 +151,9 @@ class _MainContent extends StatelessWidget {
   }
 }
 
-/* ------------------------ Active Workers Card -------------------------- */
-
+/* -------------------------------------------------------------------------- */
+/*                            ACTIVE WORKERS TABLE                            */
+/* -------------------------------------------------------------------------- */
 class _ActiveWorkersCard extends StatelessWidget {
   const _ActiveWorkersCard();
 
@@ -261,8 +266,9 @@ class _ActiveWorkersCard extends StatelessWidget {
   }
 }
 
-/* ------------------------------- Orders Card ------------------------------- */
-
+/* -------------------------------------------------------------------------- */
+/*                               ORDERS TABLE                                 */
+/* -------------------------------------------------------------------------- */
 class _OrdersCard extends StatelessWidget {
   const _OrdersCard();
 
@@ -362,7 +368,39 @@ class _OrdersCard extends StatelessWidget {
     final typeColor = r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
 
     return InkWell(
-      onTap: () {},
+      onTap: () {
+        OrderDetailPopup.show(
+          context,
+          orderType: r[1].startsWith('in') ? 'in' : 'out',
+          status: r[1].contains('UPDATE') ? 'UPDATE' : 'NEW',
+          products: [
+            {
+              "id": 1,
+              "name": "Hand Shower",
+              "brand": "GROHE",
+              "price": "26\$",
+              "quantity": 26,
+              "total": "26\$",
+            },
+            {
+              "id": 2,
+              "name": "Wall-Hung Toilet",
+              "brand": "Royal",
+              "price": "150\$",
+              "quantity": 30,
+              "total": "150\$",
+            },
+            {
+              "id": 3,
+              "name": "Kitchen Sink",
+              "brand": "GROHE",
+              "price": "200\$",
+              "quantity": 30,
+              "total": "200\$",
+            },
+          ],
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFF252525),

@@ -3,6 +3,8 @@ import 'sidebar.dart';
 import 'checks_page.dart';
 import 'archive_payment_page.dart';
 import 'choose_payment.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../supabase_config.dart';
 
 /// صفحة الـ Payment Dashboard
 class PaymentPage extends StatefulWidget {
@@ -232,19 +234,138 @@ class _TopTab extends StatelessWidget {
 
 // Card: Upcoming Checks  (zebra + scroll + check status أزرق)
 // ------------------------------------------------------------------
-class _UpcomingChecksCard extends StatelessWidget {
+class _UpcomingChecksCard extends StatefulWidget {
   const _UpcomingChecksCard();
 
   @override
-  Widget build(BuildContext context) {
-    final rows = <List<String>>[
-      ['Kareem Manasra', '1000\$', '19/10/2025', 'Company Box'],
-      ['Ammar Shobaki', '2000\$', '22/8/2025', 'Company Box'],
-      ['Ata Musleh', '500\$', '22/8/2025', 'Endorsed'],
-      ['Ameer Yasin', '3000\$', '23/9/2025', 'Endorsed'],
-      ['Ahmad Nizar', '7000\$', '25/8/2025', 'Company Box'],
-    ];
+  State<_UpcomingChecksCard> createState() => _UpcomingChecksCardState();
+}
 
+class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
+  List<Map<String, dynamic>> upcomingChecks = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUpcomingChecks();
+  }
+
+  Future<void> _fetchUpcomingChecks() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Calculate date range - next 7 days
+      final now = DateTime.now();
+      final oneWeekFromNow = now.add(const Duration(days: 7));
+
+      // Format dates for SQL query
+      final startDate = now.toIso8601String().split('T')[0];
+      final endDate = oneWeekFromNow.toIso8601String().split('T')[0];
+
+      // Fetch customer checks with status "Company Box" or "Endorsed"
+      final customerChecksResponse = await supabase
+          .from('customer_checks')
+          .select('''
+            check_id,
+            exchange_rate,
+            exchange_date,
+            status,
+            customer_id,
+            customer:customer_id (
+              name
+            )
+          ''')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate)
+          .inFilter('status', ['Company Box', 'Endorsed']);
+
+      // Fetch supplier checks with status "pending"
+      final supplierChecksResponse = await supabase
+          .from('supplier_checks')
+          .select('''
+            check_id,
+            exchange_rate,
+            exchange_date,
+            status,
+            supplier_id,
+            supplier:supplier_id (
+              name
+            )
+          ''')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate)
+          .eq('status', 'Pending');
+
+      // Combine both lists
+      final List<Map<String, dynamic>> combinedChecks = [];
+
+      // Add customer checks
+      if (customerChecksResponse is List) {
+        for (var check in customerChecksResponse) {
+          combinedChecks.add({
+            'owner': check['customer']?['name'] ?? 'Unknown',
+            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+            'date': _formatDate(check['exchange_date']),
+            'status': _capitalizeStatus(check['status']),
+            'type': 'customer',
+          });
+        }
+      }
+
+      // Add supplier checks
+      if (supplierChecksResponse is List) {
+        for (var check in supplierChecksResponse) {
+          combinedChecks.add({
+            'owner': check['supplier']?['name'] ?? 'Unknown',
+            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+            'date': _formatDate(check['exchange_date']),
+            'status': _capitalizeStatus(check['status']),
+            'type': 'supplier',
+          });
+        }
+      }
+
+      // Sort by date
+      combinedChecks.sort((a, b) {
+        final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime.now();
+        final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
+        return dateA.compareTo(dateB);
+      });
+
+      setState(() {
+        upcomingChecks = combinedChecks;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching upcoming checks: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  String _capitalizeStatus(String? status) {
+    if (status == null) return '';
+    return status
+        .split(' ')
+        .map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1);
+        })
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -266,96 +387,129 @@ class _UpcomingChecksCard extends StatelessWidget {
 
           // الهيدر
           const _TableHeaderBar(
-            titles: ['Check owner', 'Price', 'Caching Date', 'Check Status'],
+            titles: [
+              'Check owner',
+              'Price',
+              'Caching Date',
+              'Type',
+              'Check Status',
+            ],
             blueIndex: 3,
-            flexes: [3, 1, 1, 2],
+            flexes: [3, 1, 1, 1, 2],
           ),
           const SizedBox(height: 6),
 
           // 🔹 Scroll داخلي لتفادي overflow
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: rows.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final row = entry.value;
-                  final owner = row[0];
-                  final price = row[1];
-                  final date = row[2];
-                  final status = row[3];
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.blue),
+                  )
+                : upcomingChecks.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No upcoming checks',
+                      style: TextStyle(color: AppColors.grey, fontSize: 14),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      children: upcomingChecks.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final check = entry.value;
+                        final owner = check['owner'] ?? '';
+                        final price = check['price'] ?? '';
+                        final date = check['date'] ?? '';
+                        final status = check['status'] ?? '';
+                        final type = check['type'] ?? '';
 
-                  final bool isEven = index.isEven;
-                  final Color rowColor = isEven
-                      ? AppColors.dark
-                      : AppColors.cardAlt;
+                        final bool isEven = index.isEven;
+                        final Color rowColor = isEven
+                            ? AppColors.dark
+                            : AppColors.cardAlt;
 
-                  return Container(
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: rowColor,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            owner,
-                            style: const TextStyle(
-                              color: AppColors.white,
-                              fontSize: 13,
-                            ),
+                        return Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              price,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 13,
+                          decoration: BoxDecoration(
+                            color: rowColor,
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  owner,
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              date,
-                              style: const TextStyle(
-                                color: AppColors.white,
-                                fontSize: 13,
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    price,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              status,
-                              style: const TextStyle(
-                                color: AppColors.blue, // 🔹 الكل أزرق
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    date,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    type == 'customer'
+                                        ? 'Customer'
+                                        : 'Supplier',
+                                    style: const TextStyle(
+                                      color: AppColors.blue,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    status,
+                                    style: const TextStyle(
+                                      color: AppColors.blue, // 🔹 الكل أزرق
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
+                  ),
           ),
         ],
       ),
@@ -366,8 +520,63 @@ class _UpcomingChecksCard extends StatelessWidget {
 // ------------------------------------------------------------------
 // الكروت الصغيرة Endorsed / Returned
 // ------------------------------------------------------------------
-class _TopStatsCards extends StatelessWidget {
+class _TopStatsCards extends StatefulWidget {
   const _TopStatsCards();
+
+  @override
+  State<_TopStatsCards> createState() => _TopStatsCardsState();
+}
+
+class _TopStatsCardsState extends State<_TopStatsCards> {
+  int endorsedCount = 0;
+  int returnedCount = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCheckStats();
+  }
+
+  Future<void> _fetchCheckStats() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Fetch endorsed checks count (customer checks only)
+      final endorsedResponse = await supabase
+          .from('customer_checks')
+          .select('check_id')
+          .eq('status', 'Endorsed');
+
+      // Calculate this month's date range
+      final now = DateTime.now();
+      final firstDayOfMonth = DateTime(now.year, now.month, 1);
+      final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+
+      final startDate = firstDayOfMonth.toIso8601String().split('T')[0];
+      final endDate = lastDayOfMonth.toIso8601String().split('T')[0];
+
+      // Fetch returned checks count for this month (customer checks)
+      final returnedResponse = await supabase
+          .from('customer_checks')
+          .select('check_id')
+          .eq('status', 'Returned')
+          .gte('exchange_date', startDate)
+          .lte('exchange_date', endDate);
+
+      print('Endorsed response: $endorsedResponse');
+      print('Returned response: $returnedResponse');
+
+      setState(() {
+        endorsedCount = endorsedResponse is List ? endorsedResponse.length : 0;
+        returnedCount = returnedResponse is List ? returnedResponse.length : 0;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching check stats: $e');
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +595,7 @@ class _TopStatsCards extends StatelessWidget {
                 size: 28,
               ),
             ),
-            number: '9',
+            number: isLoading ? '-' : endorsedCount.toString(),
             label: 'Check',
             bottomMain: 'Endorsed',
           ),
@@ -405,7 +614,7 @@ class _TopStatsCards extends StatelessWidget {
                 size: 28,
               ),
             ),
-            number: '5',
+            number: isLoading ? '-' : returnedCount.toString(),
             label: 'Check',
             bottomMain: 'Returned',
             bottomSmall: 'this month',
