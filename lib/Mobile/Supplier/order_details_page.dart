@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'supplier_bottom_nav.dart';
-import 'supplier_home_page.dart';
+import '../account_page.dart';
 
-class OrderDetailsPage extends StatelessWidget {
+class OrderDetailsPage extends StatefulWidget {
   final String customerName;
   final List<Map<String, dynamic>> products;
 
@@ -11,6 +11,13 @@ class OrderDetailsPage extends StatelessWidget {
     required this.customerName,
     required this.products,
   });
+
+  @override
+  State<OrderDetailsPage> createState() => _OrderDetailsPageState();
+}
+
+class _OrderDetailsPageState extends State<OrderDetailsPage> {
+  bool isUpdated = false; // لو المستخدم عدل أي كمية
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +29,7 @@ class OrderDetailsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // Back button + Name
+            // ---------------- TITLE + BACK BUTTON ----------------
             Row(
               children: [
                 GestureDetector(
@@ -34,12 +40,15 @@ class OrderDetailsPage extends StatelessWidget {
                       color: const Color(0xFF2D2D2D),
                       borderRadius: BorderRadius.circular(50),
                     ),
-                    child: const Icon(Icons.arrow_back, color: Color(0xFFF9D949)),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Color(0xFFF9D949),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  customerName,
+                  widget.customerName,
                   style: const TextStyle(
                     color: Color(0xFFF9D949),
                     fontSize: 24,
@@ -51,109 +60,82 @@ class OrderDetailsPage extends StatelessWidget {
 
             const SizedBox(height: 25),
 
-            // Table Headers
+            // ---------------- TABLE HEADER ----------------
             Row(
               children: const [
                 Expanded(
                   flex: 4,
-                  child: Text("Product Name",
-                      style: TextStyle(color: Colors.white60, fontSize: 16)),
+                  child: Text(
+                    "Product Name",
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    "Brand",
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
                 ),
                 Expanded(
                   flex: 2,
-                  child: Text("Brand",
-                      style: TextStyle(color: Colors.white60, fontSize: 16)),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text("Quantity",
-                      style: TextStyle(color: Colors.white60, fontSize: 16)),
+                  child: Text(
+                    "Quantity",
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 10),
-            Container(height: 1, color: Colors.white12),
-            const SizedBox(height: 10),
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              height: 1,
+              color: Colors.white12,
+            ),
 
-            // Product rows
+            // ---------------- PRODUCT LIST ----------------
             Expanded(
               child: ListView.builder(
-                itemCount: products.length,
+                itemCount: widget.products.length,
                 itemBuilder: (context, index) {
-                  final p = products[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 4,
-                          child: Text(
-                            p['name'],
-                            style:
-                                const TextStyle(color: Colors.white, fontSize: 17),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            p['brand'],
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 16),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Container(
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2D2D2D),
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: Color(0xFFF9D949), width: 1),
-                            ),
-                            child: Text(
-                              "${p['quantity']}",
-                              style: const TextStyle(
-                                  color: Color(0xFFF9D949),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
+                  final p = widget.products[index];
+                  return _buildRow(p, index);
                 },
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
 
-            // Done button
+            // ---------------- SUBMIT BUTTON ----------------
             GestureDetector(
               onTap: () {},
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9D949),
+                  color: isUpdated
+                      ? const Color(0xFF50B2E7)
+                      : const Color(0xFFF9D949),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      "D   o   n   e",
+                      isUpdated ? "Send Update" : "Done",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
-                        color: Color(0xFF1A1A1A),
+                        color: isUpdated
+                            ? Colors.white
+                            : const Color(0xFF1A1A1A),
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Icon(Icons.send, color: Color(0xFF1A1A1A)),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.send,
+                      color: isUpdated ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
                   ],
                 ),
               ),
@@ -170,10 +152,160 @@ class OrderDetailsPage extends StatelessWidget {
           if (i == 1) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => const AccountPage()),
+              MaterialPageRoute(builder: (_) => AccountPage()),
             );
           }
         },
+      ),
+    );
+  }
+
+  // ============= EDIT QUANTITY POPUP =============
+  void _editQuantity(int index) {
+    final controller = TextEditingController(
+      text: widget.products[index]['quantity'].toString(),
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "Edit Quantity",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: "Enter quantity",
+              hintStyle: TextStyle(color: Colors.white70),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white38),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFB7A447)),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                final val = int.tryParse(controller.text);
+                if (val != null && val > 0) {
+                  setState(() {
+                    widget.products[index]['quantity'] = val;
+                    isUpdated = true; // ⚠️ مهم: زر Done يصير Send Update
+                  });
+                }
+                Navigator.pop(context);
+              },
+              child: const Text(
+                "Save",
+                style: TextStyle(color: Color(0xFFB7A447)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // ROW COMPONENT (Product Line)
+  // ------------------------------------------------------------------
+  Widget _buildRow(Map<String, dynamic> p, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(16),
+      ),
+
+      child: Row(
+        children: [
+          // Product name
+          Expanded(
+            flex: 4,
+            child: Text(
+              p['name'],
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          // Brand
+          Expanded(
+            flex: 3,
+            child: Text(
+              p['brand'],
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          // Editable quantity (EXACT STAFF STYLE)
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => _editQuantity(index),
+                  child: Container(
+                    width: 55,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB7A447), // الأصفر
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${p['quantity']}',
+                      style: const TextStyle(
+                        color: Color(0xFF202020),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'cm',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
