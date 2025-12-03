@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,14 +28,14 @@ class _AddProductPopupState extends State<AddProductPopup> {
   int? _selectedBrandId;
   int? _selectedCategoryId;
   int? _selectedUnitId;
-  
+
   List<Map<String, dynamic>> brands = [];
   List<Map<String, dynamic>> categories = [];
   List<Map<String, dynamic>> units = [];
-  
+
   bool isLoading = true;
   bool isSaving = false;
-  
+
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
 
@@ -79,7 +78,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_selectedBrandId == null) {
       _showError('Please select a brand');
       return;
@@ -96,18 +95,18 @@ class _AddProductPopupState extends State<AddProductPopup> {
     setState(() => isSaving = true);
 
     try {
-      // Convert image to data URL if selected
-      String? imageDataUrl;
+      // Upload image to Supabase storage if selected
+      String? imageUrl;
       if (_selectedImageBytes != null) {
-        print('Image selected, converting...');
-        imageDataUrl = _convertImageToDataUrl();
-        if (imageDataUrl != null) {
-          print('Image converted successfully');
+        print('Image selected, uploading...');
+        imageUrl = await _uploadImageToSupabase();
+        if (imageUrl != null) {
+          print('Image uploaded successfully');
         }
       } else {
         print('No image selected');
       }
-      
+
       // Insert the product
       final productData = {
         'name': _productNameController.text.trim(),
@@ -120,12 +119,16 @@ class _AddProductPopupState extends State<AddProductPopup> {
         'is_active': true,
         'total_quantity': 0,
       };
-      
-      if (imageDataUrl != null) {
-        productData['product_image'] = imageDataUrl;
+
+      if (imageUrl != null) {
+        productData['product_image'] = imageUrl;
       }
-      
-      final productResponse = await supabase.from('product').insert(productData).select('product_id').single();
+
+      final productResponse = await supabase
+          .from('product')
+          .insert(productData)
+          .select('product_id')
+          .single();
 
       // If a specific inventory is selected, create a batch entry
       if (widget.selectedInventoryId != null) {
@@ -141,9 +144,11 @@ class _AddProductPopupState extends State<AddProductPopup> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.selectedInventoryId == null 
-                ? 'Product added successfully'
-                : 'Product added to inventory successfully'),
+            content: Text(
+              widget.selectedInventoryId == null
+                  ? 'Product added successfully'
+                  : 'Product added to inventory successfully',
+            ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -171,7 +176,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         final bytes = await image.readAsBytes();
         setState(() {
@@ -184,33 +189,31 @@ class _AddProductPopupState extends State<AddProductPopup> {
     }
   }
 
-  String? _convertImageToDataUrl() {
+  Future<String?> _uploadImageToSupabase() async {
     if (_selectedImageBytes == null || _selectedImageName == null) return null;
-    
+
     try {
-      print('Converting image to base64...');
-      
-      // Determine MIME type from file extension
-      String mimeType = 'image/jpeg';
+      print('Uploading image to Supabase...');
+
+      // Generate a unique filename using timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final extension = _selectedImageName!.toLowerCase().split('.').last;
-      if (extension == 'png') {
-        mimeType = 'image/png';
-      } else if (extension == 'gif') {
-        mimeType = 'image/gif';
-      } else if (extension == 'webp') {
-        mimeType = 'image/webp';
-      }
-      
-      // Convert bytes to base64
-      final base64String = base64Encode(_selectedImageBytes!);
-      final dataUrl = 'data:$mimeType;base64,$base64String';
-      
-      print('Image converted successfully');
-      return dataUrl;
+      final fileName = 'product_new_$timestamp.$extension';
+
+      // Upload to Supabase storage in 'images' bucket
+      await supabase.storage
+          .from('images')
+          .uploadBinary(fileName, _selectedImageBytes!);
+
+      // Get the public URL
+      final publicUrl = supabase.storage.from('images').getPublicUrl(fileName);
+
+      print('Image uploaded successfully: $publicUrl');
+      return publicUrl;
     } catch (e) {
-      print('Error converting image: $e');
+      print('Error uploading image to Supabase: $e');
       if (mounted) {
-        _showError('Failed to process image: $e');
+        _showError('Failed to upload image: $e');
       }
       return null;
     }
@@ -303,7 +306,9 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                     child: _textField(
                                       controller: _productNameController,
                                       hint: 'Product Name',
-                                      validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
+                                      validator: (v) => v?.isEmpty ?? true
+                                          ? 'Required'
+                                          : null,
                                     ),
                                   ),
                                 ),
@@ -312,16 +317,26 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                   child: FormFieldWrapper(
                                     label: 'Brand Name',
                                     child: isLoading
-                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        ? const Center(
+                                            child: CircularProgressIndicator(
+                                              color: Color(0xFFFFE14D),
+                                            ),
+                                          )
                                         : _dropdownFieldInt(
                                             hint: 'Brand Name',
                                             value: _selectedBrandId,
-                                            items: brands.map((b) => {
-                                              'id': b['brand_id'],
-                                              'name': b['name'].toString(),
-                                            }).toList(),
-                                            onChanged: (v) =>
-                                                setState(() => _selectedBrandId = v),
+                                            items: brands
+                                                .map(
+                                                  (b) => {
+                                                    'id': b['brand_id'],
+                                                    'name': b['name']
+                                                        .toString(),
+                                                  },
+                                                )
+                                                .toList(),
+                                            onChanged: (v) => setState(
+                                              () => _selectedBrandId = v,
+                                            ),
                                           ),
                                   ),
                                 ),
@@ -330,16 +345,27 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                   child: FormFieldWrapper(
                                     label: 'Category',
                                     child: isLoading
-                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        ? const Center(
+                                            child: CircularProgressIndicator(
+                                              color: Color(0xFFFFE14D),
+                                            ),
+                                          )
                                         : _dropdownFieldInt(
                                             hint: 'Category Name',
                                             value: _selectedCategoryId,
-                                            items: categories.map((c) => {
-                                              'id': c['product_category_id'],
-                                              'name': c['name'].toString(),
-                                            }).toList(),
-                                            onChanged: (v) =>
-                                                setState(() => _selectedCategoryId = v),
+                                            items: categories
+                                                .map(
+                                                  (c) => {
+                                                    'id':
+                                                        c['product_category_id'],
+                                                    'name': c['name']
+                                                        .toString(),
+                                                  },
+                                                )
+                                                .toList(),
+                                            onChanged: (v) => setState(
+                                              () => _selectedCategoryId = v,
+                                            ),
                                           ),
                                   ),
                                 ),
@@ -352,8 +378,10 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Value',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true) return 'Required';
-                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        if (v?.isEmpty ?? true)
+                                          return 'Required';
+                                        if (double.tryParse(v!) == null)
+                                          return 'Invalid number';
                                         return null;
                                       },
                                     ),
@@ -368,8 +396,10 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Value',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true) return 'Required';
-                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        if (v?.isEmpty ?? true)
+                                          return 'Required';
+                                        if (double.tryParse(v!) == null)
+                                          return 'Invalid number';
                                         return null;
                                       },
                                     ),
@@ -384,8 +414,10 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Percent',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true) return 'Required';
-                                        if (double.tryParse(v!) == null) return 'Invalid number';
+                                        if (v?.isEmpty ?? true)
+                                          return 'Required';
+                                        if (double.tryParse(v!) == null)
+                                          return 'Invalid number';
                                         return null;
                                       },
                                     ),
@@ -396,16 +428,26 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                   child: FormFieldWrapper(
                                     label: 'Unit',
                                     child: isLoading
-                                        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFE14D)))
+                                        ? const Center(
+                                            child: CircularProgressIndicator(
+                                              color: Color(0xFFFFE14D),
+                                            ),
+                                          )
                                         : _dropdownFieldInt(
                                             hint: 'cm, pcs, kg..etc',
                                             value: _selectedUnitId,
-                                            items: units.map((u) => {
-                                              'id': u['unit_id'],
-                                              'name': u['unit_name'].toString(),
-                                            }).toList(),
-                                            onChanged: (v) =>
-                                                setState(() => _selectedUnitId = v),
+                                            items: units
+                                                .map(
+                                                  (u) => {
+                                                    'id': u['unit_id'],
+                                                    'name': u['unit_name']
+                                                        .toString(),
+                                                  },
+                                                )
+                                                .toList(),
+                                            onChanged: (v) => setState(
+                                              () => _selectedUnitId = v,
+                                            ),
                                           ),
                                   ),
                                 ),
@@ -420,13 +462,17 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                         height: 48,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF1E1E1E),
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           border: Border.all(
                                             color: const Color(0xFF3D3D3D),
                                             width: 1,
                                           ),
                                         ),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
                                         child: Row(
                                           children: [
                                             const Icon(
@@ -437,9 +483,11 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Text(
-                                                _selectedImageName ?? 'Upload Image',
+                                                _selectedImageName ??
+                                                    'Upload Image',
                                                 style: TextStyle(
-                                                  color: _selectedImageName != null
+                                                  color:
+                                                      _selectedImageName != null
                                                       ? Colors.white
                                                       : Colors.white54,
                                                   fontSize: 15,
@@ -493,7 +541,8 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                           ),
                                         )
                                       : const Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.add_box_rounded,
