@@ -780,19 +780,51 @@ class _TableHeaderBar extends StatelessWidget {
 // ------------------------------------------------------------------
 // Card: Most Debtors
 // ------------------------------------------------------------------
-class _MostDebtorsCard extends StatelessWidget {
+class _MostDebtorsCard extends StatefulWidget {
   const _MostDebtorsCard();
 
   @override
-  Widget build(BuildContext context) {
-    final rows = <List<String>>[
-      ['Kareem Manasra', '1000\$'],
-      ['Ammar Shobaki', '2000\$'],
-      ['Ata Musleh', '500\$'],
-      ['Ameer Yasin', '3000\$'],
-      ['Ahmad Nizar', '7000\$'],
-    ];
+  State<_MostDebtorsCard> createState() => _MostDebtorsCardState();
+}
 
+class _MostDebtorsCardState extends State<_MostDebtorsCard> {
+  List<Map<String, dynamic>> topSuppliers = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTopSuppliers();
+  }
+
+  Future<void> _fetchTopSuppliers() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Fetch top 5 suppliers ordered by creditor_balance (highest first)
+      final response = await supabase
+          .from('supplier')
+          .select('name, creditor_balance')
+          .not('creditor_balance', 'is', null)
+          .order('creditor_balance', ascending: false)
+          .limit(5);
+
+      if (response is List) {
+        setState(() {
+          topSuppliers = List<Map<String, dynamic>>.from(response);
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print('Error fetching top suppliers: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -813,65 +845,77 @@ class _MostDebtorsCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           const _TableHeaderBar(
-            titles: ['Check owner', 'Debit Balance'],
+            titles: ['Supplier Name', 'Creditor Balance'],
             blueIndex: 1,
             flexes: [3, 1],
           ),
           const SizedBox(height: 6),
           // الصفوف مع Scroll داخلي لتجنّب overflow
           Expanded(
-            child: ListView.builder(
-              itemCount: rows.length,
-              padding: const EdgeInsets.only(top: 2),
-              itemBuilder: (context, index) {
-                final owner = rows[index][0];
-                final balance = rows[index][1];
-                final bool isEven = index.isEven;
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.blue),
+                  )
+                : topSuppliers.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No suppliers found',
+                      style: TextStyle(color: AppColors.grey, fontSize: 14),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: topSuppliers.length,
+                    padding: const EdgeInsets.only(top: 2),
+                    itemBuilder: (context, index) {
+                      final supplier = topSuppliers[index];
+                      final name = supplier['name'] ?? 'Unknown';
+                      final balance = supplier['creditor_balance'] ?? 0;
+                      final bool isEven = index.isEven;
 
-                final Color rowColor = isEven
-                    ? AppColors.dark
-                    : AppColors.cardAlt;
+                      final Color rowColor = isEven
+                          ? AppColors.dark
+                          : AppColors.cardAlt;
 
-                return Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: rowColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          owner,
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontSize: 16,
-                          ),
+                      return Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
                         ),
-                      ),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            balance,
-                            style: const TextStyle(
-                              color: AppColors.blue,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                        decoration: BoxDecoration(
+                          color: rowColor,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  color: AppColors.white,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ),
-                          ),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '\$${balance.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    color: AppColors.blue,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -913,7 +957,7 @@ class _ProfitChartState extends State<_ProfitChart>
     with SingleTickerProviderStateMixin {
   String selectedYear = '2026';
 
-  final List<int> profitData = [13, 14, 14, 15, 16, 16, 17, 17, 16, 18, 18, 20];
+  List<double> profitData = List.filled(12, 0.0);
   final List<String> months = [
     'Jan',
     'Feb',
@@ -938,6 +982,8 @@ class _ProfitChartState extends State<_ProfitChart>
   late final AnimationController _controller;
   late final Animation<double> _animation;
 
+  bool isLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -949,7 +995,71 @@ class _ProfitChartState extends State<_ProfitChart>
       parent: _controller,
       curve: Curves.easeOutCubic,
     );
+    _fetchProfitData();
     _controller.forward();
+  }
+
+  Future<void> _fetchProfitData() async {
+    setState(() {
+      isLoading = true;
+    });
+    try {
+      // Get all customer orders for the selected year
+      final response = await supabase
+          .from('customer_order')
+          .select('''
+            customer_order_id,
+            order_date,
+            tax_percent,
+            customer_order_description:customer_order_id (
+              product_id,
+              quantity,
+              total_price,
+              product:product_id (
+                wholesale_price
+              )
+            )
+          ''')
+          .gte('order_date', '${selectedYear}-01-01')
+          .lte('order_date', '${selectedYear}-12-31');
+
+      // Prepare monthly profit array
+      List<double> monthlyProfit = List.filled(12, 0.0);
+
+      if (response is List) {
+        for (var order in response) {
+          final orderDate = DateTime.tryParse(order['order_date'] ?? '');
+          if (orderDate == null) continue;
+          final monthIndex = orderDate.month - 1;
+          final taxPercent = (order['tax_percent'] ?? 0).toDouble();
+          final descriptions =
+              order['customer_order_description'] as List<dynamic>? ?? [];
+
+          double orderProfit = 0.0;
+          for (var desc in descriptions) {
+            final totalPrice = (desc['total_price'] ?? 0).toDouble();
+            final quantity = (desc['quantity'] ?? 0).toDouble();
+            final wholesalePrice = (desc['product']?['wholesale_price'] ?? 0)
+                .toDouble();
+            // Profit for this product in the order
+            final productProfit =
+                (totalPrice - (wholesalePrice * quantity)) *
+                (1 - (taxPercent / 100));
+            orderProfit += productProfit;
+          }
+          monthlyProfit[monthIndex] += orderProfit;
+        }
+      }
+      setState(() {
+        profitData = monthlyProfit;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching profit data: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -964,6 +1074,8 @@ class _ProfitChartState extends State<_ProfitChart>
       animation: _animation,
       builder: (context, _) {
         final anim = _animation.value;
+        final maxProfit = (profitData.reduce((a, b) => a > b ? a : b)).abs();
+        final chartMaxY = maxProfit > 0 ? maxProfit * 1.2 : 20;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1021,6 +1133,7 @@ class _ProfitChartState extends State<_ProfitChart>
                     onChanged: (value) {
                       if (value != null) {
                         setState(() => selectedYear = value);
+                        _fetchProfitData();
                         _controller.forward(from: 0);
                       }
                     },
@@ -1033,164 +1146,190 @@ class _ProfitChartState extends State<_ProfitChart>
 
             // الرسم البياني يأخذ المساحة المتبقية (بدون overflow)
             Expanded(
-              child: Stack(
-                children: [
-                  // GRID
-                  Positioned.fill(
-                    child: Column(
-                      children: List.generate(_tickCount, (index) {
-                        return Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                top: BorderSide(
-                                  color: Colors.white.withOpacity(0.08),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // محور Y
-                      SizedBox(
-                        width: 40,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(_tickCount, (index) {
-                            final step = _maxY / (_tickCount - 1);
-                            final value = index * step;
-                            return Text(
-                              value == 0 ? '0' : '${value.toInt()}K',
-                              style: const TextStyle(
-                                color: AppColors.grey,
-                                fontSize: 10,
-                              ),
-                            );
-                          }).reversed.toList(),
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
-
-                      // الأعمدة
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: List.generate(months.length, (index) {
-                                  final v = profitData[index].toDouble();
-                                  final targetHeight =
-                                      (v / _maxY) * _barMaxHeight;
-                                  final baseHeight =
-                                      targetHeight * anim.clamp(0, 1);
-
-                                  final isHovered = _hoveredIndex == index;
-                                  final barHeight = isHovered
-                                      ? baseHeight + 12
-                                      : baseHeight;
-                                  final barWidth = isHovered ? 38.0 : 32.0;
-                                  final opacity = isHovered ? 1.0 : 0.85;
-
-                                  return MouseRegion(
-                                    onEnter: (_) =>
-                                        setState(() => _hoveredIndex = index),
-                                    onExit: (_) =>
-                                        setState(() => _hoveredIndex = null),
-                                    child: Tooltip(
-                                      message:
-                                          '${profitData[index]}K - ${months[index]}',
-                                      waitDuration: const Duration(
-                                        milliseconds: 150,
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
-                                        children: [
-                                          // Profit label ABOVE the bar
-                                          Opacity(
-                                            opacity: anim,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 6,
-                                              ),
-                                              child: Text(
-                                                '${profitData[index]}K',
-                                                style: TextStyle(
-                                                  color: isHovered
-                                                      ? AppColors.white
-                                                      : AppColors.white
-                                                            .withOpacity(0.9),
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          // The bar itself
-                                          AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 250,
-                                            ),
-                                            curve: Curves.easeOutCubic,
-                                            width: barWidth,
-                                            height: barHeight,
-                                            decoration: BoxDecoration(
-                                              color: AppColors.blue.withOpacity(
-                                                opacity,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(5),
-                                              boxShadow:
-                                                  isHovered && barHeight > 0
-                                                  ? [
-                                                      BoxShadow(
-                                                        color: AppColors.blue
-                                                            .withOpacity(0.4),
-                                                        blurRadius: 10,
-                                                        spreadRadius: 1,
-                                                        offset: const Offset(
-                                                          0,
-                                                          2,
-                                                        ),
-                                                      ),
-                                                    ]
-                                                  : [],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          // Month label under the bar
-                                          Text(
-                                            months[index],
-                                            style: const TextStyle(
-                                              color: AppColors.grey,
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                        ],
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.blue),
+                    )
+                  : Stack(
+                      children: [
+                        // GRID
+                        Positioned.fill(
+                          child: Column(
+                            children: List.generate(_tickCount, (index) {
+                              return Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.white.withOpacity(0.08),
+                                        width: 1,
                                       ),
                                     ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // محور Y
+                            SizedBox(
+                              width: 40,
+                              child: Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: List.generate(_tickCount, (index) {
+                                  final step = chartMaxY / (_tickCount - 1);
+                                  final value = index * step;
+                                  return Text(
+                                    value == 0
+                                        ? '0'
+                                        : '${value.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      color: AppColors.grey,
+                                      fontSize: 10,
+                                    ),
                                   );
-                                }),
+                                }).reversed.toList(),
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            // الأعمدة
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: List.generate(months.length, (
+                                        index,
+                                      ) {
+                                        final v = profitData[index];
+                                        final targetHeight = chartMaxY > 0
+                                            ? (v / chartMaxY) * _barMaxHeight
+                                            : 0.0;
+                                        final baseHeight =
+                                            targetHeight * anim.clamp(0, 1);
+
+                                        final isHovered =
+                                            _hoveredIndex == index;
+                                        final barHeight = isHovered
+                                            ? baseHeight + 12
+                                            : baseHeight;
+                                        final barWidth = isHovered
+                                            ? 38.0
+                                            : 32.0;
+                                        final opacity = isHovered ? 1.0 : 0.85;
+
+                                        return MouseRegion(
+                                          onEnter: (_) => setState(
+                                            () => _hoveredIndex = index,
+                                          ),
+                                          onExit: (_) => setState(
+                                            () => _hoveredIndex = null,
+                                          ),
+                                          child: Tooltip(
+                                            message:
+                                                '${profitData[index].toStringAsFixed(2)} - ${months[index]}',
+                                            waitDuration: const Duration(
+                                              milliseconds: 150,
+                                            ),
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                // Profit label ABOVE the bar
+                                                Opacity(
+                                                  opacity: anim,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          bottom: 6,
+                                                        ),
+                                                    child: Text(
+                                                      '\$ ${profitData[index].toInt()} ',
+                                                      style: TextStyle(
+                                                        color: isHovered
+                                                            ? AppColors.white
+                                                            : AppColors.white
+                                                                  .withOpacity(
+                                                                    0.9,
+                                                                  ),
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // The bar itself
+                                                AnimatedContainer(
+                                                  duration: const Duration(
+                                                    milliseconds: 250,
+                                                  ),
+                                                  curve: Curves.easeOutCubic,
+                                                  width: barWidth,
+                                                  height: barHeight,
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.blue
+                                                        .withOpacity(opacity),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          5,
+                                                        ),
+                                                    boxShadow:
+                                                        isHovered &&
+                                                            barHeight > 0
+                                                        ? [
+                                                            BoxShadow(
+                                                              color: AppColors
+                                                                  .blue
+                                                                  .withOpacity(
+                                                                    0.4,
+                                                                  ),
+                                                              blurRadius: 10,
+                                                              spreadRadius: 1,
+                                                              offset:
+                                                                  const Offset(
+                                                                    0,
+                                                                    2,
+                                                                  ),
+                                                            ),
+                                                          ]
+                                                        : [],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                // Month label under the bar
+                                                Text(
+                                                  months[index],
+                                                  style: const TextStyle(
+                                                    color: AppColors.grey,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    ),
             ),
           ],
         );

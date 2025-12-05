@@ -138,16 +138,16 @@ class _MainContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
-        SizedBox(width: 16),
-        SizedBox(width: 289, height: 640, child: _ActiveWorkersCard()),
-        SizedBox(width: 16),
-        SizedBox(width: 894, height: 640, child: _OrdersCard()),
-        Expanded(child: SizedBox()),
-      ],
-    );
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Spacer(),
+          SizedBox(width: 289, height: 640, child: _ActiveWorkersCard()),
+          SizedBox(width: 32),
+          SizedBox(width: 994, height: 640, child: _OrdersCard()),
+          Spacer(),
+        ],
+      );
   }
 }
 
