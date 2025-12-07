@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-
-void main() {
-  runApp(const DolphinApp());
-}
+import 'package:shared_preferences/shared_preferences.dart';
+import '../supabase_config.dart';
+import 'Supplier/supplier_home_page.dart';
+import 'DeliveryDriver/deleviry_home.dart';
+import 'StroageStaff/home_staff.dart';
+import 'Manager/HomeManager.dart';
 
 class DolphinApp extends StatelessWidget {
   const DolphinApp({super.key});
@@ -41,21 +43,176 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool rememberMe = false;
+  bool _isLoading = false;
   late FocusNode _usernameFocus;
   late FocusNode _passwordFocus;
+  
+  final TextEditingController _userIdController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _usernameFocus = FocusNode();
     _passwordFocus = FocusNode();
+    _checkRememberedUser();
   }
 
   @override
   void dispose() {
     _usernameFocus.dispose();
     _passwordFocus.dispose();
+    _userIdController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkRememberedUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUserId = prefs.getString('userId');
+    final savedPassword = prefs.getString('password');
+    final savedRememberMe = prefs.getBool('rememberMe') ?? false;
+
+    if (savedRememberMe && savedUserId != null && savedPassword != null) {
+      setState(() {
+        _userIdController.text = savedUserId;
+        _passwordController.text = savedPassword;
+        rememberMe = true;
+      });
+      // Auto login
+      _handleLogin();
+    }
+  }
+
+  Future<void> _handleLogin() async {
+    final userId = _userIdController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (userId.isEmpty || password.isEmpty) {
+      _showError('Please enter User ID and Password');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Try to find user in all user tables
+      String? userType;
+      Map<String, dynamic>? userData;
+
+      // Check Supplier
+      final supplierResult = await supabase
+          .from('user_account_supplier')
+          .select('supplier_id, password')
+          .eq('supplier_id', int.tryParse(userId) ?? 0)
+          .maybeSingle();
+
+      if (supplierResult != null && supplierResult['password'] == password) {
+        userType = 'supplier';
+        userData = supplierResult;
+      }
+
+      // Check Delivery Driver
+      if (userType == null) {
+        final driverResult = await supabase
+            .from('user_account_delivery_driver')
+            .select('delivery_driver_id, password')
+            .eq('delivery_driver_id', int.tryParse(userId) ?? 0)
+            .maybeSingle();
+
+        if (driverResult != null && driverResult['password'] == password) {
+          userType = 'delivery';
+          userData = driverResult;
+        }
+      }
+
+      // Check Storage Staff
+      if (userType == null) {
+        final staffResult = await supabase
+            .from('user_account_storage_staff')
+            .select('storage_staff_id, password')
+            .eq('storage_staff_id', int.tryParse(userId) ?? 0)
+            .maybeSingle();
+
+        if (staffResult != null && staffResult['password'] == password) {
+          userType = 'staff';
+          userData = staffResult;
+        }
+      }
+
+      // Check Storage Manager
+      if (userType == null) {
+        final managerResult = await supabase
+            .from('user_account_storage_manager')
+            .select('storage_manager_id, password')
+            .eq('storage_manager_id', int.tryParse(userId) ?? 0)
+            .maybeSingle();
+
+        if (managerResult != null && managerResult['password'] == password) {
+          userType = 'manager';
+          userData = managerResult;
+        }
+      }
+
+      if (userType == null || userData == null) {
+        _showError('Invalid User ID or Password');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Save to SharedPreferences if Remember Me is checked
+      if (rememberMe) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userId', userId);
+        await prefs.setString('password', password);
+        await prefs.setBool('rememberMe', true);
+        await prefs.setString('userType', userType);
+      }
+
+      // Navigate to appropriate home page
+      if (mounted) {
+        Widget homePage;
+        switch (userType) {
+          case 'supplier':
+            homePage = const SupplierHomePage();
+            break;
+          case 'delivery':
+            homePage = const HomeDeleviry();
+            break;
+          case 'staff':
+            homePage = const HomeStaff();
+            break;
+          case 'manager':
+            homePage = const HomeManagerPage();
+            break;
+          default:
+            _showError('Unknown user type');
+            setState(() => _isLoading = false);
+            return;
+        }
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => homePage),
+        );
+      }
+    } catch (e) {
+      debugPrint('Login error: $e');
+      _showError('Login failed: ${e.toString()}');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -95,11 +252,12 @@ class _LoginPageState extends State<LoginPage> {
 
                     const SizedBox(height: 20),
 
-                    // ---- User Name ----
+                    // ---- User ID ----
                     _buildLoginField(
-                      hint: 'Enter User Name',
+                      hint: 'Enter User ID',
                       obscure: false,
                       focusNode: _usernameFocus,
+                      controller: _userIdController,
                     ),
                     const SizedBox(height: 16),
 
@@ -108,6 +266,7 @@ class _LoginPageState extends State<LoginPage> {
                       hint: 'Enter Password',
                       obscure: true,
                       focusNode: _passwordFocus,
+                      controller: _passwordController,
                     ),
                     const SizedBox(height: 16),
 
@@ -151,35 +310,41 @@ class _LoginPageState extends State<LoginPage> {
                     SizedBox(
                       width: 220,
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _isLoading ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.yellow,
                           shape: const StadiumBorder(),
                           padding: EdgeInsets.zero,
                           elevation: 4,
+                          disabledBackgroundColor: AppColors.yellow.withOpacity(0.5),
                         ),
                         child: SizedBox(
                           height: 50,
                           child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Text(
-                                  'Login',
-                                  style: TextStyle(
+                            child: _isLoading
+                                ? const CircularProgressIndicator(
                                     color: AppColors.black,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                                    strokeWidth: 2,
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Text(
+                                        'Login',
+                                        style: TextStyle(
+                                          color: AppColors.black,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(
+                                        Icons.arrow_right_alt,
+                                        color: AppColors.black,
+                                        size: 24,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(
-                                  Icons.arrow_right_alt,
-                                  color: AppColors.black,
-                                  size: 24,
-                                ),
-                              ],
-                            ),
                           ),
                         ),
                       ),
@@ -203,10 +368,13 @@ class _LoginPageState extends State<LoginPage> {
     required String hint,
     required bool obscure,
     required FocusNode focusNode,
+    required TextEditingController controller,
   }) {
     return TextField(
+      controller: controller,
       focusNode: focusNode,
       obscureText: obscure,
+      enabled: !_isLoading,
       style: const TextStyle(
         color: AppColors.white,
         fontSize: 14,

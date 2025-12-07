@@ -13,6 +13,13 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # OpenStreetMap using flutter_map
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  http: ^1.1.0
+  geolocator: ^9.0.2
+  signature: ^5.5.0
+
   # أيقونات iOS-style
   cupertino_icons: ^1.0.8
 

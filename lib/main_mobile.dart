@@ -1,10 +1,9 @@
-import 'package:dolphin/Mobile/StroageStaff/home_staff.dart';
-import 'package:dolphin/Mobile/Supplier/supplier_home_page.dart';
 import 'package:flutter/material.dart';
-import 'Mobile/Manager/ManagerShell.dart';
+import 'supabase_config.dart';
+import 'Mobile/LoginMobile.dart';
 
-void main() {
-  runApp(
-    const MaterialApp(debugShowCheckedModeBanner: false, home: SupplierHomePage()),
-  );
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseConfig.initialize();
+  runApp(const DolphinApp());
 }

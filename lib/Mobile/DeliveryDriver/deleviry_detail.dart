@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import '../account_page.dart';
+import '../../supabase_config.dart';
+import 'route_map_deleviry.dart';
+import 'signature_confirmation.dart';
 
 class DeleviryDetail extends StatefulWidget {
   final String customerName;
   final int customerId;
+  final int? orderId;
 
   const DeleviryDetail({
     super.key,
     required this.customerName,
     required this.customerId,
+    this.orderId,
   });
 
   @override
@@ -16,15 +21,37 @@ class DeleviryDetail extends StatefulWidget {
 }
 
 class _DeleviryDetailState extends State<DeleviryDetail> {
+    Future<bool?> _showSignaturePopup() async {
+      int? orderId = widget.orderId;
+
+      if (orderId == null) {
+        final ordersRes = await supabase
+            .from('customer_order')
+            .select('customer_order_id')
+            .eq('customer_id', widget.customerId)
+            .order('order_date', ascending: false)
+            .limit(1) as List<dynamic>;
+
+        if (ordersRes.isEmpty) return null;
+        orderId = ordersRes.first['customer_order_id'] as int;
+      }
+
+      return showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => SignatureConfirmation(
+          customerName: widget.customerName,
+          customerId: widget.customerId,
+          orderId: orderId!,
+        ),
+      );
+    }
+
   int _selectedIndex = 0;
 
-  final List<Map<String, dynamic>> products = [
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'quantity': 1},
-    {'name': 'Freestanding Bathtub', 'brand': 'Royal', 'quantity': 1},
-    {'name': 'Wall-Hung Toilet', 'brand': 'GROHE', 'quantity': 1},
-    {'name': 'Kitchen Sink', 'brand': 'Royal', 'quantity': 1},
-    {'name': 'Towel Ring', 'brand': 'Royal', 'quantity': 1},
-  ];
+  bool _loading = true;
+  List<Map<String, dynamic>> products = [];
+  bool _openingMap = false;
 
   void _onItemTapped(int index) {
     if (index == 1) {
@@ -35,6 +62,95 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       return;
     }
     setState(() => _selectedIndex = index);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProducts();
+  }
+
+  Future<void> _fetchProducts() async {
+    try {
+      setState(() {
+        _loading = true;
+      });
+
+      int? orderId = widget.orderId;
+
+      // Fallback: fetch latest order if not provided
+      if (orderId == null) {
+        final ordersRes = await supabase
+            .from('customer_order')
+            .select('customer_order_id,order_date')
+            .eq('customer_id', widget.customerId)
+            .order('order_date', ascending: false)
+            .limit(1) as List<dynamic>;
+
+        if (ordersRes.isEmpty) {
+          setState(() {
+            products = [];
+            _loading = false;
+          });
+          return;
+        }
+
+        orderId = ordersRes.first['customer_order_id'] as int;
+      }
+
+      final descRes = await supabase
+          .from('customer_order_description')
+          .select('customer_order_description_id,customer_order_id,product_id,delivered_quantity,quantity,total_price,product(*)')
+          .eq('customer_order_id', orderId) as List<dynamic>;
+
+      // collect brand ids
+      final brandIds = <int>{};
+      for (final d in descRes) {
+        final prod = d['product'] as Map<String, dynamic>?;
+        if (prod != null && prod['brand_id'] != null) {
+          brandIds.add(prod['brand_id'] as int);
+        }
+      }
+
+      Map<int, String> brandMap = {};
+      if (brandIds.isNotEmpty) {
+        final brandsRes = await supabase.from('brand').select('brand_id,name') as List<dynamic>;
+
+        for (final b in brandsRes) {
+          final id = b['brand_id'] as int;
+          if (brandIds.contains(id)) {
+            brandMap[id] = b['name'] as String? ?? '';
+          }
+        }
+      }
+
+      final List<Map<String, dynamic>> list = [];
+      for (final d in descRes) {
+        final prod = d['product'] as Map<String, dynamic>?;
+        final name = prod != null ? (prod['name'] as String? ?? 'Unknown') : 'Unknown';
+        final brandId = prod != null ? prod['brand_id'] as int? : null;
+        final brandName = brandId != null ? (brandMap[brandId] ?? brandId.toString()) : 'Unknown';
+        final qty = d['delivered_quantity'] ?? d['quantity'] ?? 0;
+
+        list.add({
+          'name': name,
+          'brand': brandName,
+          'quantity': qty,
+        });
+      }
+
+      setState(() {
+        products = list;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        products = [];
+        _loading = false;
+      });
+      // ignore: avoid_print
+      print('Error fetching delivery details: $e');
+    }
   }
 
   // ======================================
@@ -96,6 +212,148 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
         );
       },
     );
+  }
+
+  Future<void> _confirmDelivery() async {
+    try {
+      int? orderId = widget.orderId;
+
+      // Fallback: fetch latest order ID for this customer if none was provided
+      if (orderId == null) {
+        final ordersRes = await supabase
+            .from('customer_order')
+            .select('customer_order_id')
+            .eq('customer_id', widget.customerId)
+            .order('order_date', ascending: false)
+            .limit(1) as List<dynamic>;
+
+        if (ordersRes.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No order found')),
+            );
+          }
+          return;
+        }
+
+        orderId = ordersRes.first['customer_order_id'] as int;
+      }
+
+      // Update all order descriptions with delivered_quantity = quantity
+      final descRes = await supabase
+          .from('customer_order_description')
+          .select('customer_order_description_id,quantity')
+          .eq('customer_order_id', orderId) as List<dynamic>;
+
+      // Update each description with delivered_quantity
+      for (final desc in descRes) {
+        final descId = desc['customer_order_description_id'] as int;
+        final qty = desc['quantity'] as int;
+
+        await supabase
+            .from('customer_order_description')
+            .update({
+              'delivered_quantity': qty,
+              'delivered_date': DateTime.now().toIso8601String(),
+            })
+            .eq('customer_order_description_id', descId);
+      }
+
+      // Note: Order status is updated to 'Received' in signature_confirmation.dart
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Delivery confirmed successfully!')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to confirm delivery: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openRouteOnMap() async {
+    if (_openingMap) return;
+    setState(() => _openingMap = true);
+
+    try {
+      final res = await supabase
+          .from('customer')
+          .select('name,address,latitude_location,longitude_location')
+          .eq('customer_id', widget.customerId)
+          .maybeSingle();
+
+      debugPrint('Customer data: $res'); // Debug log
+
+      if (res == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Customer not found')),
+          );
+        }
+        return;
+      }
+
+      final lat = res['latitude_location'];
+      final lng = res['longitude_location'];
+      final address = (res['address'] as String?) ?? 'Unknown address';
+      final customerName = (res['name'] as String?) ?? widget.customerName;
+
+      debugPrint('Coordinates: lat=$lat, lng=$lng'); // Debug log
+
+      if (lat == null || lng == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No coordinates for this customer. Please add location data in database.')), 
+          );
+        }
+        return;
+      }
+
+      final latDouble = lat is num ? lat.toDouble() : double.tryParse('$lat');
+      final lngDouble = lng is num ? lng.toDouble() : double.tryParse('$lng');
+
+      debugPrint('Parsed coordinates: lat=$latDouble, lng=$lngDouble'); // Debug log
+
+      if (latDouble == null || lngDouble == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid coordinates for this customer')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      
+      debugPrint('Opening map with: lat=$latDouble, lng=$lngDouble'); // Debug log
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RouteMapDeleviry(
+            customerName: customerName,
+            locationLabel: 'Customer Location',
+            address: address,
+            latitude: latDouble,
+            longitude: lngDouble,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error opening map: $e'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load location: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingMap = false);
+    }
   }
 
   @override
@@ -195,105 +453,116 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
             //========== LIST OF PRODUCTS ==========
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2D2D2D),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 1,
-                            offset: const Offset(0, 4),
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : products.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No products found',
+                            style: TextStyle(color: Colors.white70),
                           ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 18,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Product Name
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                product['name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final product = products[index];
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2D2D2D),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 1,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                            // Brand
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                product['brand'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            // Quantity (box + cm)
-                            Expanded(
-                              flex: 2,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => _editQuantity(index),
-                                    child: Container(
-                                      width: 60,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFB7A447),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '${product['quantity']}',
-                                        style: const TextStyle(
-                                          color: Color(0xFF202020),
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 18,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Product Name
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          product['name'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                      // Brand
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          product['brand'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      // Quantity (box + cm)
+                                      Expanded(
+                                        flex: 2,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () => _editQuantity(index),
+                                              child: Container(
+                                                width: 60,
+                                                padding: const EdgeInsets.symmetric(
+                                                  vertical: 12,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFB7A447),
+                                                  borderRadius: BorderRadius.circular(14),
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  '${product['quantity']}',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF202020),
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Text(
+                                              'cm',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Text(
-                                    'cm',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
 
             //========== BUTTONS: View Route on Map & Confirm Delivery ==========
@@ -306,14 +575,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Add map functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Opening route on map...'),
-                          ),
-                        );
-                      },
+                      onPressed: _openingMap ? null : _openRouteOnMap,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF67CD67), // Green
                         foregroundColor: Colors.white,
@@ -338,7 +600,6 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () {
-                        // TODO: Add confirmation functionality
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
@@ -360,11 +621,12 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                                 ),
                               ),
                               TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context); // Close dialog
-                                  Navigator.pop(
-                                    context,
-                                  ); // Go back to previous page
+                                onPressed: () async {
+                                  Navigator.pop(context);
+                                  final confirmed = await _showSignaturePopup();
+                                  if (confirmed == true) {
+                                    _confirmDelivery();
+                                  }
                                 },
                                 child: const Text(
                                   'Confirm',
@@ -402,31 +664,92 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
       //========== BOTTOM NAV BAR ==========
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
+        decoration: const BoxDecoration(
+          color: Color(0xFF242424),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(22),
+            topRight: Radius.circular(22),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
+              color: Colors.black54,
+              offset: Offset(0, -3),
+              blurRadius: 6,
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: const Color(0xFFFFE14D),
-          unselectedItemColor: const Color(0xFFB7A447),
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_circle),
-              label: 'Account',
-            ),
-          ],
+        child: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(22),
+            topRight: Radius.circular(22),
+          ),
+          child: BottomNavigationBar(
+            backgroundColor: const Color(0xFF242424),
+            currentIndex: _selectedIndex,
+            type: BottomNavigationBarType.fixed,
+            elevation: 0,
+            showSelectedLabels: false,
+            showUnselectedLabels: false,
+            selectedItemColor: const Color(0xFFF9D949),
+            unselectedItemColor: Colors.white60,
+            onTap: _onItemTapped,
+            items: [
+              BottomNavigationBarItem(
+                icon: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.home_filled),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Home',
+                      style: TextStyle(
+                        color: _selectedIndex == 0 ? const Color(0xFFF9D949) : Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: _selectedIndex == 0 ? 70.0 : 0,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9D949),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+                label: '',
+              ),
+              BottomNavigationBarItem(
+                icon: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Account',
+                      style: TextStyle(
+                        color: _selectedIndex == 1 ? const Color(0xFFF9D949) : Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: _selectedIndex == 1 ? 70.0 : 0,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9D949),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+                label: '',
+              ),
+            ],
+          ),
         ),
       ),
     );
