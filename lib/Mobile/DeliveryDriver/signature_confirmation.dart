@@ -219,18 +219,18 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                             return;
                           }
 
-                          // Save signature to database and update status to Received
+                          // Save signature to database and update status to Delivered
                           await supabase.from('customer_order').update({
                             'customer_signature': signatureBytes,
                             'order_status': 'Delivered',
                             'last_action_time': DateTime.now().toIso8601String(),
                           }).eq('customer_order_id', widget.orderId);
 
-                          debugPrint('Signature saved and order status updated to Received for order ${widget.orderId}');
+                          debugPrint('Signature saved and order status updated to Delivered for order ${widget.orderId}');
 
-                          // Return true to indicate confirmation
+                          // Return true and navigate back to home
                           if (mounted) {
-                            Navigator.pop(context, true);
+                            Navigator.of(context).popUntil((route) => route.isFirst);
                           }
                         } catch (e) {
                           debugPrint('Error saving signature: $e');
