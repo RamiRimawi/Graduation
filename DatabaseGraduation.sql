@@ -157,6 +157,7 @@ CREATE TABLE public.delivery_driver (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
+  profile_image text,
   CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id)
 );
 CREATE TABLE public.incoming_payment (
