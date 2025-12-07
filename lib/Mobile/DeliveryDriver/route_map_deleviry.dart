@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
-import '../../supabase_config.dart';
 import 'live_navigation.dart';
 
 class RouteMapDeleviry extends StatefulWidget {
@@ -146,36 +145,20 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     }
   }
 
-  Future<void> _startNavigation() async {
-    // Update customer_order status to 'Delivery'
-    if (widget.deliveryId != null) {
-      try {
-        await supabase.from('customer_order').update({
-          'order_status': 'Delivery',
-          'last_action_time': DateTime.now().toIso8601String(),
-        }).eq('customer_order_id', widget.deliveryId!);
-        
-        debugPrint('Order status updated to Delivery');
-      } catch (e) {
-        debugPrint('Error updating order status: $e');
-      }
-    }
-    
+  void _startNavigation() {
     // Open live navigation screen
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => LiveNavigation(
-            customerName: widget.customerName,
-            address: widget.address,
-            customerLatitude: widget.latitude,
-            customerLongitude: widget.longitude,
-            orderId: widget.deliveryId,
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveNavigation(
+          customerName: widget.customerName,
+          address: widget.address,
+          customerLatitude: widget.latitude,
+          customerLongitude: widget.longitude,
+          orderId: widget.deliveryId,
         ),
-      );
-    }
+      ),
+    );
   }
 
   @override

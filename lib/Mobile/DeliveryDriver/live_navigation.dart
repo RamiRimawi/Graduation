@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
-import '../../supabase_config.dart';
 
 class LiveNavigation extends StatefulWidget {
   final String customerName;
@@ -165,40 +164,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
     return distance.as(LengthUnit.Kilometer, point1, point2);
   }
 
-  Future<void> _completeDelivery() async {
-    try {
-      if (widget.orderId != null) {
-        await supabase
-            .from('customer_order')
-            .update({
-              'order_status': 'Delivered',
-              'last_action_time': DateTime.now().toIso8601String(),
-            })
-            .eq('customer_order_id', widget.orderId!);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Delivery completed successfully!'),
-              backgroundColor: Color(0xFF67CD67),
-            ),
-          );
-          
-          Navigator.pop(context);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error completing delivery: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   void _showArrivalDialog() {
     showDialog(
@@ -211,25 +177,15 @@ class _LiveNavigationState extends State<LiveNavigation> {
           style: TextStyle(color: Colors.white),
         ),
         content: const Text(
-          'You have arrived at the customer location. Complete the delivery?',
+          'You have arrived at the customer location.',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
-              'Not Yet',
+              'OK',
               style: TextStyle(color: Color(0xFFB7A447)),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _completeDelivery();
-            },
-            child: const Text(
-              'Complete Delivery',
-              style: TextStyle(color: Color(0xFF67CD67)),
             ),
           ),
         ],

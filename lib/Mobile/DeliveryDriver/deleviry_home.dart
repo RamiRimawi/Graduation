@@ -4,7 +4,9 @@ import '../account_page.dart';
 import '../../supabase_config.dart';
 
 class HomeDeleviry extends StatefulWidget {
-  const HomeDeleviry({super.key});
+  final int deliveryDriverId;
+  
+  const HomeDeleviry({super.key, required this.deliveryDriverId});
 
   @override
   State<HomeDeleviry> createState() => _HomeDeleviryState();
@@ -37,13 +39,14 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
     
     try {
       // Fetch customer orders with related customer data
-      // Only show orders that are ready for delivery (Prepared) or currently being delivered (Delivery)
+      // Only show orders with status 'Delivery' assigned to this delivery driver
       final data = await supabase
           .from('customer_order')
           .select(
-            'customer_order_id, order_date, order_status, customer:customer_id(customer_id, name), customer_order_description(*)',
+            'customer_order_id, order_date, order_status, delivered_by_id, customer:customer_id(customer_id, name), customer_order_description(*)',
           )
-          .inFilter('order_status', ['Prepared', 'Delivery'])
+          .eq('order_status', 'Delivery')
+          .eq('delivered_by_id', widget.deliveryDriverId)
           .order('order_date', ascending: false)
           .limit(100) as List<dynamic>;
 
@@ -112,7 +115,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
             : customers.isEmpty
                 ? const Center(
                     child: Text(
-                      'No orders ready for delivery',
+                      'No active deliveries assigned to you',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 16,

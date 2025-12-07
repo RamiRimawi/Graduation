@@ -161,12 +161,13 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       // Save to SharedPreferences if Remember Me is checked
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userId', userId);
+      await prefs.setString('userType', userType);
+      
       if (rememberMe) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('userId', userId);
         await prefs.setString('password', password);
         await prefs.setBool('rememberMe', true);
-        await prefs.setString('userType', userType);
       }
 
       // Navigate to appropriate home page
@@ -177,7 +178,7 @@ class _LoginPageState extends State<LoginPage> {
             homePage = const SupplierHomePage();
             break;
           case 'delivery':
-            homePage = const HomeDeleviry();
+            homePage = HomeDeleviry(deliveryDriverId: int.parse(userId));
             break;
           case 'staff':
             homePage = const HomeStaff();

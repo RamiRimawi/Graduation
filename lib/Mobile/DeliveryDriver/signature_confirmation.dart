@@ -72,7 +72,7 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Super Arrived!',
+                      'Signature Confirmation',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -222,7 +222,7 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                           // Save signature to database and update status to Received
                           await supabase.from('customer_order').update({
                             'customer_signature': signatureBytes,
-                            'order_status': 'Received',
+                            'order_status': 'Delivered',
                             'last_action_time': DateTime.now().toIso8601String(),
                           }).eq('customer_order_id', widget.orderId);
 
