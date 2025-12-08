@@ -11,6 +11,11 @@ CREATE TABLE public.accountant (
   last_action_time timestamp without time zone,
   CONSTRAINT accountant_pkey PRIMARY KEY (accountant_id)
 );
+CREATE TABLE public.banks (
+  bank_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  bank_name character varying NOT NULL,
+  CONSTRAINT banks_pkey PRIMARY KEY (bank_id)
+);
 CREATE TABLE public.batch (
   batch_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   product_id integer NOT NULL,
@@ -20,10 +25,19 @@ CREATE TABLE public.batch (
   storage_location_descrption character varying,
   last_action_by text,
   last_action_time timestamp without time zone,
+  expiry_date date,
+  production_date date,
   CONSTRAINT batch_pkey PRIMARY KEY (batch_id, product_id),
   CONSTRAINT batch_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id),
   CONSTRAINT batch_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
   CONSTRAINT batch_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
+);
+CREATE TABLE public.branches (
+  branch_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  bank_id integer NOT NULL,
+  address character varying,
+  CONSTRAINT branches_pkey PRIMARY KEY (branch_id),
+  CONSTRAINT Branchs_Bank_ID_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id)
 );
 CREATE TABLE public.brand (
   brand_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -50,18 +64,6 @@ CREATE TABLE public.customer (
   CONSTRAINT customer_customer_city_fkey FOREIGN KEY (customer_city) REFERENCES public.customer_city(customer_city_id),
   CONSTRAINT customer_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id)
 );
-CREATE TABLE public.customer_banks (
-  bank_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  bank_name character varying,
-  CONSTRAINT customer_banks_pkey PRIMARY KEY (bank_id)
-);
-CREATE TABLE public.customer_branches (
-  branch_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  bank_id integer,
-  address character varying,
-  CONSTRAINT customer_branches_pkey PRIMARY KEY (branch_id),
-  CONSTRAINT customer_branches_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.customer_banks(bank_id)
-);
 CREATE TABLE public.customer_checks (
   check_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   customer_id integer,
@@ -76,8 +78,8 @@ CREATE TABLE public.customer_checks (
   last_action_time timestamp without time zone,
   CONSTRAINT customer_checks_pkey PRIMARY KEY (check_id),
   CONSTRAINT customer_checks_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
-  CONSTRAINT customer_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.customer_banks(bank_id),
-  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.customer_branches(branch_id)
+  CONSTRAINT customer_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id),
+  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id)
 );
 CREATE TABLE public.customer_city (
   customer_city_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -102,6 +104,7 @@ CREATE TABLE public.customer_order (
   accountant_id integer,
   last_action_by text,
   last_action_time timestamp without time zone,
+  delivered_date date,
   CONSTRAINT customer_order_pkey PRIMARY KEY (customer_order_id),
   CONSTRAINT customer_order_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
   CONSTRAINT customer_order_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id),
@@ -111,18 +114,31 @@ CREATE TABLE public.customer_order (
   CONSTRAINT customer_order_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accountant(accountant_id)
 );
 CREATE TABLE public.customer_order_description (
-  customer_order_description_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  customer_order_id integer,
-  product_id integer,
+  customer_order_id integer NOT NULL,
+  product_id integer NOT NULL,
   delivered_quantity integer,
   quantity integer,
   total_price numeric,
   delivered_date timestamp without time zone,
   last_action_by text,
   last_action_time timestamp without time zone,
-  CONSTRAINT customer_order_description_pkey PRIMARY KEY (customer_order_description_id),
+  CONSTRAINT customer_order_description_pkey PRIMARY KEY (customer_order_id, product_id),
   CONSTRAINT customer_order_description_customer_order_id_fkey FOREIGN KEY (customer_order_id) REFERENCES public.customer_order(customer_order_id),
   CONSTRAINT customer_order_description_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id)
+);
+CREATE TABLE public.customer_order_inventory (
+  customer_order_id integer NOT NULL,
+  product_id integer NOT NULL,
+  inventory_id integer NOT NULL,
+  batch_id integer,
+  quantity integer,
+  CONSTRAINT customer_order_inventory_pkey PRIMARY KEY (customer_order_id, product_id, inventory_id),
+  CONSTRAINT customer_order_inventory_customer_order_id_fkey FOREIGN KEY (customer_order_id) REFERENCES public.customer_order(customer_order_id),
+  CONSTRAINT customer_order_inventory_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id),
+  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(product_id),
+  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id)
 );
 CREATE TABLE public.customer_quarters (
   quarter_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -141,6 +157,7 @@ CREATE TABLE public.delivery_driver (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
+  profile_image text,
   CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id)
 );
 CREATE TABLE public.incoming_payment (
@@ -253,18 +270,6 @@ CREATE TABLE public.supplier (
   CONSTRAINT supplier_supplier_city_fkey FOREIGN KEY (supplier_city) REFERENCES public.supplier_city(supplier_city_id),
   CONSTRAINT supplier_supplier_category_id_fkey FOREIGN KEY (supplier_category_id) REFERENCES public.supplier_category(supplier_category_id)
 );
-CREATE TABLE public.supplier_banks (
-  bank_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  bank_name character varying,
-  CONSTRAINT supplier_banks_pkey PRIMARY KEY (bank_id)
-);
-CREATE TABLE public.supplier_branches (
-  branch_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  bank_id integer,
-  address character varying,
-  CONSTRAINT supplier_branches_pkey PRIMARY KEY (branch_id),
-  CONSTRAINT supplier_branches_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.supplier_banks(bank_id)
-);
 CREATE TABLE public.supplier_category (
   supplier_category_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   name character varying,
@@ -276,7 +281,7 @@ CREATE TABLE public.supplier_checks (
   check_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   supplier_id integer,
   bank_id integer,
-  bank_branch integer,
+  bank_branch bigint,
   check_image bytea,
   exchange_rate numeric,
   exchange_date date,
@@ -286,8 +291,8 @@ CREATE TABLE public.supplier_checks (
   last_action_time timestamp without time zone,
   CONSTRAINT supplier_checks_pkey PRIMARY KEY (check_id),
   CONSTRAINT supplier_checks_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
-  CONSTRAINT supplier_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.supplier_banks(bank_id),
-  CONSTRAINT supplier_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.supplier_branches(branch_id)
+  CONSTRAINT supplier_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id),
+  CONSTRAINT supplier_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id)
 );
 CREATE TABLE public.supplier_city (
   supplier_city_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -315,17 +320,30 @@ CREATE TABLE public.supplier_order (
   CONSTRAINT supplier_order_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accountant(accountant_id)
 );
 CREATE TABLE public.supplier_order_description (
-  order_in_products_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  order_id integer,
-  product_id integer,
+  order_id integer NOT NULL,
+  product_id integer NOT NULL,
   receipt_quantity integer,
   quantity integer,
   price_per_product numeric,
   last_tracing_by text,
   last_tracing_time timestamp without time zone,
-  CONSTRAINT supplier_order_description_pkey PRIMARY KEY (order_in_products_id),
+  CONSTRAINT supplier_order_description_pkey PRIMARY KEY (order_id, product_id),
   CONSTRAINT supplier_order_description_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.supplier_order(order_id),
   CONSTRAINT supplier_order_description_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id)
+);
+CREATE TABLE public.supplier_order_inventory (
+  supplier_order_id integer NOT NULL,
+  product_id integer NOT NULL,
+  inventory_id integer NOT NULL,
+  batch_id integer,
+  quantity integer,
+  CONSTRAINT supplier_order_inventory_pkey PRIMARY KEY (supplier_order_id, product_id, inventory_id),
+  CONSTRAINT supplier_order_inventory_supplier_order_id_fkey FOREIGN KEY (supplier_order_id) REFERENCES public.supplier_order(order_id),
+  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (product_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (product_id) REFERENCES public.batch(product_id),
+  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id),
+  CONSTRAINT supplier_order_inventory_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
 );
 CREATE TABLE public.unit (
   unit_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,

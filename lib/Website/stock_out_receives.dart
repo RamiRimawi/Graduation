@@ -48,11 +48,14 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
 
   Future<void> _fetchOrders() async {
     try {
+      // Fetch only orders with Received, Updated, or Hold status
       final data = await supabase
           .from('customer_order')
-          .select('customer_order_id, order_status, order_date, customer:customer_id(name), sales_representative:sales_rep_id(name)')
-          .order('customer_order_id', ascending: false)
-          .limit(100);
+          .select(
+            'customer_order_id, order_status, order_date, last_action_by, customer:customer_id(name)',
+          )
+          .inFilter('order_status', ['Received', 'Updated', 'Hold'])
+          .order('customer_order_id', ascending: false);
 
       final ordersList = <OrderReceiveRow>[];
       final onHoldList = <OrderReceiveRow>[];
@@ -60,26 +63,25 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
       for (final row in data) {
         final id = (row['customer_order_id'] ?? '').toString();
         final status = (row['order_status'] ?? '').toString();
-        
-        // Only process orders with 'Received' status or 'hold' in status
-        if (status != 'Received' && !status.toLowerCase().contains('hold')) {
-          continue;
-        }
-        
+
         final customerName = (row['customer'] is Map)
             ? (row['customer']['name'] ?? 'Unknown')
             : 'Unknown';
-        final createdBy = (row['sales_representative'] is Map)
-            ? (row['sales_representative']['name'] ?? 'Sender')
-            : 'Sender';
-        
+        final createdBy = (row['last_action_by'] ?? 'System') as String;
+
         final orderDate = row['order_date'] != null
             ? DateTime.parse(row['order_date'])
             : DateTime.now();
-        final time = '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
+        final time =
+            '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
         final date = '${orderDate.day}/${orderDate.month}';
-        
-        final type = status.contains('Pending') ? 'out (NEW)' : status.contains('Preparing') ? 'out (UPDATE)' : 'out (NEW)';
+
+        // Type: "out (UPDATE)" for Updated, "out (NEW)" for Received, "out" for Hold
+        final type = status == 'Updated'
+            ? 'out (UPDATE)'
+            : status == 'Hold'
+            ? 'out'
+            : 'out (NEW)';
 
         final orderRow = OrderReceiveRow(
           id: id,
@@ -90,8 +92,8 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
           date: date,
         );
 
-        // Separate orders based on status containing "hold"
-        if (status.toLowerCase().contains('hold')) {
+        // Separate orders: Hold goes to "On Hold" section, others to main list
+        if (status == 'Hold') {
           onHoldList.add(orderRow);
         } else {
           ordersList.add(orderRow);
@@ -163,12 +165,12 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                               selected: stockTab,
                               onChanged: (i) {
                                 if (i == 1) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
                                       builder: (_) => const StockInPage(),
-                                      ),
-                                    );
+                                    ),
+                                  );
                                 } else {
                                   setState(() => stockTab = i);
                                 }
@@ -206,12 +208,12 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                         onTap: (i) {
                           setState(() => currentTab = i);
                           if (i == 0) {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
                                 builder: (_) => const OrdersPage(),
-                                ),
-                              );
+                              ),
+                            );
                           } else {
                             Navigator.pushReplacement(
                               context,
@@ -260,164 +262,219 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                       child: _loading
                           ? const Center(child: CircularProgressIndicator())
                           : _error != null
-                              ? Center(
-                                  child: Text(
-                                    _error!,
-                                    style: const TextStyle(color: Colors.redAccent),
-                                  ),
-                                )
-                              : ListView(
-                                  children: [
-                                    if (_filteredOrders.isEmpty)
-                                      const Padding(
-                                        padding: EdgeInsets.all(40.0),
-                                        child: Center(
-                                          child: Text(
-                                            'No Received orders found',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      ...List.generate(_filteredOrders.length, (i) {
-                                      final o = _filteredOrders[i];
-                                      final even = int.tryParse(o.id) ?? 0;
-                                      final bg = even.isEven
-                                          ? const Color(0xFF2D2D2D)
-                                          : const Color(0xFF262626);
-
-                                      return MouseRegion(
-                                        onEnter: (_) => setState(() => hoveredIndex = i),
-                                        onExit: (_) => setState(() => hoveredIndex = null),
-                                        child: AnimatedContainer(
-                                          duration: const Duration(milliseconds: 200),
-                                          margin: const EdgeInsets.only(bottom: 8),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: bg,
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: hoveredIndex == i
-                                                  ? const Color(0xFF50B2E7)
-                                                  : Colors.transparent,
-                                              width: 2,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                flex: 2,
-                                                child: Text(o.id, style: _cellStyle()),
-                                              ),
-                                              Expanded(
-                                                flex: 3,
-                                                child: Text(o.customerName, style: _cellStyle()),
-                                              ),
-                                              Expanded(
-                                                flex: 2,
-                                                child: Text(o.type, style: _cellStyle()),
-                                              ),
-                                              Expanded(
-                                                flex: 2,
-                                                child: Text(o.createdBy, style: _cellStyle()),
-                                              ),
-                                              Expanded(
-                                                flex: 2,
-                                                child: Text(o.time, style: _cellStyle()),
-                                              ),
-                                              Expanded(
-                                                flex: 2,
-                                                child: Align(
-                                                  alignment: Alignment.centerRight,
-                                                  child: Text(o.date, style: _cellStyle()),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                    if (_filteredOnHold.isNotEmpty) ...[
-                                      const SizedBox(height: 20),
-                                      const Text(
-                                        'On Hold',
+                          ? Center(
+                              child: Text(
+                                _error!,
+                                style: const TextStyle(color: Colors.redAccent),
+                              ),
+                            )
+                          : ListView(
+                              children: [
+                                if (_filteredOrders.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(40.0),
+                                    child: Center(
+                                      child: Text(
+                                        'No Received orders found',
                                         style: TextStyle(
                                           color: Colors.white70,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
+                                          fontSize: 16,
                                         ),
                                       ),
-                                      const SizedBox(height: 10),
-                                      ...List.generate(_filteredOnHold.length, (i) {
-                                        final o = _filteredOnHold[i];
-                                        final even = int.tryParse(o.id) ?? 0;
-                                        final bg = even.isEven
-                                            ? const Color(0xFF2D2D2D)
-                                            : const Color(0xFF262626);
+                                    ),
+                                  )
+                                else
+                                  ...List.generate(_filteredOrders.length, (i) {
+                                    final o = _filteredOrders[i];
+                                    final even = int.tryParse(o.id) ?? 0;
+                                    final bg = even.isEven
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
 
-                                        return MouseRegion(
-                                          onEnter: (_) => setState(() => hoveredIndex = i + 100),
-                                          onExit: (_) => setState(() => hoveredIndex = null),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 200),
-                                            margin: const EdgeInsets.only(bottom: 8),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 14,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: bg,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: hoveredIndex == i + 100
-                                                    ? const Color(0xFF50B2E7)
-                                                    : Colors.transparent,
-                                                width: 2,
+                                    return MouseRegion(
+                                      onEnter: (_) =>
+                                          setState(() => hoveredIndex = i),
+                                      onExit: (_) =>
+                                          setState(() => hoveredIndex = null),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: bg,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
+                                            color: hoveredIndex == i
+                                                ? const Color(0xFF50B2E7)
+                                                : Colors.transparent,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.id,
+                                                style: _cellStyle(),
                                               ),
                                             ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(o.id, style: _cellStyle()),
-                                                ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Text(o.customerName, style: _cellStyle()),
-                                                ),
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(o.type, style: _cellStyle()),
-                                                ),
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(o.createdBy, style: _cellStyle()),
-                                                ),
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(o.time, style: _cellStyle()),
-                                                ),
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Align(
-                                                    alignment: Alignment.centerRight,
-                                                    child: Text(o.date, style: _cellStyle()),
-                                                  ),
-                                                ),
-                                              ],
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                o.customerName,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.type,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.createdBy,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.time,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: Text(
+                                                  o.date,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                if (_filteredOnHold.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    'On Hold',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ...List.generate(_filteredOnHold.length, (i) {
+                                    final o = _filteredOnHold[i];
+                                    final even = int.tryParse(o.id) ?? 0;
+                                    final bg = even.isEven
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
+
+                                    return MouseRegion(
+                                      onEnter: (_) => setState(
+                                        () => hoveredIndex = i + 100,
+                                      ),
+                                      onExit: (_) =>
+                                          setState(() => hoveredIndex = null),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: bg,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                        );
-                                      }),
-                                    ],
-                                  ],
-                                ),
+                                          border: Border.all(
+                                            color: hoveredIndex == i + 100
+                                                ? const Color(0xFF50B2E7)
+                                                : Colors.transparent,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.id,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                o.customerName,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.type,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.createdBy,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                o.time,
+                                                style: _cellStyle(),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: Text(
+                                                  o.date,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ],
+                            ),
                     ),
                   ],
                 ),

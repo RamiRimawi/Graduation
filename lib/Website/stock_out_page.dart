@@ -46,8 +46,8 @@ class _OrdersPageState extends State<OrdersPage> {
     final q = _searchQuery.toLowerCase();
     // Prefix match: equivalent to SQL LIKE 'q%'
     return _orders
-      .where((o) => o.name.toLowerCase().startsWith(q))
-      .toList(growable: false);
+        .where((o) => o.name.toLowerCase().startsWith(q))
+        .toList(growable: false);
   }
 
   @override
@@ -58,28 +58,55 @@ class _OrdersPageState extends State<OrdersPage> {
 
   Future<void> _fetchOrders() async {
     try {
-      // Select order id, status, and related customer name.
-      // Adjust selected columns if schema differs.
+      // Get today's date in YYYY-MM-DD format
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      // Fetch orders with status and delivered_date
       final data = await supabase
           .from('customer_order')
-          .select('customer_order_id, order_status, customer:customer_id(name)')
-          .order('customer_order_id', ascending: false)
-          .limit(100);
+          .select(
+            'customer_order_id, order_status, delivered_date, customer:customer_id(name)',
+          )
+          .order('customer_order_id', ascending: false);
 
       final list = <OrderRow>[];
       for (final row in data) {
         final id = (row['customer_order_id'] ?? '').toString();
         final status = (row['order_status'] ?? '').toString();
-        // Only show orders with specific statuses
-        if (status != 'Received' && status != 'Prepared' &&
-            status != 'Delivery' && status != 'Updated') {
+        final deliveredDate = row['delivered_date']?.toString() ?? '';
+
+        // Filter: Show only specific statuses
+        bool shouldShow = false;
+
+        if (status == 'Received' ||
+            status == 'Pinned' ||
+            status == 'Prepared' ||
+            status == 'Delivery' ||
+            status == 'Updated') {
+          shouldShow = true;
+        } else if (status == 'Delivered') {
+          // Only show Delivered if delivered_date is today
+          if (deliveredDate.isNotEmpty && deliveredDate.startsWith(todayStr)) {
+            shouldShow = true;
+          }
+        }
+
+        if (!shouldShow) {
           continue;
         }
+
         final customer = (row['customer'] is Map)
             ? (row['customer']['name'] ?? '')
             : '';
-        list.add(OrderRow(id: id, name: customer, status: status));
+
+        // Convert "Pinned" to "Sended to manager" for display
+        final displayStatus = status == 'Pinned' ? 'Sended to manager' : status;
+
+        list.add(OrderRow(id: id, name: customer, status: displayStatus));
       }
+
       setState(() {
         _orders = list;
         _loading = false;
@@ -135,8 +162,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
-                                            const StockInPage(),
+                                        builder: (_) => const StockInPage(),
                                       ),
                                     );
                                   } else {
@@ -182,7 +208,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
+                                        builder: (_) =>
                                             const OrdersReceivesPage(),
                                       ),
                                     );
@@ -236,77 +262,88 @@ class _OrdersPageState extends State<OrdersPage> {
                                       child: CircularProgressIndicator(),
                                     )
                                   : _error != null
-                                      ? Center(
-                                          child: Text(
-                                            _error!,
-                                            style: const TextStyle(color: Colors.redAccent),
-                                          ),
-                                        )
-                                      : ListView.separated(
-                                          itemCount: _filteredOrders.length,
-                                          separatorBuilder: (_, __) => const SizedBox(height: 6),
-                                          itemBuilder: (context, i) {
-                                            final row = _filteredOrders[i];
-                                            final bg = i.isEven
-                                                ? AppColors.card
-                                                : AppColors.cardAlt;
-                                            final isHovered = hoveredRow == i;
-                                            return MouseRegion(
-                                              onEnter: (_) => setState(() => hoveredRow = i),
-                                              onExit: (_) => setState(() => hoveredRow = null),
-                                              child: AnimatedContainer(
-                                                duration: const Duration(milliseconds: 200),
-                                                decoration: BoxDecoration(
-                                                  color: bg,
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  border: isHovered
-                                                      ? Border.all(
-                                                          color: AppColors.blue,
-                                                          width: 2,
-                                                        )
-                                                      : null,
-                                                ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 12,
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Text(
-                                                        row.id,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w800,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 5,
-                                                      child: Text(
-                                                        row.name,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 3,
-                                                      child: Align(
-                                                        alignment: Alignment.centerRight,
-                                                        child: _StatusChip(
-                                                          status: row.status,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                  ? Center(
+                                      child: Text(
+                                        _error!,
+                                        style: const TextStyle(
+                                          color: Colors.redAccent,
                                         ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      itemCount: _filteredOrders.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 6),
+                                      itemBuilder: (context, i) {
+                                        final row = _filteredOrders[i];
+                                        final bg = i.isEven
+                                            ? AppColors.card
+                                            : AppColors.cardAlt;
+                                        final isHovered = hoveredRow == i;
+                                        return MouseRegion(
+                                          onEnter: (_) =>
+                                              setState(() => hoveredRow = i),
+                                          onExit: (_) =>
+                                              setState(() => hoveredRow = null),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: bg,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: isHovered
+                                                  ? Border.all(
+                                                      color: AppColors.blue,
+                                                      width: 2,
+                                                    )
+                                                  : null,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 12,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    row.id,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 5,
+                                                  child: Text(
+                                                    row.name,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: _StatusChip(
+                                                      status: row.status,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),
@@ -401,10 +438,7 @@ class _SearchField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide(
-            color: Color(0xFFB7A447),
-            width: 1.2,
-          ),
+          borderSide: BorderSide(color: Color(0xFFB7A447), width: 1.2),
         ),
       ),
     );
