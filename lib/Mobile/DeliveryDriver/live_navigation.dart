@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
+import '../../supabase_config.dart';
 
 class LiveNavigation extends StatefulWidget {
   final String customerName;
@@ -12,6 +13,7 @@ class LiveNavigation extends StatefulWidget {
   final double customerLatitude;
   final double customerLongitude;
   final int? orderId;
+  final int deliveryDriverId;
 
   const LiveNavigation({
     super.key,
@@ -20,6 +22,7 @@ class LiveNavigation extends StatefulWidget {
     required this.customerLatitude,
     required this.customerLongitude,
     this.orderId,
+    required this.deliveryDriverId,
   });
 
   @override
@@ -34,6 +37,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
   double _remainingTime = 0;
   StreamSubscription<Position>? _positionStream;
   Timer? _routeUpdateTimer;
+  Timer? _locationUpdateTimer;
   bool _arrivedAtDestination = false;
   DateTime? _lastUpdate;
   int _updateCount = 0;
@@ -43,13 +47,40 @@ class _LiveNavigationState extends State<LiveNavigation> {
     super.initState();
     _mapController = MapController();
     _startLiveTracking();
+    _startLocationUpdates();
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
     _routeUpdateTimer?.cancel();
+    _locationUpdateTimer?.cancel();
     super.dispose();
+  }
+
+  void _startLocationUpdates() {
+    _locationUpdateTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _updateLocationInDatabase(),
+    );
+  }
+
+  Future<void> _updateLocationInDatabase() async {
+    if (_currentDriverLocation == null) return;
+
+    try {
+      await supabase
+          .from('delivery_driver')
+          .update({
+            'latitude_location': _currentDriverLocation!.latitude,
+            'longitude_location': _currentDriverLocation!.longitude,
+          })
+          .eq('delivery_driver_id', widget.deliveryDriverId);
+
+      debugPrint('📍 Location updated in DB: ${_currentDriverLocation!.latitude}, ${_currentDriverLocation!.longitude}');
+    } catch (e) {
+      debugPrint('❌ Error updating location in database: $e');
+    }
   }
 
   Future<void> _startLiveTracking() async {

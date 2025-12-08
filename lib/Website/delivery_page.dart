@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../supabase_config.dart';
 import 'sidebar.dart'; // نفس الشريط الجانبي
+import 'delivery_live_popup.dart';
 
 class DeliveryPage extends StatefulWidget {
   const DeliveryPage({super.key});
@@ -52,6 +53,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
           active.add({
             'name': driverName,
             'profile_image': driver['profile_image'],
+            'delivery_driver_id': driverId,
           });
         } else {
           // Driver is idle (no active deliveries)
@@ -162,6 +164,17 @@ class _DeliveryPageState extends State<DeliveryPage> {
                                             name: d["name"]!,
                                             profileImage: d["profile_image"],
                                             isIdle: false,
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: true,
+                                                builder: (ctx) => DeliveryLivePopup(
+                                                  driverId: d["delivery_driver_id"] ?? 0,
+                                                  driverName: d["name"]!,
+                                                  profileImage: d["profile_image"],
+                                                ),
+                                              );
+                                            },
                                           ),
                                         )
                                         .toList(),
@@ -219,81 +232,86 @@ class _DeliveryCard extends StatelessWidget {
   final String name;
   final String? profileImage;
   final bool isIdle;
+  final VoidCallback? onTap;
 
   const _DeliveryCard({
     required this.name,
     this.profileImage,
     this.isIdle = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 190,
-      height: 210,
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4)),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 55,
-                backgroundImage: profileImage != null && profileImage!.isNotEmpty
-                    ? NetworkImage(profileImage!)
-                    : null,
-                backgroundColor: isIdle ? Colors.grey : const Color(0xFF67CD67),
-                child: profileImage == null || profileImage!.isEmpty
-                    ? Text(
-                        name[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.roboto(
-                    color: isIdle ? Colors.white70 : Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 190,
+        height: 210,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4)),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 55,
+                  backgroundImage: profileImage != null && profileImage!.isNotEmpty
+                      ? NetworkImage(profileImage!)
+                      : null,
+                  backgroundColor: isIdle ? Colors.grey : const Color(0xFF67CD67),
+                  child: profileImage == null || profileImage!.isEmpty
+                      ? Text(
+                          name[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.roboto(
+                      color: isIdle ? Colors.white70 : Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
-          ),
-          // نقطة خضراء للـ active
-          if (!isIdle)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF67CD67),
-                  shape: BoxShape.circle,
-                ),
-              ),
+              ],
             ),
-        ],
+            // نقطة خضراء للـ active
+            if (!isIdle)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF67CD67),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -14,6 +14,7 @@ class RouteMapDeleviry extends StatefulWidget {
   final double latitude;
   final double longitude;
   final int? deliveryId;
+  final int deliveryDriverId;
 
   const RouteMapDeleviry({
     super.key,
@@ -23,6 +24,7 @@ class RouteMapDeleviry extends StatefulWidget {
     required this.latitude,
     required this.longitude,
     this.deliveryId,
+    required this.deliveryDriverId,
   });
 
   @override
@@ -156,6 +158,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
           customerLatitude: widget.latitude,
           customerLongitude: widget.longitude,
           orderId: widget.deliveryId,
+          deliveryDriverId: widget.deliveryDriverId,
         ),
       ),
     );

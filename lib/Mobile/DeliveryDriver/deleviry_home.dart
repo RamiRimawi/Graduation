@@ -139,6 +139,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                         customerName: customer['name'],
                         customerId: customer['customerId'],
                         orderId: customer['orderId'],
+                        deliveryDriverId: widget.deliveryDriverId,
                       ),
                     ),
                   );

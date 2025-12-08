@@ -8,12 +8,14 @@ class DeleviryDetail extends StatefulWidget {
   final String customerName;
   final int customerId;
   final int? orderId;
+  final int deliveryDriverId;
 
   const DeleviryDetail({
     super.key,
     required this.customerName,
     required this.customerId,
     this.orderId,
+    required this.deliveryDriverId,
   });
 
   @override
@@ -336,6 +338,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
             address: address,
             latitude: latDouble,
             longitude: lngDouble,
+            deliveryDriverId: widget.deliveryDriverId,
           ),
         ),
       );
