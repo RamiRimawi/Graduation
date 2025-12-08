@@ -242,12 +242,12 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       // Update all order descriptions with delivered_quantity = quantity
       final descRes = await supabase
           .from('customer_order_description')
-          .select('customer_order_description_id,quantity')
+          .select('customer_order_id,product_id,quantity')
           .eq('customer_order_id', orderId) as List<dynamic>;
 
-      // Update each description with delivered_quantity
+      // Update each description with delivered_quantity using composite key
       for (final desc in descRes) {
-        final descId = desc['customer_order_description_id'] as int;
+        final productId = desc['product_id'] as int;
         final qty = desc['quantity'] as int;
 
         await supabase
@@ -256,17 +256,12 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
               'delivered_quantity': qty,
               'delivered_date': DateTime.now().toIso8601String(),
             })
-            .eq('customer_order_description_id', descId);
+            .eq('customer_order_id', orderId)
+            .eq('product_id', productId);
       }
 
-      // Note: Order status is updated to 'Received' in signature_confirmation.dart
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Delivery confirmed successfully!')),
-        );
-        Navigator.pop(context);
-      }
+      // Note: Order status is updated to 'Delivered' in signature_confirmation.dart
+      // Signature confirmation will handle navigation back to home
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

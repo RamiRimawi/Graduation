@@ -1,6 +1,18 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.Banks (
+  Banks_ID integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  Bank_name character varying NOT NULL,
+  CONSTRAINT Banks_pkey PRIMARY KEY (Banks_ID)
+);
+CREATE TABLE public.Branchs (
+  Branch_ID integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  Bank_ID integer NOT NULL,
+  Address character varying,
+  CONSTRAINT Branchs_pkey PRIMARY KEY (Branch_ID),
+  CONSTRAINT Branchs_Bank_ID_fkey FOREIGN KEY (Bank_ID) REFERENCES public.Banks(Banks_ID)
+);
 CREATE TABLE public.accountant (
   accountant_id integer NOT NULL,
   name character varying,
@@ -78,8 +90,8 @@ CREATE TABLE public.customer_checks (
   last_action_time timestamp without time zone,
   CONSTRAINT customer_checks_pkey PRIMARY KEY (check_id),
   CONSTRAINT customer_checks_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
-  CONSTRAINT customer_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id),
-  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id)
+  CONSTRAINT customer_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.customer_banks(bank_id),
+  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.customer_branches(branch_id)
 );
 CREATE TABLE public.customer_city (
   customer_city_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -291,8 +303,8 @@ CREATE TABLE public.supplier_checks (
   last_action_time timestamp without time zone,
   CONSTRAINT supplier_checks_pkey PRIMARY KEY (check_id),
   CONSTRAINT supplier_checks_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
-  CONSTRAINT supplier_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id),
-  CONSTRAINT supplier_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id)
+  CONSTRAINT supplier_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.supplier_banks(bank_id),
+  CONSTRAINT supplier_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.supplier_branches(branch_id)
 );
 CREATE TABLE public.supplier_city (
   supplier_city_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -330,20 +342,6 @@ CREATE TABLE public.supplier_order_description (
   CONSTRAINT supplier_order_description_pkey PRIMARY KEY (order_id, product_id),
   CONSTRAINT supplier_order_description_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.supplier_order(order_id),
   CONSTRAINT supplier_order_description_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id)
-);
-CREATE TABLE public.supplier_order_inventory (
-  supplier_order_id integer NOT NULL,
-  product_id integer NOT NULL,
-  inventory_id integer NOT NULL,
-  batch_id integer,
-  quantity integer,
-  CONSTRAINT supplier_order_inventory_pkey PRIMARY KEY (supplier_order_id, product_id, inventory_id),
-  CONSTRAINT supplier_order_inventory_supplier_order_id_fkey FOREIGN KEY (supplier_order_id) REFERENCES public.supplier_order(order_id),
-  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (product_id) REFERENCES public.batch(batch_id),
-  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(batch_id),
-  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (product_id) REFERENCES public.batch(product_id),
-  CONSTRAINT supplier_order_inventory_product_id_Batch_ID_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id),
-  CONSTRAINT supplier_order_inventory_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
 );
 CREATE TABLE public.unit (
   unit_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
