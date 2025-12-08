@@ -19,6 +19,7 @@ dependencies:
   http: ^1.1.0
   geolocator: ^9.0.2
   signature: ^5.5.0
+  flutter_compass: ^0.8.0
 
   # أيقونات iOS-style
   cupertino_icons: ^1.0.8

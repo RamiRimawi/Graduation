@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'dart:convert';
 import 'dart:async';
 import '../../supabase_config.dart';
@@ -36,11 +37,13 @@ class _LiveNavigationState extends State<LiveNavigation> {
   double _remainingDistance = 0;
   double _remainingTime = 0;
   StreamSubscription<Position>? _positionStream;
+  StreamSubscription<CompassEvent>? _compassStream;
   Timer? _routeUpdateTimer;
   Timer? _locationUpdateTimer;
   bool _arrivedAtDestination = false;
   DateTime? _lastUpdate;
   int _updateCount = 0;
+  bool _compassMode = true;
 
   @override
   void initState() {
@@ -48,11 +51,13 @@ class _LiveNavigationState extends State<LiveNavigation> {
     _mapController = MapController();
     _startLiveTracking();
     _startLocationUpdates();
+    _startCompassTracking();
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
+    _compassStream?.cancel();
     _routeUpdateTimer?.cancel();
     _locationUpdateTimer?.cancel();
     super.dispose();
@@ -63,6 +68,23 @@ class _LiveNavigationState extends State<LiveNavigation> {
       const Duration(seconds: 10),
       (_) => _updateLocationInDatabase(),
     );
+  }
+
+  void _startCompassTracking() {
+    _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
+      if (_compassMode && _currentDriverLocation != null) {
+        double heading = event.heading ?? 0;
+        
+        // تحويل الاتجاه من 0-360 درجة إلى راديان للخريطة
+        // نستخدم القيمة السالبة لأن الدوران في الخريطة عكس عقارب الساعة
+        double rotation = -heading * (3.141592653589793 / 180.0);
+
+        // تدوير الخريطة بناءً على اتجاه الجهاز
+        _mapController?.rotate(rotation);
+        
+        debugPrint('🧭 Compass heading: ${heading.toStringAsFixed(1)}°');
+      }
+    });
   }
 
   Future<void> _updateLocationInDatabase() async {
@@ -120,7 +142,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
             _currentDriverLocation = newLocation;
           });
 
-          _mapController?.move(newLocation, 16.0);
+          _mapController?.move(newLocation, 17.0);
           
           final distanceToDestination = _calculateDistance(
             newLocation,
@@ -250,7 +272,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 boundsOptions: const FitBoundsOptions(
                   padding: EdgeInsets.all(50.0),
                 ),
-                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                interactiveFlags: _compassMode 
+                    ? InteractiveFlag.all 
+                    : InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
               children: [
                 TileLayer(
@@ -406,6 +430,85 @@ class _LiveNavigationState extends State<LiveNavigation> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            Positioned(
+              top: 130,
+              right: 16,
+              child: Column(
+                children: [
+                  // زر تبديل وضع البوصلة
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _compassMode 
+                            ? const Color(0xFF2196F3) 
+                            : const Color(0xFFB7A447).withOpacity(0.3),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.explore,
+                        color: _compassMode 
+                            ? const Color(0xFF2196F3) 
+                            : Colors.white70,
+                        size: 28,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _compassMode = !_compassMode;
+                          if (!_compassMode) {
+                            // إعادة تعيين دوران الخريطة عند إيقاف وضع البوصلة
+                            _mapController?.rotate(0);
+                          }
+                        });
+                      },
+                      tooltip: _compassMode 
+                          ? 'تعطيل وضع البوصلة' 
+                          : 'تفعيل وضع البوصلة',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // زر العودة إلى الموقع الحالي
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFB7A447).withOpacity(0.3),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.my_location,
+                        color: Colors.white70,
+                        size: 28,
+                      ),
+                      onPressed: () {
+                        if (_currentDriverLocation != null) {
+                          _mapController?.move(_currentDriverLocation!, 16.0);
+                        }
+                      },
+                      tooltip: 'العودة إلى موقعي',
+                    ),
+                  ),
+                ],
               ),
             ),
             Positioned(

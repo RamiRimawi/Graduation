@@ -446,23 +446,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                                 ),
                               ),
                               Text(
-                                widget.locationLabel,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              const Text(
-                                'Address',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              Text(
                                 widget.address,
                                 style: const TextStyle(
                                   color: Colors.white,
