@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../supabase_config.dart';
-import 'sidebar.dart'; // نفس الشريط الجانبي
+import 'sidebar.dart'; 
 import 'delivery_live_popup.dart';
 
 class DeliveryPage extends StatefulWidget {
@@ -228,7 +228,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
   }
 }
 
-class _DeliveryCard extends StatelessWidget {
+class _DeliveryCard extends StatefulWidget {
   final String name;
   final String? profileImage;
   final bool isIdle;
@@ -242,75 +242,122 @@ class _DeliveryCard extends StatelessWidget {
   });
 
   @override
+  State<_DeliveryCard> createState() => _DeliveryCardState();
+}
+
+class _DeliveryCardState extends State<_DeliveryCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 190,
-        height: 210,
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4)),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 55,
-                  backgroundImage: profileImage != null && profileImage!.isNotEmpty
-                      ? NetworkImage(profileImage!)
-                      : null,
-                  backgroundColor: isIdle ? Colors.grey : const Color(0xFF67CD67),
-                  child: profileImage == null || profileImage!.isEmpty
-                      ? Text(
-                          name[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text(
-                    name,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.roboto(
-                      color: isIdle ? Colors.white70 : Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    final hoverEnabled = !widget.isIdle && widget.onTap != null;
+    final scale = hoverEnabled && _hovered ? 1.05 : 1.0;
+    final avatarScale = hoverEnabled && _hovered ? 1.08 : 1.0;
+
+    return MouseRegion(
+      cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: hoverEnabled ? (_) => setState(() => _hovered = true) : null,
+      onExit: hoverEnabled ? (_) => setState(() => _hovered = false) : null,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: scale,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: Container(
+            width: 190,
+            height: 210,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(16),
+                border: hoverEnabled && _hovered
+                  ? Border.all(color: const Color(0xFFDADADA).withOpacity(0.8), width: 2)
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black38.withOpacity(_hovered && hoverEnabled ? 0.6 : 0.45),
+                  blurRadius: _hovered && hoverEnabled ? 14 : 8,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
-            // نقطة خضراء للـ active
-            if (!isIdle)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF67CD67),
-                    shape: BoxShape.circle,
-                  ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: avatarScale,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: hoverEnabled && _hovered
+                                  ? const Color(0xFFDADADA).withOpacity(0.7)
+                                  : Colors.transparent,
+                              blurRadius: hoverEnabled && _hovered ? 28 : 0,
+                              spreadRadius: hoverEnabled && _hovered ? 4 : 0,
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 55,
+                          backgroundImage: widget.profileImage != null && widget.profileImage!.isNotEmpty
+                              ? NetworkImage(widget.profileImage!)
+                              : null,
+                          backgroundColor: widget.isIdle ? Colors.grey : const Color(0xFF67CD67),
+                          child: widget.profileImage == null || widget.profileImage!.isEmpty
+                              ? Text(
+                                  widget.name[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        widget.name,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.roboto(
+                          color: widget.isIdle ? Colors.white70 : Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-          ],
+                // نقطة خضراء للـ active
+                if (!widget.isIdle)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF67CD67),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
