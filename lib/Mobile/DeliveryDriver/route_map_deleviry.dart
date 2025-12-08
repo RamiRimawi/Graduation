@@ -102,6 +102,15 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     _getShortestRoute(_fallbackDriverLocation);
   }
 
+  double _calculateZoomByDistance(double distanceKm) {
+    // المسافة بالكيلومتر -> مستوى الزوم المناسب
+    if (distanceKm < 1) return 17.0;      // قريب جداً - زوم عالي
+    if (distanceKm < 5) return 15.0;      // قريب - زوم متوسط
+    if (distanceKm < 20) return 13.0;     // متوسط - زوم عادي
+    if (distanceKm < 50) return 11.0;     // بعيد - زوم منخفض
+    return 9.0;                           // بعيد جداً - زوم منخفض جداً
+  }
+
   Future<void> _getShortestRoute(LatLng startPoint) async {
     try {
       final endPoint = LatLng(widget.latitude, widget.longitude);
@@ -134,12 +143,23 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
           distance = (route['distance'] as num).toDouble() / 1000; // Convert to km
           duration = (route['duration'] as num).toDouble() / 60; // Convert to minutes
 
+
+          // حساب الزوم المناسب بناءً على المسافة
+          final appropriateZoom = _calculateZoomByDistance(distance);
+      
           setState(() {
             _mapLoading = false;
           });
 
-          debugPrint('Route calculated: $distance km, $duration min');
+          // تطبيق الزوم الذكي
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted && _mapController != null && deliveryDriverLocation != null) {
+              _mapController!.move(deliveryDriverLocation!, appropriateZoom);
+              debugPrint('🔍 Zoom adjusted to $appropriateZoom for distance $distance km');
+            }
+          });
         }
+          debugPrint('Route calculated: $distance km, $duration min');
       }
     } catch (e) {
       debugPrint('Error getting route: $e');
@@ -178,7 +198,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: deliveryDriverLocation ?? deliveryLocation,
-                initialZoom: 12.0,
+                initialZoom: 14.0,
                 minZoom: 8.0,
                 maxZoom: 18.0,
                 // Restrict strictly to Palestine area
