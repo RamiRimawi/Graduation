@@ -235,7 +235,12 @@ class _LiveNavigationState extends State<LiveNavigation> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Close live_navigation
+              Navigator.pop(context); // Close route_map_deleviry
+              Navigator.pop(context); // Return to deleviry_detail
+            },
             child: const Text(
               'OK',
               style: TextStyle(color: Color(0xFFB7A447)),

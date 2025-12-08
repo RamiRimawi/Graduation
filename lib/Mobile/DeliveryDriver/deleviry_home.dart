@@ -159,7 +159,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
+                      horizontal: 16,
                       vertical: 14,
                     ),
                     child: Column(
@@ -172,7 +172,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                               'ID #',
                               style: TextStyle(
                                 color: const Color(0xFFB7A447),
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -181,7 +181,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                               'Customer Name',
                               style: TextStyle(
                                 color: const Color(0xFFB7A447),
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -198,7 +198,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                               '${customer['orderId']}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 32,
+                                fontSize: 23,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -210,7 +210,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                                 customer['name'],
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 26,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -220,8 +220,8 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
 
                             // PRODUCT BOX — bigger
                             Container(
-                              width: 89,
-                              height: 89,
+                              width: 84,
+                              height: 84,
                               decoration: BoxDecoration(
                                 color: const Color(0xFF262626),
                                 borderRadius: BorderRadius.circular(18),
@@ -233,7 +233,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                                     '${customer['inventory']}',
                                     style: const TextStyle(
                                       color: Color(0xFFFFEFFF),
-                                      fontSize: 30,
+                                      fontSize: 25,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -242,7 +242,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                                     'inventory #',
                                     style: TextStyle(
                                       color: const Color(0xFFB7A447),
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
