@@ -5,11 +5,13 @@ import 'create_stock_out_page.dart';
 import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_out_previous.dart';
+import 'order_detail_popup.dart';
 
 class OrderReceiveRow {
   final String id;
   final String customerName;
   final String type;
+  final String orderStatus;
   final String createdBy;
   final String time;
   final String date;
@@ -17,9 +19,30 @@ class OrderReceiveRow {
     required this.id,
     required this.customerName,
     required this.type,
+    required this.orderStatus,
     required this.createdBy,
     required this.time,
     required this.date,
+  });
+}
+
+class _OrderDetailData {
+  final String customerName;
+  final String? city;
+  final String? address;
+  final DateTime orderDate;
+  final num? taxPercent;
+  final num? totalPrice;
+  final List<Map<String, dynamic>> products;
+
+  _OrderDetailData({
+    required this.customerName,
+    required this.orderDate,
+    required this.products,
+    this.city,
+    this.address,
+    this.taxPercent,
+    this.totalPrice,
   });
 }
 
@@ -87,6 +110,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
           id: id,
           customerName: customerName,
           type: type,
+          orderStatus: status,
           createdBy: createdBy,
           time: time,
           date: date,
@@ -243,11 +267,6 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                             },
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        _RoundIconButton(
-                          icon: Icons.filter_alt_rounded,
-                          onTap: () {},
-                        ),
                       ],
                     ),
 
@@ -296,78 +315,81 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                                           setState(() => hoveredIndex = i),
                                       onExit: (_) =>
                                           setState(() => hoveredIndex = null),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 14,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: bg,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
+                                      child: InkWell(
+                                        onTap: () => _openOrderPopup(o),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
                                           ),
-                                          border: Border.all(
-                                            color: hoveredIndex == i
-                                                ? const Color(0xFF50B2E7)
-                                                : Colors.transparent,
-                                            width: 2,
+                                          margin: const EdgeInsets.only(
+                                            bottom: 8,
                                           ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.id,
-                                                style: _cellStyle(),
-                                              ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
                                             ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                o.customerName,
-                                                style: _cellStyle(),
-                                              ),
+                                            border: Border.all(
+                                              color: hoveredIndex == i
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                              width: 2,
                                             ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.type,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.createdBy,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.time,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Align(
-                                                alignment:
-                                                    Alignment.centerRight,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
                                                 child: Text(
-                                                  o.date,
+                                                  o.id,
                                                   style: _cellStyle(),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(
+                                                  o.customerName,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.type,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.createdBy,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.time,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerRight,
+                                                  child: Text(
+                                                    o.date,
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );
@@ -396,78 +418,81 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                                       ),
                                       onExit: (_) =>
                                           setState(() => hoveredIndex = null),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 14,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: bg,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
+                                      child: InkWell(
+                                        onTap: () => _openOrderPopup(o),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
                                           ),
-                                          border: Border.all(
-                                            color: hoveredIndex == i + 100
-                                                ? const Color(0xFF50B2E7)
-                                                : Colors.transparent,
-                                            width: 2,
+                                          margin: const EdgeInsets.only(
+                                            bottom: 8,
                                           ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.id,
-                                                style: _cellStyle(),
-                                              ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
                                             ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Text(
-                                                o.customerName,
-                                                style: _cellStyle(),
-                                              ),
+                                            border: Border.all(
+                                              color: hoveredIndex == i + 100
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                              width: 2,
                                             ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.type,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.createdBy,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Text(
-                                                o.time,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Align(
-                                                alignment:
-                                                    Alignment.centerRight,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
                                                 child: Text(
-                                                  o.date,
+                                                  o.id,
                                                   style: _cellStyle(),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(
+                                                  o.customerName,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.type,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.createdBy,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  o.time,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerRight,
+                                                  child: Text(
+                                                    o.date,
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );
@@ -488,6 +513,135 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
 
   TextStyle _cellStyle() =>
       const TextStyle(color: Colors.white, fontWeight: FontWeight.w600);
+
+  Future<void> _openOrderPopup(OrderReceiveRow order) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black26,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final detail = await _fetchOrderDetail(order.id);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      OrderDetailPopup.show(
+        context,
+        orderType: 'out',
+        status: _mapStatus(order.orderStatus),
+        products: detail.products,
+        partyName: detail.customerName,
+        location: _composeLocation(detail.city, detail.address),
+        orderDate: detail.orderDate,
+        taxPercent: detail.taxPercent,
+        totalPrice: detail.totalPrice,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load order details: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<_OrderDetailData> _fetchOrderDetail(String orderId) async {
+    final parsedId = int.tryParse(orderId);
+    final order = await supabase
+        .from('customer_order')
+        .select(
+          'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
+        )
+        .eq('customer_order_id', parsedId ?? orderId)
+        .maybeSingle();
+
+    if (order == null) {
+      throw Exception('Order not found');
+    }
+
+    final items = await supabase
+        .from('customer_order_description')
+        .select(
+          'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+        )
+        .eq('customer_order_id', parsedId ?? orderId);
+
+    final products = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final product = item['product'] as Map<String, dynamic>?;
+      final brand = product?['brand'] as Map<String, dynamic>?;
+      final unit = product?['unit'] as Map<String, dynamic>?;
+      final quantity = (item['quantity'] ?? 0) as num;
+      final total = (item['total_price'] ?? 0) as num;
+      final price = (product?['selling_price'] ?? 0) as num;
+
+      products.add({
+        'id': item['product_id']?.toString() ?? '-',
+        'name': product?['name'] ?? 'Unknown',
+        'brand': brand?['name'] ?? '-',
+        'price': _formatMoney(price),
+        'quantity': quantity,
+        'total': _formatMoney(
+          total == 0 && price != 0
+              ? price * (quantity == 0 ? 1 : quantity)
+              : total,
+        ),
+        'unit_name': unit?['unit_name'] ?? 'pcs',
+      });
+    }
+
+    final orderDateRaw = order['order_date']?.toString();
+    final orderDate = orderDateRaw != null && orderDateRaw.isNotEmpty
+        ? DateTime.parse(orderDateRaw)
+        : DateTime.now();
+
+    return _OrderDetailData(
+      customerName: (order['customer']?['name'] ?? 'Unknown') as String,
+      city: order['customer']?['customer_city']?['name'] as String?,
+      address: order['customer']?['address'] as String?,
+      orderDate: orderDate,
+      taxPercent: order['tax_percent'] as num?,
+      totalPrice: order['total_balance'] as num?,
+      products: products,
+    );
+  }
+
+  String _mapStatus(String orderStatus) {
+    switch (orderStatus) {
+      case 'Updated':
+        return 'UPDATE';
+      case 'Hold':
+        return 'HOLD';
+      default:
+        return 'NEW';
+    }
+  }
+
+  String _composeLocation(String? city, String? address) {
+    if ((city == null || city.isEmpty) &&
+        (address == null || address.isEmpty)) {
+      return '-';
+    }
+    if (city != null &&
+        city.isNotEmpty &&
+        address != null &&
+        address.isNotEmpty) {
+      return '$city - $address';
+    }
+    return city?.isNotEmpty == true ? city! : address ?? '-';
+  }
+
+  String _formatMoney(num value) {
+    final asDouble = value.toDouble();
+    if (asDouble == 0) return '-';
+    return '${asDouble.toStringAsFixed(2)}\$';
+  }
 }
 
 // 🔹 Tabs

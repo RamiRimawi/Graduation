@@ -42,7 +42,7 @@ class _StockInPageState extends State<StockInPage> {
 
   Future<void> _loadTodayOrders() async {
     setState(() => isLoading = true);
-    
+
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
@@ -64,21 +64,22 @@ class _StockInPageState extends State<StockInPage> {
           .order('order_date', ascending: false);
 
       final List<Map<String, dynamic>> allOrders = [];
-      
+
       for (var order in response) {
         final orderDate = DateTime.parse(order['order_date']);
         final status = order['order_status'];
-        
+
         // Include Sent and Updated regardless of date
         // Include Accepted and Rejected only if same day
         bool shouldInclude = false;
-        
+
         if (status == 'Sent' || status == 'Updated') {
           shouldInclude = true;
         } else if (status == 'Accepted' || status == 'Rejected') {
-          shouldInclude = orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
+          shouldInclude =
+              orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
         }
-        
+
         if (shouldInclude) {
           allOrders.add({
             'id': order['order_id'].toString(),
@@ -97,9 +98,9 @@ class _StockInPageState extends State<StockInPage> {
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading orders: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading orders: $e')));
       }
     }
   }
@@ -204,15 +205,14 @@ class _StockInPageState extends State<StockInPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
-                                            const StockInPage(),
+                                        builder: (_) => const StockInPage(),
                                       ),
                                     );
                                   } else if (index == 1) {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
+                                        builder: (_) =>
                                             const OrdersStockInReceivesPage(),
                                       ),
                                     );
@@ -264,98 +264,108 @@ class _StockInPageState extends State<StockInPage> {
                                       ),
                                     )
                                   : filteredOrders.isEmpty
-                                      ? Center(
-                                          child: Text(
-                                            searchQuery.isEmpty
-                                                ? 'No orders for today'
-                                                : 'No suppliers found matching "$searchQuery"',
-                                            style: TextStyle(
-                                              color: AppColors.white.withOpacity(0.6),
-                                              fontSize: 16,
-                                            ),
+                                  ? Center(
+                                      child: Text(
+                                        searchQuery.isEmpty
+                                            ? 'No orders for today'
+                                            : 'No suppliers found matching "$searchQuery"',
+                                        style: TextStyle(
+                                          color: AppColors.white.withOpacity(
+                                            0.6,
                                           ),
-                                        )
-                                      : ListView.separated(
-                                          itemCount: filteredOrders.length,
-                                          separatorBuilder: (_, __) =>
-                                              const SizedBox(height: 10),
-                                          itemBuilder: (context, i) {
-                                            final row = filteredOrders[i];
-                                            final bg = i.isEven
-                                                ? AppColors.card
-                                                : AppColors.cardAlt;
-                                            final isHovered = hoveredRow == i;
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      itemCount: filteredOrders.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 10),
+                                      itemBuilder: (context, i) {
+                                        final row = filteredOrders[i];
+                                        final bg = i.isEven
+                                            ? AppColors.card
+                                            : AppColors.cardAlt;
+                                        final isHovered = hoveredRow == i;
 
-                                            return MouseRegion(
-                                              onEnter: (_) =>
-                                                  setState(() => hoveredRow = i),
-                                              onExit: (_) =>
-                                                  setState(() => hoveredRow = null),
-                                              child: AnimatedContainer(
-                                                duration: const Duration(
-                                                  milliseconds: 200,
-                                                ),
-                                                height: 64,
-                                                decoration: BoxDecoration(
-                                                  color: bg,
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  border: Border.all(
-                                                    color: isHovered
-                                                        ? AppColors.blue
-                                                        : Colors.transparent,
-                                                    width: 1.5,
+                                        return MouseRegion(
+                                          onEnter: (_) =>
+                                              setState(() => hoveredRow = i),
+                                          onExit: (_) =>
+                                              setState(() => hoveredRow = null),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            height: 64,
+                                            decoration: BoxDecoration(
+                                              color: bg,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: isHovered
+                                                    ? AppColors.blue
+                                                    : Colors.transparent,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 20,
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      row['id'] ?? '',
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 20,
+                                                Expanded(
+                                                  flex: 5,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      row['name'] ?? '',
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.spaceBetween,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  children: [
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Align(
-                                                        alignment: Alignment.centerLeft,
-                                                        child: Text(
-                                                          row['id'] ?? '',
-                                                          style: const TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w800,
-                                                          ),
-                                                        ),
-                                                      ),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: _StatusChip(
+                                                      status:
+                                                          row['status'] ?? '',
                                                     ),
-                                                    Expanded(
-                                                      flex: 5,
-                                                      child: Align(
-                                                        alignment: Alignment.centerLeft,
-                                                        child: Text(
-                                                          row['name'] ?? '',
-                                                          style: const TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 3,
-                                                      child: Align(
-                                                        alignment: Alignment.centerRight,
-                                                        child: _StatusChip(
-                                                          status: row['status'] ?? '',
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                  ),
                                                 ),
-                                              ),
-                                            );
-                                          },
-                                        ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),

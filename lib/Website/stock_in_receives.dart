@@ -32,7 +32,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
   }
 
   String _formatTime(DateTime date) {
-    final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    final hour = date.hour > 12
+        ? date.hour - 12
+        : (date.hour == 0 ? 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
@@ -62,7 +64,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
               name
             )
           ''')
-          .or('order_status.eq.Accepted,order_status.eq.Rejected,order_status.eq.Updated,order_status.eq.Hold')
+          .or(
+            'order_status.eq.Accepted,order_status.eq.Rejected,order_status.eq.Updated,order_status.eq.Hold',
+          )
           .order('order_date', ascending: false);
 
       final orders = (response as List).cast<Map<String, dynamic>>();
@@ -73,7 +77,11 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
 
       for (var order in orders) {
         final orderDate = DateTime.parse(order['order_date']);
-        final orderDay = DateTime(orderDate.year, orderDate.month, orderDate.day);
+        final orderDay = DateTime(
+          orderDate.year,
+          orderDate.month,
+          orderDate.day,
+        );
         final status = order['order_status'];
 
         // For Hold status, always include
@@ -83,7 +91,8 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
         }
 
         // For Accepted and Rejected, only show if same day
-        if ((status == 'Accepted' || status == 'Rejected') && orderDay == today) {
+        if ((status == 'Accepted' || status == 'Rejected') &&
+            orderDay == today) {
           regularOrders.add(order);
           continue;
         }
@@ -113,7 +122,8 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
         filteredOrders = allOrders;
       } else {
         filteredOrders = allOrders.where((order) {
-          final supplierName = order['supplier']['name']?.toString().toLowerCase() ?? '';
+          final supplierName =
+              order['supplier']['name']?.toString().toLowerCase() ?? '';
           return supplierName.startsWith(query.toLowerCase());
         }).toList();
       }
@@ -158,12 +168,12 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                               onChanged: (i) {
                                 if (i == 0) {
                                   // Stock-out
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
                                       builder: (_) => const OrdersPage(),
-                                      ),
-                                    );
+                                    ),
+                                  );
                                 } else {
                                   setState(() => stockTab = i);
                                 }
@@ -203,12 +213,12 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
 
                           if (i == 0) {
                             // 👉 Today (Stock-in الرئيسية)
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
                                 builder: (_) => const StockInPage(),
-                                ),
-                              );
+                              ),
+                            );
                           } else if (i == 2) {
                             // 👉 Previous
                             Navigator.pushReplacement(
@@ -236,11 +246,6 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                             onChanged: _filterOrders,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        _RoundIconButton(
-                          icon: Icons.filter_alt_rounded,
-                          onTap: () {},
-                        ),
                       ],
                     ),
 
@@ -264,14 +269,18 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                 ...List.generate(filteredOrders.length, (i) {
                                   final order = filteredOrders[i];
                                   final orderId = order['order_id'].toString();
-                                  final supplierName = order['supplier']['name'] ?? 'Unknown';
+                                  final supplierName =
+                                      order['supplier']['name'] ?? 'Unknown';
                                   final status = order['order_status'] ?? '';
-                                  final createdBy = order['last_tracing_by'] ?? 'System';
-                                  
-                                  final orderDate = DateTime.parse(order['order_date']);
+                                  final createdBy =
+                                      order['last_tracing_by'] ?? 'System';
+
+                                  final orderDate = DateTime.parse(
+                                    order['order_date'],
+                                  );
                                   final time = _formatTime(orderDate);
                                   final date = _formatDate(orderDate);
-                                  
+
                                   // Determine type based on status
                                   String type = 'in (NEW)';
                                   if (status == 'Updated') {
@@ -288,10 +297,14 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                       : const Color(0xFF262626);
 
                                   return MouseRegion(
-                                    onEnter: (_) => setState(() => hoveredIndex = i),
-                                    onExit: (_) => setState(() => hoveredIndex = null),
+                                    onEnter: (_) =>
+                                        setState(() => hoveredIndex = i),
+                                    onExit: (_) =>
+                                        setState(() => hoveredIndex = null),
                                     child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
                                       margin: const EdgeInsets.only(bottom: 8),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -311,29 +324,47 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                         children: [
                                           Expanded(
                                             flex: 2,
-                                            child: Text(orderId, style: _cellStyle()),
+                                            child: Text(
+                                              orderId,
+                                              style: _cellStyle(),
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 3,
-                                            child: Text(supplierName, style: _cellStyle()),
+                                            child: Text(
+                                              supplierName,
+                                              style: _cellStyle(),
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(type, style: _cellStyle()),
+                                            child: Text(
+                                              type,
+                                              style: _cellStyle(),
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(createdBy, style: _cellStyle()),
+                                            child: Text(
+                                              createdBy,
+                                              style: _cellStyle(),
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Text(time, style: _cellStyle()),
+                                            child: Text(
+                                              time,
+                                              style: _cellStyle(),
+                                            ),
                                           ),
                                           Expanded(
                                             flex: 2,
                                             child: Align(
                                               alignment: Alignment.centerRight,
-                                              child: Text(date, style: _cellStyle()),
+                                              child: Text(
+                                                date,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -357,11 +388,16 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                   // on hold list
                                   ...List.generate(onHoldOrders.length, (i) {
                                     final order = onHoldOrders[i];
-                                    final orderId = order['order_id'].toString();
-                                    final supplierName = order['supplier']['name'] ?? 'Unknown';
-                                    final createdBy = order['last_tracing_by'] ?? 'System';
-                                    
-                                    final orderDate = DateTime.parse(order['order_date']);
+                                    final orderId = order['order_id']
+                                        .toString();
+                                    final supplierName =
+                                        order['supplier']['name'] ?? 'Unknown';
+                                    final createdBy =
+                                        order['last_tracing_by'] ?? 'System';
+
+                                    final orderDate = DateTime.parse(
+                                      order['order_date'],
+                                    );
                                     final time = _formatTime(orderDate);
                                     final date = _formatDate(orderDate);
 
@@ -371,18 +407,27 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                         : const Color(0xFF262626);
 
                                     return MouseRegion(
-                                      onEnter: (_) => setState(() => hoveredIndex = i + 1000),
-                                      onExit: (_) => setState(() => hoveredIndex = null),
+                                      onEnter: (_) => setState(
+                                        () => hoveredIndex = i + 1000,
+                                      ),
+                                      onExit: (_) =>
+                                          setState(() => hoveredIndex = null),
                                       child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 200),
-                                        margin: const EdgeInsets.only(bottom: 8),
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 16,
                                           vertical: 14,
                                         ),
                                         decoration: BoxDecoration(
                                           color: bg,
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                           border: Border.all(
                                             color: hoveredIndex == i + 1000
                                                 ? const Color(0xFF50B2E7)
@@ -394,29 +439,48 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                           children: [
                                             Expanded(
                                               flex: 2,
-                                              child: Text(orderId, style: _cellStyle()),
+                                              child: Text(
+                                                orderId,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                             Expanded(
                                               flex: 3,
-                                              child: Text(supplierName, style: _cellStyle()),
+                                              child: Text(
+                                                supplierName,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                             Expanded(
                                               flex: 2,
-                                              child: Text('in (HOLD)', style: _cellStyle()),
+                                              child: Text(
+                                                'in (HOLD)',
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                             Expanded(
                                               flex: 2,
-                                              child: Text(createdBy, style: _cellStyle()),
+                                              child: Text(
+                                                createdBy,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                             Expanded(
                                               flex: 2,
-                                              child: Text(time, style: _cellStyle()),
+                                              child: Text(
+                                                time,
+                                                style: _cellStyle(),
+                                              ),
                                             ),
                                             Expanded(
                                               flex: 2,
                                               child: Align(
-                                                alignment: Alignment.centerRight,
-                                                child: Text(date, style: _cellStyle()),
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: Text(
+                                                  date,
+                                                  style: _cellStyle(),
+                                                ),
                                               ),
                                             ),
                                           ],

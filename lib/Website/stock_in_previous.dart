@@ -69,7 +69,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
       // الحصول على المخزن من batch إذا كان موجود، وإلا N/A
       for (var order in orders) {
         String inventoryLocation = 'N/A';
-        
+
         try {
           final descriptionResponse = await supabase
               .from('supplier_order_description')
@@ -78,7 +78,8 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
               .limit(1)
               .maybeSingle();
 
-          if (descriptionResponse != null && descriptionResponse['product_id'] != null) {
+          if (descriptionResponse != null &&
+              descriptionResponse['product_id'] != null) {
             final batchResponse = await supabase
                 .from('batch')
                 .select('inventory:inventory_id(inventory_location)')
@@ -86,16 +87,17 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                 .limit(1)
                 .maybeSingle();
 
-            if (batchResponse != null && 
+            if (batchResponse != null &&
                 batchResponse['inventory'] is Map &&
                 batchResponse['inventory']['inventory_location'] != null) {
-              inventoryLocation = batchResponse['inventory']['inventory_location'];
+              inventoryLocation =
+                  batchResponse['inventory']['inventory_location'];
             }
           }
         } catch (e) {
           print('Error fetching inventory for order ${order['order_id']}: $e');
         }
-        
+
         order['inventory_name'] = inventoryLocation;
       }
 
@@ -117,7 +119,8 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
         filteredOrders = allOrders;
       } else {
         filteredOrders = allOrders.where((order) {
-          final supplierName = order['supplier']['name']?.toString().toLowerCase() ?? '';
+          final supplierName =
+              order['supplier']['name']?.toString().toLowerCase() ?? '';
           return supplierName.startsWith(query.toLowerCase());
         }).toList();
       }
@@ -248,15 +251,14 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
-                                            const StockInPage(),
-                                        ),
-                                      );
+                                        builder: (_) => const StockInPage(),
+                                      ),
+                                    );
                                   } else if (index == 1) {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
+                                        builder: (_) =>
                                             const OrdersStockInReceivesPage(),
                                       ),
                                     );
@@ -264,11 +266,10 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (_) =>
-                                            const StockInPage(),
-                                        ),
-                                      );
-                                    }
+                                        builder: (_) => const StockInPage(),
+                                      ),
+                                    );
+                                  }
                                 },
                               ),
                             ),
@@ -306,111 +307,124 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                                       ),
                                     )
                                   : filteredOrders.isEmpty
-                                      ? const Center(
-                                          child: Text(
-                                            'No previous orders found',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 16,
+                                  ? const Center(
+                                      child: Text(
+                                        'No previous orders found',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      itemCount: filteredOrders.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 6),
+                                      itemBuilder: (context, i) {
+                                        final order = filteredOrders[i];
+                                        final orderId = order['order_id']
+                                            .toString();
+                                        final supplierName =
+                                            order['supplier']['name'] ??
+                                            'Unknown';
+                                        final inventoryName =
+                                            order['inventory_name'] ?? '-';
+
+                                        final orderDate = DateTime.parse(
+                                          order['order_date'],
+                                        );
+                                        final date = _formatDate(orderDate);
+
+                                        final bg = i.isEven
+                                            ? AppColors.card
+                                            : AppColors.cardAlt;
+                                        final isHovered = hoveredRow == i;
+
+                                        return MouseRegion(
+                                          onEnter: (_) =>
+                                              setState(() => hoveredRow = i),
+                                          onExit: (_) =>
+                                              setState(() => hoveredRow = null),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: bg,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: isHovered
+                                                  ? Border.all(
+                                                      color: AppColors.blue,
+                                                      width: 2,
+                                                    )
+                                                  : null,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 12,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    orderId,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 4,
+                                                  child: Text(
+                                                    supplierName,
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 8,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      inventoryName,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerRight,
+                                                    child: Text(
+                                                      date,
+                                                      style: const TextStyle(
+                                                        color: AppColors.gold,
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        )
-                                      : ListView.separated(
-                                          itemCount: filteredOrders.length,
-                                          separatorBuilder: (_, __) =>
-                                              const SizedBox(height: 6),
-                                          itemBuilder: (context, i) {
-                                            final order = filteredOrders[i];
-                                            final orderId = order['order_id'].toString();
-                                            final supplierName = order['supplier']['name'] ?? 'Unknown';
-                                            final inventoryName = order['inventory_name'] ?? '-';
-                                            
-                                            final orderDate = DateTime.parse(order['order_date']);
-                                            final date = _formatDate(orderDate);
-
-                                            final bg = i.isEven
-                                                ? AppColors.card
-                                                : AppColors.cardAlt;
-                                            final isHovered = hoveredRow == i;
-
-                                            return MouseRegion(
-                                              onEnter: (_) =>
-                                                  setState(() => hoveredRow = i),
-                                              onExit: (_) =>
-                                                  setState(() => hoveredRow = null),
-                                              child: AnimatedContainer(
-                                                duration: const Duration(
-                                                  milliseconds: 200,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: bg,
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  border: isHovered
-                                                      ? Border.all(
-                                                          color: AppColors.blue,
-                                                          width: 2,
-                                                        )
-                                                      : null,
-                                                ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 12,
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Text(
-                                                        orderId,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w800,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 4,
-                                                      child: Text(
-                                                        supplierName,
-                                                        style: const TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 8,
-                                                      child: Align(
-                                                        alignment: Alignment.centerLeft,
-                                                        child: Text(
-                                                          inventoryName,
-                                                          style: const TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w700,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 3,
-                                                      child: Align(
-                                                        alignment: Alignment.centerRight,
-                                                        child: Text(
-                                                          date,
-                                                          style: const TextStyle(
-                                                            color: AppColors.gold,
-                                                            fontSize: 15,
-                                                            fontWeight: FontWeight.w700,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
+                                        );
+                                      },
+                                    ),
                             ),
                           ],
                         ),

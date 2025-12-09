@@ -5,6 +5,7 @@ import 'create_stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_out_receives.dart';
 import 'stock_out_previous.dart';
+import 'order_detail_popup.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -30,30 +31,75 @@ class OrderRow {
   final String id;
   final String name;
   final String status;
-  OrderRow({required this.id, required this.name, required this.status});
+  final String orderStatus;
+  OrderRow({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.orderStatus,
+  });
 }
 
+class _OrderDetailData {
+  final String customerName;
+  final String? city;
+  final String? address;
+  final DateTime orderDate;
+  final num? taxPercent;
+  final num? totalPrice;
+  final List<Map<String, dynamic>> products;
+
+  _OrderDetailData({
+    required this.customerName,
+    required this.orderDate,
+    required this.products,
+    this.city,
+    this.address,
+    this.taxPercent,
+    this.totalPrice,
+  });
+}
+
+/* ----------------------- FILTER POPUP ----------------------- */
+
 class _OrdersPageState extends State<OrdersPage> {
+  static const Color _filterGold = Color(0xFFF9D949);
   int stockTab = 0;
   int? hoveredRow;
   bool _loading = true;
   String? _error;
   List<OrderRow> _orders = [];
   String _searchQuery = '';
+  Set<String> _selectedStatuses = {};
+  final GlobalKey _filterButtonKey = GlobalKey();
+  OverlayEntry? _filterOverlay;
 
   List<OrderRow> get _filteredOrders {
-    if (_searchQuery.isEmpty) return _orders;
-    final q = _searchQuery.toLowerCase();
-    // Prefix match: equivalent to SQL LIKE 'q%'
-    return _orders
-        .where((o) => o.name.toLowerCase().startsWith(q))
-        .toList(growable: false);
+    Iterable<OrderRow> filtered = _orders;
+
+    if (_selectedStatuses.isNotEmpty) {
+      filtered = filtered.where((o) => _selectedStatuses.contains(o.status));
+    }
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((o) => o.name.toLowerCase().startsWith(q));
+    }
+
+    return filtered.toList(growable: false);
   }
 
   @override
   void initState() {
     super.initState();
     _fetchOrders();
+  }
+
+  @override
+  void dispose() {
+    _filterOverlay?.remove();
+    _filterOverlay = null;
+    super.dispose();
   }
 
   Future<void> _fetchOrders() async {
@@ -104,7 +150,14 @@ class _OrdersPageState extends State<OrdersPage> {
         // Convert "Pinned" to "Sended to manager" for display
         final displayStatus = status == 'Pinned' ? 'Sended to manager' : status;
 
-        list.add(OrderRow(id: id, name: customer, status: displayStatus));
+        list.add(
+          OrderRow(
+            id: id,
+            name: customer,
+            status: displayStatus,
+            orderStatus: status,
+          ),
+        );
       }
 
       setState(() {
@@ -118,6 +171,177 @@ class _OrdersPageState extends State<OrdersPage> {
         _loading = false;
       });
     }
+  }
+
+  /* ----------------------- FILTER POPUP ----------------------- */
+
+  void _toggleFilterPopup() {
+    if (_filterOverlay != null) {
+      _closeFilterPopup();
+    } else {
+      _showFilterPopup();
+    }
+  }
+
+  void _showFilterPopup() {
+    final renderBox =
+        _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    _filterOverlay = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _closeFilterPopup,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          Positioned(
+            left: offset.dx - 220 + size.width,
+            top: offset.dy + size.height + 8,
+            child: Material(
+              color: Colors.transparent,
+              child: StatefulBuilder(
+                builder: (context, setOverlayState) => GestureDetector(
+                  onTap: () {},
+                  child: Container(
+                    width: 220,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D2D2D),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black54,
+                          offset: Offset(0, 4),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 8),
+                          child: const Text(
+                            'Filter by status',
+                            style: TextStyle(
+                              color: _filterGold,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const Divider(color: Color(0xFF3D3D3D), height: 1),
+                        const SizedBox(height: 8),
+                        ..._buildStatusCheckboxes(setOverlayState),
+                        const SizedBox(height: 8),
+                        const Divider(color: Color(0xFF3D3D3D), height: 1),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                setState(() => _selectedStatuses.clear());
+                                setOverlayState(() {});
+                              },
+                              child: const Text(
+                                'Clear All',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_filterOverlay!);
+  }
+
+  List<Widget> _buildStatusCheckboxes(StateSetter setOverlayState) {
+    const statuses = [
+      'Received',
+      'Sended to manager',
+      'Prepared',
+      'Delivery',
+      'Updated',
+      'Delivered',
+    ];
+
+    return statuses.map((status) {
+      final isSelected = _selectedStatuses.contains(status);
+      return InkWell(
+        onTap: () {
+          setState(() {
+            if (isSelected) {
+              _selectedStatuses.remove(status);
+            } else {
+              _selectedStatuses.add(status);
+            }
+          });
+          setOverlayState(() {});
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: isSelected ? _filterGold : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? _filterGold : Colors.white54,
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: isSelected
+                    ? const Center(
+                        child: Icon(Icons.check, size: 14, color: Colors.black),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontSize: 13,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  void _closeFilterPopup() {
+    _filterOverlay?.remove();
+    _filterOverlay = null;
   }
 
   @override
@@ -244,9 +468,12 @@ class _OrdersPageState extends State<OrdersPage> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                _RoundIconButton(
-                                  icon: Icons.filter_alt_rounded,
-                                  onTap: () {},
+                                Container(
+                                  key: _filterButtonKey,
+                                  child: _RoundIconButton(
+                                    icon: Icons.filter_alt_rounded,
+                                    onTap: _toggleFilterPopup,
+                                  ),
                                 ),
                               ],
                             ),
@@ -285,60 +512,71 @@ class _OrdersPageState extends State<OrdersPage> {
                                               setState(() => hoveredRow = i),
                                           onExit: (_) =>
                                               setState(() => hoveredRow = null),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 200,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: bg,
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                              border: isHovered
-                                                  ? Border.all(
-                                                      color: AppColors.blue,
-                                                      width: 2,
-                                                    )
-                                                  : null,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 12,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(
-                                                    row.id,
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.w800,
+                                          child: InkWell(
+                                            onTap: () {
+                                              if (row.orderStatus ==
+                                                      'Received' ||
+                                                  row.orderStatus ==
+                                                      'Updated') {
+                                                _openOrderPopup(row);
+                                              }
+                                            },
+                                            child: AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: bg,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: isHovered
+                                                    ? Border.all(
+                                                        color: AppColors.blue,
+                                                        width: 2,
+                                                      )
+                                                    : null,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 12,
+                                                  ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: Text(
+                                                      row.id,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                Expanded(
-                                                  flex: 5,
-                                                  child: Text(
-                                                    row.name,
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.w600,
+                                                  Expanded(
+                                                    flex: 5,
+                                                    child: Text(
+                                                      row.name,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: _StatusChip(
-                                                      status: row.status,
+                                                  Expanded(
+                                                    flex: 3,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerRight,
+                                                      child: _StatusChip(
+                                                        status: row.status,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         );
@@ -357,6 +595,133 @@ class _OrdersPageState extends State<OrdersPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _openOrderPopup(OrderRow order) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black26,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final detail = await _fetchOrderDetail(order.id);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      OrderDetailPopup.show(
+        context,
+        orderType: 'out',
+        status: _mapStatus(order.orderStatus),
+        products: detail.products,
+        partyName: detail.customerName,
+        location: _composeLocation(detail.city, detail.address),
+        orderDate: detail.orderDate,
+        taxPercent: detail.taxPercent,
+        totalPrice: detail.totalPrice,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load order details: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<_OrderDetailData> _fetchOrderDetail(String orderId) async {
+    final parsedId = int.tryParse(orderId);
+    final order = await supabase
+        .from('customer_order')
+        .select(
+          'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
+        )
+        .eq('customer_order_id', parsedId ?? orderId)
+        .maybeSingle();
+
+    if (order == null) {
+      throw Exception('Order not found');
+    }
+
+    final items = await supabase
+        .from('customer_order_description')
+        .select(
+          'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+        )
+        .eq('customer_order_id', parsedId ?? orderId);
+
+    final products = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final product = item['product'] as Map<String, dynamic>?;
+      final brand = product?['brand'] as Map<String, dynamic>?;
+      final unit = product?['unit'] as Map<String, dynamic>?;
+      final quantity = (item['quantity'] ?? 0) as num;
+      final total = (item['total_price'] ?? 0) as num;
+      final price = (product?['selling_price'] ?? 0) as num;
+
+      products.add({
+        'id': item['product_id']?.toString() ?? '-',
+        'name': product?['name'] ?? 'Unknown',
+        'brand': brand?['name'] ?? '-',
+        'price': _formatMoney(price),
+        'quantity': quantity,
+        'total': _formatMoney(
+          total == 0 && price != 0
+              ? price * (quantity == 0 ? 1 : quantity)
+              : total,
+        ),
+        'unit_name': unit?['unit_name'] ?? 'pcs',
+      });
+    }
+
+    final orderDateRaw = order['order_date']?.toString();
+    final orderDate = orderDateRaw != null && orderDateRaw.isNotEmpty
+        ? DateTime.parse(orderDateRaw)
+        : DateTime.now();
+
+    return _OrderDetailData(
+      customerName: (order['customer']?['name'] ?? 'Unknown') as String,
+      city: order['customer']?['customer_city']?['name'] as String?,
+      address: order['customer']?['address'] as String?,
+      orderDate: orderDate,
+      taxPercent: order['tax_percent'] as num?,
+      totalPrice: order['total_balance'] as num?,
+      products: products,
+    );
+  }
+
+  String _mapStatus(String orderStatus) {
+    switch (orderStatus) {
+      case 'Updated':
+        return 'UPDATE';
+      default:
+        return 'NEW';
+    }
+  }
+
+  String _composeLocation(String? city, String? address) {
+    if ((city == null || city.isEmpty) &&
+        (address == null || address.isEmpty)) {
+      return '-';
+    }
+    if (city != null &&
+        city.isNotEmpty &&
+        address != null &&
+        address.isNotEmpty) {
+      return '$city - $address';
+    }
+    return city?.isNotEmpty == true ? city! : address ?? '-';
+  }
+
+  String _formatMoney(num value) {
+    final asDouble = value.toDouble();
+    if (asDouble == 0) return '-';
+    return '${asDouble.toStringAsFixed(2)}\$';
   }
 }
 
