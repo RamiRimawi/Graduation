@@ -33,12 +33,14 @@ class _OrderDetailData {
   final DateTime orderDate;
   final num? taxPercent;
   final num? totalPrice;
+  final int orderId;
   final List<Map<String, dynamic>> products;
 
   _OrderDetailData({
     required this.customerName,
     required this.orderDate,
     required this.products,
+    required this.orderId,
     this.city,
     this.address,
     this.taxPercent,
@@ -537,6 +539,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
         orderDate: detail.orderDate,
         taxPercent: detail.taxPercent,
         totalPrice: detail.totalPrice,
+        orderId: int.tryParse(order.id) ?? detail.orderId,
       );
     } catch (e) {
       if (mounted) {
@@ -608,6 +611,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
       orderDate: orderDate,
       taxPercent: order['tax_percent'] as num?,
       totalPrice: order['total_balance'] as num?,
+      orderId: parsedId ?? int.tryParse(orderId) ?? 0,
       products: products,
     );
   }

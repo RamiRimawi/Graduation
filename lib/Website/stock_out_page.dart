@@ -47,16 +47,24 @@ class _OrderDetailData {
   final DateTime orderDate;
   final num? taxPercent;
   final num? totalPrice;
+  final int orderId;
   final List<Map<String, dynamic>> products;
+  final Map<String, dynamic>? manager;
+  final Map<String, dynamic>? storageStaff;
+  final Map<String, dynamic>? deliveryDriver;
 
   _OrderDetailData({
     required this.customerName,
     required this.orderDate,
     required this.products,
+    required this.orderId,
     this.city,
     this.address,
     this.taxPercent,
     this.totalPrice,
+    this.manager,
+    this.storageStaff,
+    this.deliveryDriver,
   });
 }
 
@@ -129,6 +137,7 @@ class _OrdersPageState extends State<OrdersPage> {
         if (status == 'Received' ||
             status == 'Pinned' ||
             status == 'Prepared' ||
+            status == 'Preparing' || // <-- Added this line
             status == 'Delivery' ||
             status == 'Updated') {
           shouldShow = true;
@@ -513,12 +522,79 @@ class _OrdersPageState extends State<OrdersPage> {
                                           onExit: (_) =>
                                               setState(() => hoveredRow = null),
                                           child: InkWell(
-                                            onTap: () {
+                                            onTap: () async {
+                                              // Open editable popup for Received/Updated, read-only for others
                                               if (row.orderStatus ==
                                                       'Received' ||
                                                   row.orderStatus ==
                                                       'Updated') {
                                                 _openOrderPopup(row);
+                                              } else {
+                                                // Fetch order details as in _openOrderPopup
+                                                showDialog(
+                                                  context: context,
+                                                  barrierDismissible: false,
+                                                  barrierColor: Colors.black26,
+                                                  builder: (_) => const Center(
+                                                    child:
+                                                        CircularProgressIndicator(),
+                                                  ),
+                                                );
+                                                try {
+                                                  final detail =
+                                                      await _fetchOrderDetail(
+                                                        row.id,
+                                                      );
+                                                  if (!mounted) return;
+                                                  Navigator.of(
+                                                    context,
+                                                    rootNavigator: true,
+                                                  ).pop();
+                                                  ReadOnlyOrderDetailPopup.show(
+                                                    context,
+                                                    orderType: 'out',
+                                                    status: row.status,
+                                                    products: detail.products,
+                                                    partyName:
+                                                        detail.customerName,
+                                                    location: _composeLocation(
+                                                      detail.city,
+                                                      detail.address,
+                                                    ),
+                                                    orderDate: detail.orderDate,
+                                                    taxPercent:
+                                                        detail.taxPercent,
+                                                    totalPrice:
+                                                        detail.totalPrice,
+                                                    orderId:
+                                                        int.tryParse(row.id) ??
+                                                        detail.orderId,
+                                                    manager: detail.manager,
+                                                    storageStaff:
+                                                        detail.storageStaff,
+                                                    deliveryDriver:
+                                                        detail.deliveryDriver,
+                                                  );
+                                                } catch (e) {
+                                                  if (mounted) {
+                                                    Navigator.of(
+                                                      context,
+                                                      rootNavigator: true,
+                                                    ).pop();
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          'Failed to load order details: $e',
+                                                        ),
+                                                        behavior:
+                                                            SnackBarBehavior
+                                                                .floating,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
                                               }
                                             },
                                             child: AnimatedContainer(
@@ -620,6 +696,8 @@ class _OrdersPageState extends State<OrdersPage> {
         orderDate: detail.orderDate,
         taxPercent: detail.taxPercent,
         totalPrice: detail.totalPrice,
+        orderId: int.tryParse(order.id) ?? detail.orderId,
+        onOrderUpdated: _fetchOrders,
       );
     } catch (e) {
       if (mounted) {
@@ -636,11 +714,21 @@ class _OrdersPageState extends State<OrdersPage> {
 
   Future<_OrderDetailData> _fetchOrderDetail(String orderId) async {
     final parsedId = int.tryParse(orderId);
+
     final order = await supabase
         .from('customer_order')
-        .select(
-          'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
-        )
+        .select('''
+          order_date,
+          tax_percent,
+          total_balance,
+          managed_by_id,
+          prepared_by_id,
+          delivered_by_id,
+          customer:customer_id(name, address, customer_city:customer_city(name)),
+          manager:managed_by_id(name),
+          storage_staff:prepared_by_id(name),
+          delivery_driver:delivered_by_id(name)
+          ''')
         .eq('customer_order_id', parsedId ?? orderId)
         .maybeSingle();
 
@@ -691,7 +779,22 @@ class _OrdersPageState extends State<OrdersPage> {
       orderDate: orderDate,
       taxPercent: order['tax_percent'] as num?,
       totalPrice: order['total_balance'] as num?,
+      orderId: parsedId ?? int.tryParse(orderId) ?? 0,
       products: products,
+      manager:
+          order['manager'] != null && order['manager'] is Map<String, dynamic>
+          ? order['manager']
+          : null,
+      storageStaff:
+          order['storage_staff'] != null &&
+              order['storage_staff'] is Map<String, dynamic>
+          ? order['storage_staff']
+          : null,
+      deliveryDriver:
+          order['delivery_driver'] != null &&
+              order['delivery_driver'] is Map<String, dynamic>
+          ? order['delivery_driver']
+          : null,
     );
   }
 
