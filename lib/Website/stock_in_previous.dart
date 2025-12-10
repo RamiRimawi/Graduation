@@ -101,6 +101,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
         order['inventory_name'] = inventoryLocation;
       }
 
+      if (!mounted) return;
       setState(() {
         allOrders = orders;
         filteredOrders = orders;
@@ -108,6 +109,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
       });
     } catch (e) {
       print('Error loading previous orders: $e');
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
