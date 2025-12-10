@@ -272,9 +272,15 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
       if (mounted) {
         _showMessage('Order sent successfully!');
-        // حذف جميع المنتجات من الجدول
+        // Reset all fields
         setState(() {
           allProducts.clear();
+          selectedCustomerId = null;
+          selectedCustomer = null;
+          discountController.clear();
+          hoveredIndex = null;
+          productAvailableQty.clear();
+          insufficientProducts.clear();
         });
       }
     } catch (e) {
@@ -392,9 +398,15 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
       if (mounted) {
         _showMessage('Order saved as Hold!');
-        // حذف جميع المنتجات من الجدول
+        // Reset all fields
         setState(() {
           allProducts.clear();
+          selectedCustomerId = null;
+          selectedCustomer = null;
+          discountController.clear();
+          hoveredIndex = null;
+          productAvailableQty.clear();
+          insufficientProducts.clear();
         });
       }
     } catch (e) {
