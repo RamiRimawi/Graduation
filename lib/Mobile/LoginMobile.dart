@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../supabase_config.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
-import 'StroageStaff/home_staff.dart';
+import 'StroageStaff/staff_home.dart';
 import 'Manager/HomeManager.dart';
 
 class DolphinApp extends StatelessWidget {
@@ -135,7 +135,7 @@ class _LoginPageState extends State<LoginPage> {
             .maybeSingle();
 
         if (staffResult != null && staffResult['password'] == password) {
-          userType = 'staff';
+          userType = 'storage_staff';
           userData = staffResult;
         }
       }
@@ -164,6 +164,9 @@ class _LoginPageState extends State<LoginPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userId', userId);
       await prefs.setString('userType', userType);
+      // Save for account_page.dart compatibility
+      await prefs.setString('current_user_id', userId);
+      await prefs.setString('current_user_role', userType);
       
       if (rememberMe) {
         await prefs.setString('password', password);
@@ -180,7 +183,7 @@ class _LoginPageState extends State<LoginPage> {
           case 'delivery':
             homePage = HomeDeleviry(deliveryDriverId: int.parse(userId));
             break;
-          case 'staff':
+          case 'storage_staff':
             homePage = const HomeStaff();
             break;
           case 'manager':

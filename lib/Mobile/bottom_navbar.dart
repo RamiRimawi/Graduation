@@ -1,13 +1,11 @@
 // ...existing code...
 import 'package:flutter/material.dart';
-import '../account_page.dart';
-import 'supplier_home_page.dart';
 
-class SupplierBottomNav extends StatelessWidget {
+class BottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
 
-  const SupplierBottomNav({
+  const BottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,

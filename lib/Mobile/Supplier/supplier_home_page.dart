@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../account_page.dart';
-import 'supplier_bottom_nav.dart';
+import '../bottom_navbar.dart';
 import 'order_details_page.dart';   // ⬅ مهم جداً
 
 class SupplierHomePage extends StatefulWidget {
@@ -52,7 +52,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
         ),
       ),
 
-      bottomNavigationBar: SupplierBottomNav(
+      bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
         onTap: (i) {
           if (i == 1) {

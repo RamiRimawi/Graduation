@@ -3,6 +3,7 @@ import '../account_page.dart';
 import '../../supabase_config.dart';
 import 'route_map_deleviry.dart';
 import 'signature_confirmation.dart';
+import '../bottom_navbar.dart';
 
 class DeleviryDetail extends StatefulWidget {
   final String customerName;
@@ -660,95 +661,10 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
         ),
       ),
 
-      //========== BOTTOM NAV BAR ==========
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF242424),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(22),
-            topRight: Radius.circular(22),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black54,
-              offset: Offset(0, -3),
-              blurRadius: 6,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(22),
-            topRight: Radius.circular(22),
-          ),
-          child: BottomNavigationBar(
-            backgroundColor: const Color(0xFF242424),
-            currentIndex: _selectedIndex,
-            type: BottomNavigationBarType.fixed,
-            elevation: 0,
-            showSelectedLabels: false,
-            showUnselectedLabels: false,
-            selectedItemColor: const Color(0xFFF9D949),
-            unselectedItemColor: Colors.white60,
-            onTap: _onItemTapped,
-            items: [
-              BottomNavigationBarItem(
-                icon: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.home_filled),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Home',
-                      style: TextStyle(
-                        color: _selectedIndex == 0 ? const Color(0xFFF9D949) : Colors.white60,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: _selectedIndex == 0 ? 70.0 : 0,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9D949),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ],
-                ),
-                label: '',
-              ),
-              BottomNavigationBarItem(
-                icon: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.person),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Account',
-                      style: TextStyle(
-                        color: _selectedIndex == 1 ? const Color(0xFFF9D949) : Colors.white60,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: _selectedIndex == 1 ? 70.0 : 0,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9D949),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ],
-                ),
-                label: '',
-              ),
-            ],
-          ),
-        ),
+      //========== BOTTOM NAV BAR ===========
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'staff_detail.dart';
 import '../account_page.dart';
+import '../bottom_navbar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomeStaff extends StatefulWidget {
   const HomeStaff({super.key});
@@ -11,13 +14,71 @@ class HomeStaff extends StatefulWidget {
 
 class _HomeStaffState extends State<HomeStaff> {
   int _selectedIndex = 0;
+  bool _loading = true;
+  List<Map<String, dynamic>> customers = const [];
 
-  final List<Map<String, dynamic>> customers = [
-    {'id': 8, 'name': 'Rami Rimawi', 'products': 5},
-    {'id': 22, 'name': 'Nizar Ahamd', 'products': 13},
-    {'id': 63, 'name': 'Akef Al Asmar', 'products': 9},
-    {'id': 15, 'name': 'Eyas Barghouthi', 'products': 11},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomers();
+  }
+
+  Future<void> _fetchCustomers() async {
+    try {
+      setState(() => _loading = true);
+      final prefs = await SharedPreferences.getInstance();
+      final String? userIdStr = prefs.getString('current_user_id');
+      final int? staffId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      if (staffId == null) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Fetch orders prepared by this storage staff
+        final List<dynamic> orders = await Supabase.instance.client
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('prepared_by_id', staffId)
+          .order('customer_order_id');
+
+      // Collect order ids for counting products
+      final orderIds = orders
+          .map<int?>((o) => o['customer_order_id'] as int?)
+          .whereType<int>()
+          .toList();
+
+      Map<int, int> productCounts = {};
+      if (orderIds.isNotEmpty) {
+        final List<dynamic> desc = await Supabase.instance.client
+            .from('customer_order_description')
+            .select('customer_order_id, quantity')
+            // Use generic filter to avoid in_ version issues
+            .filter('customer_order_id', 'in', orderIds);
+
+        for (final row in desc) {
+          final id = row['customer_order_id'] as int?;
+          if (id == null) continue;
+          final qty = (row['quantity'] as num?)?.toInt() ?? 0;
+          if (qty == 0) continue;
+          productCounts[id] = (productCounts[id] ?? 0) + qty;
+        }
+      }
+
+      final List<Map<String, dynamic>> mapped = orders.map<Map<String, dynamic>>((o) {
+        final id = o['customer_order_id'] as int? ?? 0;
+        final customer = (o['customer'] as Map?)?['name']?.toString() ?? 'Unknown';
+        final products = productCounts[id] ?? 0;
+        return {'id': id, 'name': customer, 'products': products};
+      }).toList();
+
+      setState(() {
+        customers = mapped;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   void _onItemTapped(int index) {
     if (index == 1) {
@@ -35,11 +96,15 @@ class _HomeStaffState extends State<HomeStaff> {
     return Scaffold(
       backgroundColor: const Color(0xFF202020),
       body: SafeArea(
-        child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-          itemCount: customers.length,
-          itemBuilder: (context, index) {
-            final customer = customers[index];
+        child: _loading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                itemCount: customers.length,
+                itemBuilder: (context, index) {
+                  final customer = customers[index];
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -172,33 +237,9 @@ class _HomeStaffState extends State<HomeStaff> {
         ),
       ),
 
-      // NAV BAR
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: const Color(0xFFFFE14D),
-          unselectedItemColor: const Color(0xFFB7A447),
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_circle),
-              label: 'Account',
-            ),
-          ],
-        ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

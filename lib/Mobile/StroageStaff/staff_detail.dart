@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../account_page.dart';
+import '../bottom_navbar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerDetail extends StatefulWidget {
   final String customerName;
@@ -20,14 +22,46 @@ class _CustomerDetailState extends State<CustomerDetail> {
 
   // NEW: حالة الزر (Done أو Send Update)
   bool _isUpdateMode = false;
+  bool _saving = false;
+  bool _loading = true;
+  List<Map<String, dynamic>> products = const [];
 
-  final List<Map<String, dynamic>> products = [
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'quantity': 1},
-    {'name': 'Freestanding Bathtub', 'brand': 'Royal', 'quantity': 1},
-    {'name': 'Wall-Hung Toilet', 'brand': 'GROHE', 'quantity': 1},
-    {'name': 'Kitchen Sink', 'brand': 'Royal', 'quantity': 1},
-    {'name': 'Towel Ring', 'brand': 'Royal', 'quantity': 1},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchProducts();
+  }
+
+  Future<void> _fetchProducts() async {
+    try {
+      setState(() => _loading = true);
+      final List<dynamic> rows = await Supabase.instance.client
+          .from('customer_order_description')
+          .select('product_id, quantity, product:product_id(name, brand:brand_id(name))')
+          .eq('customer_order_id', widget.customerId)
+          .order('product_id');
+
+      final mapped = rows.map<Map<String, dynamic>>((row) {
+        final product = row['product'] as Map?;
+        final brandMap = product?['brand'] as Map?;
+        return {
+          'product_id': row['product_id'] as int?,
+          'name': product?['name']?.toString() ?? 'Unknown',
+          'brand': brandMap?['name']?.toString() ?? 'Unknown',
+          'quantity': (row['quantity'] as num?)?.toInt() ?? 0,
+        };
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          products = mapped;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   void _onItemTapped(int index) {
     if (index == 1) {
@@ -99,6 +133,30 @@ class _CustomerDetailState extends State<CustomerDetail> {
         );
       },
     );
+  }
+
+  Future<void> _saveUpdates() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      for (final product in products) {
+        final pid = product['product_id'] as int?;
+        final qty = product['quantity'] as int? ?? 0;
+        if (pid == null) continue;
+        await Supabase.instance.client
+            .from('customer_order_description')
+            .update({'quantity': qty})
+            .eq('customer_order_id', widget.customerId)
+            .eq('product_id', pid);
+      }
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      // تجاهل الخطأ للحفاظ على نفس الـ UI
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -198,105 +256,109 @@ class _CustomerDetailState extends State<CustomerDetail> {
 
             //========== LIST OF PRODUCTS ==========
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final product = products[index];
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2D2D2D),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 1,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 18,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Product Name
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                product['name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2D2D2D),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.25),
+                                  blurRadius: 1,
+                                  offset: const Offset(0, 4),
                                 ),
-                              ),
+                              ],
                             ),
-                            // Brand
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                product['brand'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 18,
                               ),
-                            ),
-                            // Quantity (box + cm)
-                            Expanded(
-                              flex: 2,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  GestureDetector(
-                                    onTap: () => _editQuantity(index),
-                                    child: Container(
-                                      width: 60,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFB7A447),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '${product['quantity']}',
-                                        style: const TextStyle(
-                                          color: Color(0xFF202020),
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                  // Product Name
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      product['name'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Text(
-                                    'cm',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                  // Brand
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      product['brand'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  // Quantity (box + cm)
+                                  Expanded(
+                                    flex: 2,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () => _editQuantity(index),
+                                          child: Container(
+                                            width: 60,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFB7A447),
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              '${product['quantity']}',
+                                              style: const TextStyle(
+                                                color: Color(0xFF202020),
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          'cm',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
 
             //========== DONE / SEND UPDATE BUTTON ==========
@@ -312,13 +374,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
                       setState(() {
                         _isUpdateMode = true;
                       });
-                      // ممكن تضيف Snackbar لو حاب
-                      // ScaffoldMessenger.of(context).showSnackBar(
-                      //   const SnackBar(content: Text('Changes saved')),
-                      // );
                     } else {
-                      // الضغطة الثانية: إرسال التحديث (حالياً نرجع للصفحة السابقة)
-                      Navigator.pop(context);
+                      _saveUpdates();
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -357,34 +414,9 @@ class _CustomerDetailState extends State<CustomerDetail> {
         ),
       ),
 
-      //========== BOTTOM NAV BAR ==========
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: const Color(0xFFFFE14D),
-          unselectedItemColor: const Color(0xFFB7A447),
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_circle),
-              label: 'Account',
-            ),
-          ],
-        ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

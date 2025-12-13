@@ -1,8 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'Supplier/supplier_bottom_nav.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../supabase_config.dart';
+import 'bottom_navbar.dart';
 import 'Supplier/supplier_home_page.dart';
+import 'DeliveryDriver/deleviry_home.dart';
+import 'StroageStaff/staff_home.dart';
+import 'LoginMobile.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -16,13 +22,354 @@ class _AccountPageState extends State<AccountPage> {
   XFile? _photo;
 
   bool _isPressed = false;
+  bool _loading = true;
+  bool _imageReady = false;
+  String? _name;
+  String? _role;
+  String? _address;
+  String? _mobile;
+  String? _telephone;
+  String? _idLabel;
+  String? _profileImageUrl;
+  String? _userRole;
+  bool _profileCached = false;
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         _photo = image;
+        _loading = true;
       });
+      
+      // Upload image to Supabase and update database
+      await _uploadProfileImage(image);
+    }
+  }
+
+  Future<void> _uploadProfileImage(XFile imageFile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? userIdStr = prefs.getString('current_user_id');
+      String? userRole = prefs.getString('current_user_role');
+      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      if (userId == null || userRole == null) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Generate unique filename
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      final String fileName = '${userRole}_${userId}_$timestamp.png';
+    
+      // Read file bytes
+      final bytes = await imageFile.readAsBytes();
+
+      // Upload to Supabase Storage
+      await supabase.storage.from('images').uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: const FileOptions(
+          contentType: 'image/png',
+          upsert: true,
+        ),
+      );
+
+      // Get public URL
+      final String imageUrl = supabase.storage.from('images').getPublicUrl(fileName);
+      
+      
+
+      // Update database based on user role
+      String? tableName;
+      String? idColumn;
+      
+      if (userRole == 'delivery' || userRole == 'delivery_driver') {
+        tableName = 'delivery_driver';
+        idColumn = 'delivery_driver_id';
+      } else if (userRole == 'supplier') {
+        tableName = 'user_account_supplier';
+        idColumn = 'supplier_id';
+      } else if (userRole == 'storage_staff') {
+        tableName = 'user_account_storage_staff';
+        idColumn = 'storage_staff_id';
+      } else if (userRole == 'sales_rep') {
+        tableName = 'user_account_sales_rep';
+        idColumn = 'sales_rep_id';
+      } else if (userRole == 'storage_manager') {
+        tableName = 'user_account_storage_manager';
+        idColumn = 'storage_manager_id';
+      } else if (userRole == 'customer') {
+        tableName = 'user_account_customer';
+        idColumn = 'customer_id';
+      }
+
+      if (tableName != null && idColumn != null) {
+        await supabase.from(tableName).update({
+          'profile_image': imageUrl,
+        }).eq(idColumn, userId);
+        
+        
+        
+        // Cache locally so we don't refetch next time
+        await prefs.setString('profile_image_url', imageUrl);
+        setState(() {
+          _profileImageUrl = imageUrl;
+          _loading = false;
+          _profileCached = true;
+        });
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      setState(() => _loading = true);
+      final prefs = await SharedPreferences.getInstance();
+      final String? userIdStr = prefs.getString('current_user_id');
+      final String? userRole = prefs.getString('current_user_role');
+      final String? cachedImage = prefs.getString('profile_image_url');
+      
+      // Parse userId to int
+      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      // Store role for conditional nav bar rendering
+      setState(() {
+        _userRole = userRole;
+        if (cachedImage != null && cachedImage.isNotEmpty) {
+          _profileImageUrl = cachedImage;
+          _profileCached = true;
+        }
+      });
+      
+      
+
+      
+
+      // Attempt based on stored role; fallback to delivery_driver
+      if (userId != null) {
+        if (userRole == 'delivery_driver') {
+          await _loadDeliveryDriver(userId);
+        } else if (userRole == 'supplier') {
+          await _loadSupplier(userId);
+        } else if (userRole == 'storage_staff') {
+          await _loadStorageStaff(userId);
+        } else if (userRole == 'sales_rep') {
+          await _loadSalesRep(userId);
+        } else if (userRole == 'storage_manager') {
+          await _loadStorageManager(userId);
+        } else if (userRole == 'customer') {
+          await _loadCustomer(userId);
+        } else {
+          // Default to delivery driver
+          await _loadDeliveryDriver(userId);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed loading profile: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadDeliveryDriver(int id) async {
+    final profile = await supabase
+        .from('delivery_driver')
+        .select('delivery_driver_id,name,mobile_number,telephone_number,address,profile_image')
+        .eq('delivery_driver_id', id)
+        .maybeSingle();
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Delivery Driver';
+        _address = profile['address'] as String?;
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['delivery_driver_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : profile['profile_image'] as String?;
+        _imageReady = false;
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+  Future<void> _loadSupplier(int id) async {
+    final profile = await supabase
+        .from('supplier')
+        .select('supplier_id,name,mobile_number,telephone_number,address')
+        .eq('supplier_id', id)
+        .maybeSingle();
+    
+    // Get profile_image from user_account_supplier
+    final userAccount = await supabase
+        .from('user_account_supplier')
+        .select('profile_image')
+        .eq('supplier_id', id)
+        .maybeSingle();
+    
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Supplier';
+        _address = profile['address'] as String?;
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['supplier_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+            // debugPrint('Failed loading profile: $e');
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+  Future<void> _loadStorageStaff(int id) async {
+    final profile = await supabase
+        .from('storage_staff')
+        .select('storage_staff_id,name,mobile_number,telephone_number,address')
+        .eq('storage_staff_id', id)
+        .maybeSingle();
+    
+    // Get profile_image from user_account_storage_staff
+    final userAccount = await supabase
+        .from('user_account_storage_staff')
+        .select('profile_image')
+        .eq('storage_staff_id', id)
+        .maybeSingle();
+    
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Storage Staff';
+        _address = profile['address'] as String?;
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['storage_staff_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _imageReady = false;
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+  Future<void> _loadSalesRep(int id) async {
+    final profile = await supabase
+        .from('sales_representative')
+        .select('sales_rep_id,name,mobile_number,telephone_number,email')
+        .eq('sales_rep_id', id)
+        .maybeSingle();
+    
+    // Get profile_image from user_account_sales_rep
+    final userAccount = await supabase
+        .from('user_account_sales_rep')
+        .select('profile_image')
+        .eq('sales_rep_id', id)
+        .maybeSingle();
+    
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Sales Representative';
+        _address = profile['email'] as String?; // show email in address field
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['sales_rep_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _imageReady = false;
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+
+  Future<void> _loadStorageManager(int id) async {
+    final profile = await supabase
+        .from('storage_manager')
+        .select('storage_manager_id,name,mobile_number,telephone_number,address')
+        .eq('storage_manager_id', id)
+        .maybeSingle();
+    
+    // Get profile_image from user_account_storage_manager
+    final userAccount = await supabase
+        .from('user_account_storage_manager')
+        .select('profile_image')
+        .eq('storage_manager_id', id)
+        .maybeSingle();
+    
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Storage Manager';
+        _address = profile['address'] as String?;
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['storage_manager_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _imageReady = false;
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+  Future<void> _loadCustomer(int id) async {
+    final profile = await supabase
+        .from('customer')
+        .select('customer_id,name,mobile_number,telephone_number,address')
+        .eq('customer_id', id)
+        .maybeSingle();
+    
+    // Get profile_image from user_account_customer
+    final userAccount = await supabase
+        .from('user_account_customer')
+        .select('profile_image')
+        .eq('customer_id', id)
+        .maybeSingle();
+    
+    if (profile != null) {
+      setState(() {
+        _name = profile['name'] as String?;
+        _role = 'Customer';
+        _address = profile['address'] as String?;
+        _mobile = profile['mobile_number']?.toString();
+        _telephone = profile['telephone_number']?.toString();
+        _idLabel = profile['customer_id']?.toString();
+        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _imageReady = false;
+      });
+      await _precacheProfileImage();
+    }
+  }
+
+  Future<void> _precacheProfileImage() async {
+    try {
+      if (!mounted) return;
+      if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+        final provider = NetworkImage(_profileImageUrl!);
+        await precacheImage(provider, context);
+        if (mounted) setState(() => _imageReady = true);
+      } else {
+        if (mounted) setState(() => _imageReady = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _imageReady = false);
     }
   }
 
@@ -66,12 +413,50 @@ class _AccountPageState extends State<AccountPage> {
                               end: Alignment.bottomRight,
                             ),
                           ),
-                          child: CircleAvatar(
-                            radius: 95,
-                            backgroundImage: _photo != null
-                                ? FileImage(File(_photo!.path))
-                                : const AssetImage('assets/images/ramadan.jpg')
-                                    as ImageProvider,
+                          child: Builder(
+                            builder: (context) {
+                              final hasLocalPhoto = _photo != null;
+                              final hasRemotePhoto = _profileImageUrl != null && _profileImageUrl!.isNotEmpty;
+                              if (hasLocalPhoto) {
+                                final ImageProvider provider = hasLocalPhoto
+                                    ? FileImage(File(_photo!.path))
+                                    : const AssetImage(''); // won't be used
+                                return CircleAvatar(
+                                  radius: 95,
+                                  backgroundImage: provider,
+                                );
+                              }
+                              if (hasRemotePhoto && _imageReady) {
+                                return CircleAvatar(
+                                  radius: 95,
+                                  backgroundImage: NetworkImage(_profileImageUrl!),
+                                );
+                              }
+                              if (hasRemotePhoto && !_imageReady) {
+                                return CircleAvatar(
+                                  radius: 95,
+                                  backgroundColor: Colors.black12,
+                                  child: const SizedBox(
+                                    width: 28,
+                                    height: 28,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Color(0xFFFFE14D),
+                                    ),
+                                  ),
+                                );
+                              }
+                              // Fallback: show icon when no image available
+                              return CircleAvatar(
+                                radius: 95,
+                                backgroundColor: Colors.black12,
+                                child: const Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.grey,
+                                  size: 64,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -97,21 +482,25 @@ class _AccountPageState extends State<AccountPage> {
                 ),
 
                 const SizedBox(height: 12),
-                const Text(
-                  'Kareem Manasra',
-                  style: TextStyle(
-                    color: Color(0xFFFFE14D),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 25,
-                  ),
-                ),
+                _loading
+                    ? const SizedBox(
+                        height: 28,
+                        child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
+                      )
+                    : Text(
+                        _name ?? 'Account',
+                        style: const TextStyle(
+                          color: Color(0xFFFFE14D),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 25,
+                        ),
+                      ),
                 const SizedBox(height: 20),
-
-                _buildLabelAndBox('ID #', '14135849'),
-                _buildLabelAndBox('Role', 'Storage Staff'),
-                _buildLabelAndBox('Address', 'Hebron - thahrea'),
-                _buildLabelAndBox('Mobile Number', '0597390235'),
-                _buildLabelAndBox('Telephone Number', '022860183'),
+                _buildLabelAndBox('ID #', _idLabel ?? '--'),
+                _buildLabelAndBox('Role', _role ?? '--'),
+                _buildLabelAndBox('Address', _address ?? '--'),
+                _buildLabelAndBox('Mobile Number', _mobile ?? '--'),
+                _buildLabelAndBox('Telephone Number', _telephone ?? '--'),
               ],
             ),
           ),
@@ -120,8 +509,51 @@ class _AccountPageState extends State<AccountPage> {
             top: 40,
             right: 12,
             child: GestureDetector(
-              onTap: () {
-                Navigator.pop(context);
+              onTap: () async {
+                // Show confirmation dialog
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: const Color(0xFF2D2D2D),
+                    title: const Text(
+                      'Logout',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    content: const Text(
+                      'Are you sure you want to logout? This will clear saved credentials.',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text(
+                          'Logout',
+                          style: TextStyle(color: Color(0xFFE74C3C)),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true && mounted) {
+                  // Clear all saved data including Remember Me
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.clear();
+
+                  // Navigate to login page and remove all previous routes
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
+                }
               },
               child: Container(
                 width: 52,
@@ -138,17 +570,40 @@ class _AccountPageState extends State<AccountPage> {
         ],
       ),
 
-      bottomNavigationBar: SupplierBottomNav(
-        currentIndex: 1,
-        onTap: (i) {
-          if (i == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const SupplierHomePage()),
-            );
-          }
-        },
-      ),
+      bottomNavigationBar: (_userRole == 'supplier' || 
+                              _userRole == 'storage_staff' || 
+                              _userRole == 'delivery_driver' ||
+                              _userRole == 'delivery')
+          ? Builder(
+              builder: (context) {
+                return BottomNavBar(
+                  currentIndex: 1,
+                  onTap: (i) async {
+                    if (i == 0) {
+                      final prefs = await SharedPreferences.getInstance();
+                      final String? userIdStr = prefs.getString('current_user_id');
+                      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+                      Widget homePage;
+                      if ((_userRole == 'delivery_driver' || _userRole == 'delivery') && userId != null) {
+                        homePage = HomeDeleviry(deliveryDriverId: userId);
+                      } else if (_userRole == 'storage_staff') {
+                        homePage = const HomeStaff();
+                      } else {
+                        homePage = const SupplierHomePage();
+                      }
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => homePage),
+                        );
+                      }
+                    }
+                  },
+                );
+              }
+            )
+          : null,
     );
   }
 
