@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../supabase_config.dart';
+import 'package:intl/intl.dart';
+import '../Website/stock_in_previous.dart';
 
 class AppColors {
   static const white = Color(0xFFFFFFFF);
@@ -11,16 +13,58 @@ class AppColors {
   static const blue = Color(0xFF50B2E7);
 }
 
-class OrderDetailsPopup extends StatefulWidget {
+class OrdersStockInPreviousPopup extends StatefulWidget {
   final String orderId;
-
-  const OrderDetailsPopup({super.key, required this.orderId});
+  const OrdersStockInPreviousPopup({Key? key, required this.orderId})
+    : super(key: key);
 
   @override
-  State<OrderDetailsPopup> createState() => _OrderDetailsPopupState();
+  State<OrdersStockInPreviousPopup> createState() =>
+      _OrdersStockInPreviousPopupState();
 }
 
-class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
+class _OrdersStockInPreviousPopupState
+    extends State<OrdersStockInPreviousPopup> {
+  Widget _buildInventoryRow(Map<String, dynamic> inv, String unitName) {
+    final inventory = inv['inventory'] as Map?;
+    final inventoryName = inventory?['inventory_name'] ?? 'Unknown Inventory';
+    final batchId = inv['batch_id'] != null
+        ? ' (Batch: ${inv['batch_id']})'
+        : '';
+    final quantity = inv['quantity'] ?? 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.inventory,
+            size: 16,
+            color: AppColors.blue.withOpacity(0.7),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$inventoryName$batchId',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            '$quantity $unitName',
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _orderData;
@@ -35,43 +79,35 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
   Future<void> _fetchOrderDetails() async {
     try {
       final orderIdInt = int.tryParse(widget.orderId) ?? 0;
-
       // Fetch order main details with all related data
       final orderResponse = await supabase
-          .from('customer_order')
+          .from('supplier_order')
           .select('''
-            customer_order_id,
+            order_id,
             order_date,
-            delivered_date,
-            total_cost,
-            tax_percent,
-            total_balance,
             order_status,
-            customer:customer_id(name, mobile_number, address),
-            sales_rep:sales_rep_id(name),
-            delivery_driver:delivered_by_id(name, mobile_number),
-            storage_staff:prepared_by_id(name),
-            storage_manager:managed_by_id(name),
-            accountant:accountant_id(name)
+            receives_by_id,
+            supplier:supplier_id(name),
+            storage_staff:receives_by_id(name)
           ''')
-          .eq('customer_order_id', orderIdInt)
-          .single();
+          .eq('order_id', orderIdInt)
+          .maybeSingle();
 
-      // Fetch order description for quantities and prices
+      // Fetch product details (simulate as in stock out popup)
       final descriptionData = await supabase
-          .from('customer_order_description')
+          .from('supplier_order_description')
           .select('''
             product_id,
             quantity,
-            delivered_quantity,
-            total_price,
-            product:product_id(name, selling_price, unit:unit_id(unit_name))
+            receipt_quantity,
+            price_per_product,
+            product:product_id(name, unit:unit_id(unit_name))
           ''')
-          .eq('customer_order_id', orderIdInt);
+          .eq('order_id', orderIdInt);
 
-      // Fetch inventory breakdown from customer_order_inventory
+      // Fetch inventory breakdown from supplier_order_inventory
       final inventoryData = await supabase
-          .from('customer_order_inventory')
+          .from('supplier_order_inventory')
           .select('''
             product_id,
             inventory_id,
@@ -79,58 +115,15 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
             quantity,
             inventory:inventory_id(inventory_name)
           ''')
-          .eq('customer_order_id', orderIdInt);
-
-      // If no inventory data, try fetching without the relationship
-      List<Map<String, dynamic>> inventoryDataFinal = inventoryData;
-      if (inventoryData.isEmpty) {
-        final rawInventoryData = await supabase
-            .from('customer_order_inventory')
-            .select('product_id, inventory_id, batch_id, quantity')
-            .eq('customer_order_id', orderIdInt);
-
-        // If we got data, fetch inventory locations separately
-        if (rawInventoryData.isNotEmpty) {
-          final inventoryIds = <int>{};
-          for (final row in rawInventoryData) {
-            inventoryIds.add(row['inventory_id'] as int);
-          }
-
-          if (inventoryIds.isNotEmpty) {
-            final inventoryLocations = await supabase
-                .from('inventory')
-                .select('inventory_id, inventory_name')
-                .inFilter('inventory_id', inventoryIds.toList());
-
-            final locationsMap = <int, String>{};
-            for (final loc in inventoryLocations) {
-              locationsMap[loc['inventory_id'] as int] =
-                  loc['inventory_name'] as String;
-            }
-
-            // Add inventory_location to each record
-            inventoryDataFinal = rawInventoryData.map((row) {
-              return {
-                ...row,
-                'inventory': {
-                  'inventory_name': locationsMap[row['inventory_id']],
-                },
-              };
-            }).toList();
-          }
-        }
-      }
+          .eq('supplier_order_id', orderIdInt);
 
       // Group inventory data by product_id
       final Map<int, List<Map<String, dynamic>>> inventoryByProduct = {};
-
-      for (final invRow in inventoryDataFinal) {
+      for (final invRow in inventoryData) {
         final productId = invRow['product_id'] as int;
-
         if (!inventoryByProduct.containsKey(productId)) {
           inventoryByProduct[productId] = [];
         }
-
         inventoryByProduct[productId]!.add({
           'inventory_id': invRow['inventory_id'],
           'batch_id': invRow['batch_id'],
@@ -141,17 +134,22 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
 
       // Build final products list with all data combined
       final List<Map<String, dynamic>> productsList = [];
-
       for (final desc in descriptionData) {
         final productId = desc['product_id'] as int;
         final inventoriesForProduct = inventoryByProduct[productId] ?? [];
-
+        final quantity = desc['quantity'] ?? 0;
+        final receiptQuantity = desc['receipt_quantity'] ?? 0;
+        final pricePerProduct = desc['price_per_product'] ?? 0;
+        final totalPrice = (quantity is num && pricePerProduct is num)
+            ? (quantity * pricePerProduct)
+            : 0;
         productsList.add({
           'product_id': productId,
           'product': desc['product'],
-          'quantity': desc['quantity'],
-          'delivered_quantity': desc['delivered_quantity'],
-          'total_price': desc['total_price'],
+          'quantity': quantity,
+          'receipt_quantity': receiptQuantity,
+          'price_per_product': pricePerProduct,
+          'total_price': totalPrice,
           'inventories': inventoriesForProduct,
         });
       }
@@ -196,20 +194,12 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
 
   Widget _buildOrderContent() {
     if (_orderData == null) return const SizedBox();
-
-    final customer = _orderData!['customer'] as Map?;
-    final salesRep = _orderData!['sales_rep'] as Map?;
-    final deliveryDriver = _orderData!['delivery_driver'] as Map?;
-    final preparedBy = _orderData!['storage_staff'] as Map?;
-    final managedBy = _orderData!['storage_manager'] as Map?;
-    final accountant = _orderData!['accountant'] as Map?;
-
+    final supplier = _orderData!['supplier'] as Map?;
+    final storageStaff = _orderData!['storage_staff'] as Map?;
     final orderDate = _orderData!['order_date'] != null
         ? DateTime.parse(_orderData!['order_date'])
         : null;
-    final deliveredDate = _orderData!['delivered_date'] != null
-        ? DateTime.parse(_orderData!['delivered_date'])
-        : null;
+    final status = _orderData!['order_status'] ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -256,7 +246,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
             ],
           ),
         ),
-
         // Content
         Expanded(
           child: SingleChildScrollView(
@@ -264,7 +253,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Customer & Order + Staff side-by-side cards
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -278,42 +266,28 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSectionTitle('Customer & Order Information'),
+                            _buildSectionTitle('Supplier & Order Information'),
                             const SizedBox(height: 12),
                             _buildInfoGrid([
                               _InfoItem(
-                                'Customer Name',
-                                customer?['name'] ?? 'N/A',
+                                'Supplier Name',
+                                supplier?['name'] ?? 'N/A',
                                 icon: Icons.person,
-                              ),
-                              _InfoItem(
-                                'Mobile',
-                                customer?['mobile_number'] ?? 'N/A',
-                                icon: Icons.phone,
                               ),
                               _InfoItem(
                                 'Order Date',
                                 orderDate != null
-                                    ? '${orderDate.day}/${orderDate.month}/${orderDate.year}'
+                                    ? DateFormat('dd/MM/yyyy').format(orderDate)
                                     : 'N/A',
                                 icon: Icons.calendar_today,
                               ),
+                              // Removed Delivered Date (column does not exist)
                               _InfoItem(
-                                'Delivered Date',
-                                deliveredDate != null
-                                    ? '${deliveredDate.day}/${deliveredDate.month}/${deliveredDate.year}'
-                                    : 'N/A',
-                                icon: Icons.check_circle,
+                                'Status',
+                                status,
+                                icon: Icons.info_outline,
                               ),
                             ]),
-                            if (customer?['address'] != null) ...[
-                              const SizedBox(height: 12),
-                              _buildInfoCard(
-                                'Address',
-                                customer!['address'],
-                                icon: Icons.location_on,
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -333,78 +307,18 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                             const SizedBox(height: 12),
                             _buildInfoGrid([
                               _InfoItem(
-                                'Sales Representative',
-                                salesRep?['name'] ?? 'N/A',
-                                icon: Icons.badge,
-                              ),
-                              _InfoItem(
-                                'Delivery Driver',
-                                deliveryDriver?['name'] ?? 'N/A',
-                                icon: Icons.local_shipping,
-                              ),
-                              _InfoItem(
-                                'Prepared By',
-                                preparedBy?['name'] ?? 'N/A',
+                                'Received By',
+                                storageStaff?['name'] ?? 'N/A',
                                 icon: Icons.inventory_2,
                               ),
-                              _InfoItem(
-                                'Managed By',
-                                managedBy?['name'] ?? 'N/A',
-                                icon: Icons.supervised_user_circle,
-                              ),
                             ]),
-                            if (deliveryDriver?['mobile_number'] != null) ...[
-                              const SizedBox(height: 12),
-                              _buildInfoCard(
-                                'Driver Mobile',
-                                deliveryDriver!['mobile_number'],
-                                icon: Icons.phone_android,
-                              ),
-                            ],
                           ],
                         ),
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
-
-                // Financial Section
-                _buildSectionTitle('Financial Details'),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildFinancialRow(
-                        'Total Cost',
-                        _orderData!['total_cost']?.toString() ?? '0',
-                      ),
-                      const SizedBox(height: 8),
-                      _buildFinancialRow(
-                        'Tax (${_orderData!['tax_percent'] ?? 0}%)',
-                        _calculateTax().toString(),
-                        color: AppColors.white.withOpacity(0.7),
-                      ),
-                      const Divider(color: AppColors.divider, height: 24),
-                      _buildFinancialRow(
-                        'Total Balance',
-                        _orderData!['total_balance']?.toString() ?? '0',
-                        isBold: true,
-                        color: AppColors.gold,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Products Section
                 _buildSectionTitle('Products (${_products.length})'),
                 const SizedBox(height: 12),
                 ..._products.map((product) => _buildProductCard(product)),
@@ -476,75 +390,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     );
   }
 
-  Widget _buildInfoCard(String label, String value, {required IconData icon}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.blue, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.white.withOpacity(0.6),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFinancialRow(
-    String label,
-    String value, {
-    bool isBold = false,
-    Color? color,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-            color: color ?? Colors.white,
-          ),
-        ),
-        Text(
-          '\$$value',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: color ?? Colors.white,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildProductCard(Map<String, dynamic> product) {
     final productInfo = product['product'] as Map?;
     final unitInfo = productInfo?['unit'] as Map?;
@@ -585,8 +430,8 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
               ),
               const SizedBox(width: 16),
               _buildProductDetail(
-                'Delivered',
-                '${product['delivered_quantity'] ?? 0} ${unitInfo?['unit_name'] ?? 'units'}',
+                'Received',
+                '${product['receipt_quantity'] ?? 0} ${unitInfo?['unit_name'] ?? 'units'}',
                 Icons.check_circle_outline,
                 valueColor: AppColors.gold,
               ),
@@ -599,8 +444,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
               ),
             ],
           ),
-
-          // Inventory breakdown section
           if (inventories.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Divider(color: AppColors.divider, height: 1),
@@ -629,96 +472,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                   _buildInventoryRow(inv, unitInfo?['unit_name'] ?? 'units'),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInventoryRow(
-    Map<String, dynamic> inventoryData,
-    String unitName,
-  ) {
-    final inventory = inventoryData['inventory'] as Map?;
-    final inventoryLocation = inventory?['inventory_name'] ?? 'Unknown';
-    final quantity = inventoryData['quantity'] ?? 0;
-    final batchId = inventoryData['batch_id'];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.bgDark.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.divider.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.gold,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  inventoryLocation,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (batchId != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.divider.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Batch: $batchId',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.white.withOpacity(0.6),
-                    ),
-                  ),
-                ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.blue.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '$quantity $unitName',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.blue,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -759,12 +512,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
       ),
     );
   }
-
-  double _calculateTax() {
-    final totalCost = _orderData!['total_cost'] ?? 0;
-    final taxPercent = _orderData!['tax_percent'] ?? 0;
-    return (totalCost * taxPercent / 100);
-  }
 }
 
 class _InfoItem {
@@ -772,6 +519,5 @@ class _InfoItem {
   final String value;
   final IconData icon;
   final Color? valueColor;
-
   _InfoItem(this.label, this.value, {required this.icon, this.valueColor});
 }

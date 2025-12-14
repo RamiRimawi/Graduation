@@ -46,18 +46,20 @@ class _TopStepsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: totalW,
       height: cardH,
-      child: Row(
-        children: const [
-          _StepCard(title: 'Pending', icon: FontAwesomeIcons.clipboardList),
-          _ArrowSpacer(width: arrowW),
-          _StepCard(title: 'Preparing', icon: FontAwesomeIcons.boxOpen),
-          _ArrowSpacer(width: arrowW),
-          _StepCard(title: 'Delivering', icon: FontAwesomeIcons.truck),
-          _ArrowSpacer(width: arrowW),
-          _StepCard(title: 'Delivered', icon: FontAwesomeIcons.box),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: const [
+            _StepCard(title: 'Pending', icon: FontAwesomeIcons.clipboardList),
+            _ArrowSpacer(width: arrowW),
+            _StepCard(title: 'Preparing', icon: FontAwesomeIcons.boxOpen),
+            _ArrowSpacer(width: arrowW),
+            _StepCard(title: 'Delivering', icon: FontAwesomeIcons.truck),
+            _ArrowSpacer(width: arrowW),
+            _StepCard(title: 'Delivered', icon: FontAwesomeIcons.box),
+          ],
+        ),
       ),
     );
   }
@@ -138,16 +140,16 @@ class _MainContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Spacer(),
-          SizedBox(width: 289, height: 640, child: _ActiveWorkersCard()),
-          SizedBox(width: 32),
-          SizedBox(width: 994, height: 640, child: _OrdersCard()),
-          Spacer(),
-        ],
-      );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Spacer(),
+        SizedBox(width: 289, height: 640, child: _ActiveWorkersCard()),
+        SizedBox(width: 32),
+        SizedBox(width: 994, height: 640, child: _OrdersCard()),
+        Spacer(),
+      ],
+    );
   }
 }
 

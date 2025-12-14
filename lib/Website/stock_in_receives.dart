@@ -4,6 +4,7 @@ import 'stock_out_page.dart';
 import 'stock_in_page.dart';
 import 'stock_in_previous.dart';
 import 'create_stock_in_page.dart';
+import 'order_detail_popup.dart';
 import '../supabase_config.dart';
 
 class OrdersStockInReceivesPage extends StatefulWidget {
@@ -48,10 +49,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
     setState(() => isLoading = true);
 
     try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-
-      // Query for Receives tab: Accepted (same day), Rejected (same day), Updated, Hold
+      // Fetch Sent, Updated, and Hold orders
       final response = await supabase
           .from('supplier_order')
           .select('''
@@ -59,46 +57,85 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
             supplier_id,
             order_date,
             order_status,
+            created_by_id,
+            accountant_id,
             last_tracing_by,
             supplier:supplier_id (
               name
             )
           ''')
           .or(
-            'order_status.eq.Accepted,order_status.eq.Rejected,order_status.eq.Updated,order_status.eq.Hold',
+            'order_status.eq.Sent,order_status.eq.Updated,order_status.eq.Hold',
           )
           .order('order_date', ascending: false);
 
       final orders = (response as List).cast<Map<String, dynamic>>();
 
-      // Filter orders based on status and date
+      // Fetch creator names for all unique created_by_id values
+      final Set<int?> creatorIds = orders
+          .map((order) => order['created_by_id'] as int?)
+          .where((id) => id != null)
+          .toSet();
+
+      final Map<int, String> creatorNames = {};
+      if (creatorIds.isNotEmpty) {
+        // Build OR conditions for each creator ID
+        final conditions = creatorIds
+            .map((id) => 'storage_manager_id.eq.$id')
+            .join(',');
+        final managerResponse = await supabase
+            .from('storage_manager')
+            .select('storage_manager_id, name')
+            .or(conditions);
+
+        for (var creator in managerResponse) {
+          creatorNames[creator['storage_manager_id']] = creator['name'];
+        }
+
+        // Also check accountant table
+        final accountantConditions = creatorIds
+            .map((id) => 'accountant_id.eq.$id')
+            .join(',');
+        final accountantResponse = await supabase
+            .from('accountant')
+            .select('accountant_id, name')
+            .or(accountantConditions);
+
+        for (var creator in accountantResponse) {
+          creatorNames[creator['accountant_id']] = creator['name'];
+        }
+      }
+
+      // Add creator names to orders
+      for (var order in orders) {
+        final creatorId = order['created_by_id'];
+        if (creatorId != null && creatorNames.containsKey(creatorId)) {
+          order['creator_name'] = creatorNames[creatorId];
+        }
+      }
+
       final List<Map<String, dynamic>> regularOrders = [];
       final List<Map<String, dynamic>> holdOrders = [];
 
       for (var order in orders) {
-        final orderDate = DateTime.parse(order['order_date']);
-        final orderDay = DateTime(
-          orderDate.year,
-          orderDate.month,
-          orderDate.day,
-        );
         final status = order['order_status'];
-
-        // For Hold status, always include
+        // For Hold status, always include in onHoldOrders
         if (status == 'Hold') {
           holdOrders.add(order);
           continue;
         }
 
-        // For Accepted and Rejected, only show if same day
-        if ((status == 'Accepted' || status == 'Rejected') &&
-            orderDay == today) {
+        // For Sent orders with accountant_id is null, show as 'in (NEW)'
+        // TODO: Add manager ID check when user session is implemented
+        if (status == 'Sent' && order['accountant_id'] == null) {
+          order['display_status'] = 'in (NEW)';
           regularOrders.add(order);
           continue;
         }
 
-        // For Updated, always include
+        // For Updated orders, show as 'in (updated)'
         if (status == 'Updated') {
+          order['display_status'] = 'in (updated)';
           regularOrders.add(order);
         }
       }
@@ -128,6 +165,80 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
         }).toList();
       }
     });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchOrderProducts(int orderId) async {
+    try {
+      final response = await supabase
+          .from('supplier_order_description')
+          .select('''
+            product_id,
+            quantity,
+            price_per_product,
+            product:product_id (
+              name,
+              brand:brand_id(name),
+              unit:unit_id(unit_name)
+            )
+          ''')
+          .eq('order_id', orderId);
+
+      final products = (response as List).cast<Map<String, dynamic>>();
+
+      // Format products for the popup
+      return products.map((product) {
+        final productData = product['product'] as Map<String, dynamic>? ?? {};
+        final brandData = productData['brand'] as Map<String, dynamic>? ?? {};
+
+        return {
+          'id': product['product_id'],
+          'name': productData['name'] ?? 'Unknown Product',
+          'brand': brandData['name'] ?? 'Unknown Brand',
+          'price': '${product['price_per_product'] ?? 0}\$',
+          'quantity': product['quantity'] ?? 0,
+          'total':
+              '${((product['price_per_product'] ?? 0) * (product['quantity'] ?? 0)).toStringAsFixed(2)}\$',
+        };
+      }).toList();
+    } catch (e) {
+      print('Error fetching order products: $e');
+      return [];
+    }
+  }
+
+  void _showOrderDetails(
+    BuildContext context,
+    Map<String, dynamic> order,
+  ) async {
+    final orderId = order['order_id'] as int;
+    final status = order['order_status'] as String;
+
+    // Determine order type and status for popup
+    String orderType = 'in';
+    String popupStatus = 'NEW';
+
+    if (status == 'Updated') {
+      popupStatus = 'UPDATE';
+    } else if (status == 'Hold') {
+      popupStatus = 'HOLD'; // Use HOLD status to avoid Later button
+    }
+
+    // Fetch products for this order
+    final products = await _fetchOrderProducts(orderId);
+
+    // Check if context is still mounted before showing dialog
+    if (!context.mounted) return;
+
+    // Show the popup
+    OrderDetailPopup.show(
+      context,
+      orderType: orderType,
+      status: popupStatus,
+      products: products,
+      partyName: order['supplier']['name'] ?? 'Unknown Supplier',
+      orderDate: DateTime.parse(order['order_date']),
+      orderId: orderId,
+    );
   }
 
   @override
@@ -273,7 +384,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                       order['supplier']['name'] ?? 'Unknown';
                                   final status = order['order_status'] ?? '';
                                   final createdBy =
-                                      order['last_tracing_by'] ?? 'System';
+                                      order['creator_name'] ??
+                                      order['last_tracing_by'] ??
+                                      'System';
 
                                   final orderDate = DateTime.parse(
                                     order['order_date'],
@@ -301,117 +414,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                         setState(() => hoveredIndex = i),
                                     onExit: (_) =>
                                         setState(() => hoveredIndex = null),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 14,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bg,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: hoveredIndex == i
-                                              ? const Color(0xFF50B2E7)
-                                              : Colors.transparent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              orderId,
-                                              style: _cellStyle(),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Text(
-                                              supplierName,
-                                              style: _cellStyle(),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              type,
-                                              style: _cellStyle(),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              createdBy,
-                                              style: _cellStyle(),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              time,
-                                              style: _cellStyle(),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: Text(
-                                                date,
-                                                style: _cellStyle(),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }),
-
-                                if (onHoldOrders.isNotEmpty) ...[
-                                  const SizedBox(height: 20),
-                                  const Text(
-                                    'On Hold',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // on hold list
-                                  ...List.generate(onHoldOrders.length, (i) {
-                                    final order = onHoldOrders[i];
-                                    final orderId = order['order_id']
-                                        .toString();
-                                    final supplierName =
-                                        order['supplier']['name'] ?? 'Unknown';
-                                    final createdBy =
-                                        order['last_tracing_by'] ?? 'System';
-
-                                    final orderDate = DateTime.parse(
-                                      order['order_date'],
-                                    );
-                                    final time = _formatTime(orderDate);
-                                    final date = _formatDate(orderDate);
-
-                                    final even = int.tryParse(orderId) ?? 0;
-                                    final bg = even.isEven
-                                        ? const Color(0xFF2D2D2D)
-                                        : const Color(0xFF262626);
-
-                                    return MouseRegion(
-                                      onEnter: (_) => setState(
-                                        () => hoveredIndex = i + 1000,
-                                      ),
-                                      onExit: (_) =>
-                                          setState(() => hoveredIndex = null),
+                                    child: InkWell(
+                                      onTap: () =>
+                                          _showOrderDetails(context, order),
                                       child: AnimatedContainer(
                                         duration: const Duration(
                                           milliseconds: 200,
@@ -429,7 +434,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                             10,
                                           ),
                                           border: Border.all(
-                                            color: hoveredIndex == i + 1000
+                                            color: hoveredIndex == i
                                                 ? const Color(0xFF50B2E7)
                                                 : Colors.transparent,
                                             width: 2,
@@ -454,7 +459,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                             Expanded(
                                               flex: 2,
                                               child: Text(
-                                                'in (HOLD)',
+                                                type,
                                                 style: _cellStyle(),
                                               ),
                                             ),
@@ -484,6 +489,129 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                               ),
                                             ),
                                           ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+
+                                if (onHoldOrders.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  const Text(
+                                    'On Hold',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  // on hold list
+                                  ...List.generate(onHoldOrders.length, (i) {
+                                    final order = onHoldOrders[i];
+                                    final orderId = order['order_id']
+                                        .toString();
+                                    final supplierName =
+                                        order['supplier']['name'] ?? 'Unknown';
+                                    final createdBy =
+                                        order['creator_name'] ??
+                                        order['last_tracing_by'] ??
+                                        'System';
+
+                                    final orderDate = DateTime.parse(
+                                      order['order_date'],
+                                    );
+                                    final time = _formatTime(orderDate);
+                                    final date = _formatDate(orderDate);
+
+                                    final even = int.tryParse(orderId) ?? 0;
+                                    final bg = even.isEven
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
+
+                                    return MouseRegion(
+                                      onEnter: (_) => setState(
+                                        () => hoveredIndex = i + 1000,
+                                      ),
+                                      onExit: (_) =>
+                                          setState(() => hoveredIndex = null),
+                                      child: InkWell(
+                                        onTap: () =>
+                                            _showOrderDetails(context, order),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          margin: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            border: Border.all(
+                                              color: hoveredIndex == i + 1000
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  orderId,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(
+                                                  supplierName,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  'in (HOLD)',
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  createdBy,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  time,
+                                                  style: _cellStyle(),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerRight,
+                                                  child: Text(
+                                                    date,
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );
