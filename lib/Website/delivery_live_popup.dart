@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
 
 class DeliveryLivePopup extends StatefulWidget {
@@ -31,8 +32,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   int? _orderId;
   List<Map<String, dynamic>> _otherOrders = [];
   List<LatLng> _routePoints = const [];
-  Timer? _pollTimer;
   bool _isRouting = false;
+  RealtimeChannel? _driverChannel;
 
   // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
   double _getZoomForDistance(double distanceMeters) {
@@ -52,21 +53,26 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   void initState() {
     super.initState();
     _fetchLocations();
-    _startPolling();
+    // اشتراك realtime على جدول السائق
+    _driverChannel = supabase.channel('driver_location_${widget.driverId}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        table: 'delivery_driver',
+        callback: (payload) {
+          // عند تحديث الموقع في قاعدة البيانات
+          _fetchLocations(updateOnly: true);
+        },
+      )
+      ..subscribe();
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    if (_driverChannel != null) {
+      supabase.removeChannel(_driverChannel!);
+    }
     super.dispose();
   }
-
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchLocations(updateOnly: true));
-  }
-
-
-  
 
   Future<void> _fetchLocations({bool updateOnly = false}) async {
     try {
@@ -92,10 +98,10 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
             (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
             (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
           );
-          final zoom = _getZoomForDistance(dist);
-          _mapController.move(center, zoom);
+          // استخدم زوم ثابت
+          _mapController.move(center, 14);
         } else {
-          _mapController.move(newDriverLoc, _mapController.zoom);
+          _mapController.move(newDriverLoc, 14);
         }
       } else if (!updateOnly) {
       }
