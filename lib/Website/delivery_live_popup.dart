@@ -91,17 +91,20 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
         setState(() {
           _driverLocation = newDriverLoc;
         });
-        // إذا كان لدينا موقع العميل، احسب المسافة واضبط الزوم
-        if (_customerLocation != null) {
-          final dist = Distance().as(LengthUnit.Meter, newDriverLoc, _customerLocation!);
-          final center = LatLng(
-            (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
-            (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
-          );
-          // احتفظ بالزوم الحالي
-          _mapController.move(center, _mapController.zoom);
-        } else {
-          _mapController.move(newDriverLoc, _mapController.zoom);
+        // لا تحرك الخريطة عند التحديث الفوري
+        if (!updateOnly) {
+          // إذا كان لدينا موقع العميل، احسب المسافة واضبط الزوم
+          if (_customerLocation != null) {
+            final dist = Distance().as(LengthUnit.Meter, newDriverLoc, _customerLocation!);
+            final center = LatLng(
+              (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
+              (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
+            );
+            // احتفظ بالزوم الحالي
+            _mapController.move(center, _mapController.zoom);
+          } else {
+            _mapController.move(newDriverLoc, _mapController.zoom);
+          }
         }
       } else if (!updateOnly) {
       }
