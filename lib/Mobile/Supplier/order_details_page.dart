@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
 import '../account_page.dart';
 
 class OrderDetailsPage extends StatefulWidget {
+  final int orderId;
   final String customerName;
-  final List<Map<String, dynamic>> products;
 
   const OrderDetailsPage({
     super.key,
+    required this.orderId,
     required this.customerName,
-    required this.products,
   });
 
   @override
@@ -17,13 +19,76 @@ class OrderDetailsPage extends StatefulWidget {
 }
 
 class _OrderDetailsPageState extends State<OrderDetailsPage> {
-  bool isUpdated = false; // لو المستخدم عدل أي كمية
+  bool isUpdated = false;
+  List<Map<String, dynamic>> products = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrderProducts();
+  }
+
+  Future<void> _loadOrderProducts() async {
+    try {
+      // Fetch all products in this order from supplier_order_description
+      final orderItems = await supabase
+          .from('supplier_order_description')
+          .select('product_id, quantity, price_per_product, receipt_quantity')
+          .eq('order_id', widget.orderId);
+
+      final List<Map<String, dynamic>> productsList = [];
+
+      // For each product in the order, fetch product details
+      for (final item in orderItems) {
+        final productId = item['product_id'];
+
+        // Fetch product info (name, brand_id)
+        final productData = await supabase
+            .from('product')
+            .select('name, brand_id')
+            .eq('product_id', productId)
+            .maybeSingle();
+
+        if (productData != null) {
+          String brandName = '';
+
+          // Fetch brand name if brand_id exists
+          if (productData['brand_id'] != null) {
+            final brandData = await supabase
+                .from('brand')
+                .select('name')
+                .eq('brand_id', productData['brand_id'])
+                .maybeSingle();
+
+            if (brandData != null) {
+              brandName = brandData['name'] as String;
+            }
+          }
+
+          productsList.add({
+            'name': productData['name'] as String,
+            'brand': brandName.isEmpty ? 'Unknown' : brandName,
+            'quantity': item['quantity'] ?? 0,
+            'price_per_product': item['price_per_product'] ?? 0,
+          });
+        }
+      }
+
+      setState(() {
+        products = productsList;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading order products: $e');
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
-
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
         child: Column(
@@ -95,13 +160,29 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
             // ---------------- PRODUCT LIST ----------------
             Expanded(
-              child: ListView.builder(
-                itemCount: widget.products.length,
-                itemBuilder: (context, index) {
-                  final p = widget.products[index];
-                  return _buildRow(p, index);
-                },
-              ),
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFF9D949),
+                      ),
+                    )
+                  : products.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No products in this order',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final p = products[index];
+                            return _buildRow(p, index);
+                          },
+                        ),
             ),
 
             const SizedBox(height: 12),
@@ -145,14 +226,13 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           ],
         ),
       ),
-
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
         onTap: (i) {
           if (i == 1) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => AccountPage()),
+              MaterialPageRoute(builder: (_) => const AccountPage()),
             );
           }
         },
@@ -163,7 +243,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   // ============= EDIT QUANTITY POPUP =============
   void _editQuantity(int index) {
     final controller = TextEditingController(
-      text: widget.products[index]['quantity'].toString(),
+      text: products[index]['quantity'].toString(),
     );
 
     showDialog(
@@ -210,8 +290,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 final val = int.tryParse(controller.text);
                 if (val != null && val > 0) {
                   setState(() {
-                    widget.products[index]['quantity'] = val;
-                    isUpdated = true; // ⚠️ مهم: زر Done يصير Send Update
+                    products[index]['quantity'] = val;
+                    isUpdated = true;
                   });
                 }
                 Navigator.pop(context);
@@ -238,7 +318,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(16),
       ),
-
       child: Row(
         children: [
           // Product name
@@ -273,7 +352,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
           const SizedBox(width: 8),
 
-          // Editable quantity (EXACT STAFF STYLE)
+          // Editable quantity
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -283,7 +362,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   width: 55,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFB7A447), // الأصفر
+                    color: const Color(0xFFB7A447),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   alignment: Alignment.center,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../supabase_config.dart';
 import '../account_page.dart';
 import '../bottom_navbar.dart';
-import 'order_details_page.dart';   // ⬅ مهم جداً
+import 'order_details_page.dart';
 
 class SupplierHomePage extends StatefulWidget {
   const SupplierHomePage({super.key});
@@ -12,46 +14,120 @@ class SupplierHomePage extends StatefulWidget {
 
 class _SupplierHomePageState extends State<SupplierHomePage> {
   int navIndex = 0;
+  List<Map<String, dynamic>> _orders = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? userIdStr = prefs.getString('current_user_id');
+      final int? supplierId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      if (supplierId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Fetch all supplier_order records for this supplier
+      final orders = await supabase
+          .from('supplier_order')
+          .select('order_id, created_by_id, order_date, order_status')
+          .eq('supplier_id', supplierId)
+          .order('order_date', ascending: false);
+
+      final List<Map<String, dynamic>> ordersWithProducts = [];
+
+      // For each order, fetch the product count and creator name
+      for (final order in orders) {
+        final orderId = order['order_id'];
+
+        // Get product count (number of distinct products in this order)
+        final products = await supabase
+            .from('supplier_order_description')
+            .select('product_id')
+            .eq('order_id', orderId);
+
+        final productCount = (products as List).length.toString();
+
+        // Get creator/contact name (try to get from any related table or use ID)
+        final createdById = order['created_by_id'];
+        String creatorName = 'Order #$orderId';
+
+        if (createdById != null) {
+          // Try to fetch name from storage_manager table
+          final creator = await supabase
+              .from('storage_manager')
+              .select('name')
+              .eq('storage_manager_id', createdById)
+              .maybeSingle();
+
+          if (creator != null && creator['name'] != null) {
+            creatorName = creator['name'] as String;
+          }
+        }
+
+        ordersWithProducts.add({
+          'id': orderId.toString(),
+          'name': creatorName,
+          'productCount': productCount,
+          'order': order,
+        });
+      }
+
+      setState(() {
+        _orders = ordersWithProducts;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading orders: $e');
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
-
       body: Padding(
         padding: const EdgeInsets.fromLTRB(15, 60, 15, 20),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              _buildCard(
-                id: "8",
-                name: "Rami Rimawi",
-                products: "5",
-                productsList: demoProducts,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFF9D949)),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  children: _orders.isEmpty
+                      ? [
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32.0),
+                              child: Text(
+                                'No orders yet',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          )
+                        ]
+                      : _orders.map((orderData) {
+                          return _buildCard(
+                            id: orderData['id'],
+                            name: orderData['name'],
+                            products: orderData['productCount'],
+                            orderId: orderData['order']['order_id'],
+                          );
+                        }).toList(),
+                ),
               ),
-              _buildCard(
-                id: "22",
-                name: "Nizar Ahamd",
-                products: "13",
-                productsList: demoProducts,
-              ),
-              _buildCard(
-                id: "63",
-                name: "Akef Al Asmar",
-                products: "9",
-                productsList: demoProducts,
-              ),
-              _buildCard(
-                id: "5",
-                name: "Eyas Barghouthi",
-                products: "11",
-                productsList: demoProducts,
-              ),
-            ],
-          ),
-        ),
       ),
-
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
         onTap: (i) {
@@ -67,13 +143,13 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
   }
 
   /// -----------------------------------------------------------------
-  /// كارت واحد يمثل Order واحد
+  /// Card for one order (same UI/UX as before)
   /// -----------------------------------------------------------------
   Widget _buildCard({
     required String id,
     required String name,
     required String products,
-    required List<Map<String, dynamic>> productsList,
+    required int orderId,
   }) {
     return GestureDetector(
       onTap: () {
@@ -81,13 +157,12 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
           context,
           MaterialPageRoute(
             builder: (_) => OrderDetailsPage(
+              orderId: orderId,
               customerName: name,
-              products: productsList,
             ),
           ),
         );
       },
-
       child: Container(
         margin: const EdgeInsets.only(bottom: 15),
         padding: const EdgeInsets.all(15),
@@ -95,7 +170,6 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
           color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(16),
         ),
-
         child: Row(
           children: [
             // ID
@@ -113,7 +187,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
 
             const SizedBox(width: 20),
 
-            // Customer name
+            // Name
             Expanded(
               child: Column(
                 children: [
@@ -135,7 +209,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A1A),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Color(0xFFF9D949), width: 1),
+                border: Border.all(color: const Color(0xFFF9D949), width: 1),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -157,15 +231,3 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
     );
   }
 }
-
-
-/// -------------------------------------------------------------------------
-/// داتا مؤقتة (Demo) لصفحة Details
-/// -------------------------------------------------------------------------
-List<Map<String, dynamic>> demoProducts = [
-  {"name": "Hand Shower", "brand": "GROHE", "quantity": 1},
-  {"name": "Freestanding Bathtub", "brand": "Royal", "quantity": 1},
-  {"name": "Wall-Hung Toilet", "brand": "GROHE", "quantity": 1},
-  {"name": "Kitchen Sink", "brand": "Royal", "quantity": 1},
-  {"name": "Towel Ring", "brand": "Royal", "quantity": 1},
-];

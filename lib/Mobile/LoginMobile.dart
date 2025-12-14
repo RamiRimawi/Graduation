@@ -5,6 +5,7 @@ import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
 import 'StroageStaff/staff_home.dart';
 import 'Manager/HomeManager.dart';
+import 'Customer/customer_home_page.dart';
 
 class DolphinApp extends StatelessWidget {
   const DolphinApp({super.key});
@@ -154,6 +155,20 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
 
+      // Check Customer (NEW)
+      if (userType == null) {
+        final customerResult = await supabase
+            .from('user_account_customer')
+            .select('customer_id, password')
+            .eq('customer_id', int.tryParse(userId) ?? 0)
+            .maybeSingle();
+
+        if (customerResult != null && customerResult['password'] == password) {
+          userType = 'customer';
+          userData = customerResult;
+        }
+      }
+
       if (userType == null || userData == null) {
         _showError('Invalid User ID or Password');
         setState(() => _isLoading = false);
@@ -188,6 +203,9 @@ class _LoginPageState extends State<LoginPage> {
             break;
           case 'manager':
             homePage = const HomeManagerPage();
+            break;
+          case 'customer':
+            homePage = const CustomerHomePage();
             break;
           default:
             _showError('Unknown user type');

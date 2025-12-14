@@ -8,6 +8,9 @@ import 'bottom_navbar.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
 import 'StroageStaff/staff_home.dart';
+import 'Customer/customer_home_page.dart';
+import 'Customer/customer_cart_page.dart';
+import 'Customer/customer_archive_page.dart';
 import 'LoginMobile.dart';
 
 class AccountPage extends StatefulWidget {
@@ -577,40 +580,70 @@ class _AccountPageState extends State<AccountPage> {
         ],
       ),
 
-      bottomNavigationBar: (_userRole == 'supplier' || 
-                              _userRole == 'storage_staff' || 
-                              _userRole == 'delivery_driver' ||
-                              _userRole == 'delivery')
-          ? Builder(
-              builder: (context) {
-                return BottomNavBar(
-                  currentIndex: 1,
-                  onTap: (i) async {
+      bottomNavigationBar:
+          // Customer layout: 4 tabs (Home, Cart, Archive, Account)
+          (_userRole == 'customer')
+              ? BottomNavBar(
+                  currentIndex: 3,
+                  onTap: (i) {
                     if (i == 0) {
-                      final prefs = await SharedPreferences.getInstance();
-                      final String? userIdStr = prefs.getString('current_user_id');
-                      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
-
-                      Widget homePage;
-                      if ((_userRole == 'delivery_driver' || _userRole == 'delivery') && userId != null) {
-                        homePage = HomeDeleviry(deliveryDriverId: userId);
-                      } else if (_userRole == 'storage_staff') {
-                        homePage = const HomeStaff();
-                      } else {
-                        homePage = const SupplierHomePage();
-                      }
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => homePage),
-                        );
-                      }
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+                      );
+                    } else if (i == 1) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
+                      );
+                    } else if (i == 2) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
+                      );
+                    } else if (i == 3) {
+                      // already on AccountPage
                     }
                   },
-                );
-              }
-            )
-          : null,
+                )
+              :
+              // Supplier / staff / delivery layout (2 tabs: Home, Account)
+              (_userRole == 'supplier' ||
+                      _userRole == 'storage_staff' ||
+                      _userRole == 'delivery_driver' ||
+                      _userRole == 'delivery')
+                  ? Builder(
+                      builder: (context) {
+                        return BottomNavBar(
+                          currentIndex: 1,
+                          onTap: (i) async {
+                            if (i == 0) {
+                              final prefs = await SharedPreferences.getInstance();
+                              final String? userIdStr = prefs.getString('current_user_id');
+                              final int? userId =
+                                  userIdStr != null ? int.tryParse(userIdStr) : null;
+
+                              Widget homePage;
+                              if ((_userRole == 'delivery_driver' || _userRole == 'delivery') &&
+                                  userId != null) {
+                                homePage = HomeDeleviry(deliveryDriverId: userId);
+                              } else if (_userRole == 'storage_staff') {
+                                homePage = const HomeStaff();
+                              } else {
+                                homePage = const SupplierHomePage();
+                              }
+                              if (mounted) {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => homePage),
+                                );
+                              }
+                            }
+                          },
+                        );
+                      },
+                    )
+                  : null,
     );
   }
 
