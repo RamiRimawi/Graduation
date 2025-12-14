@@ -39,6 +39,7 @@ class _HomeStaffState extends State<HomeStaff> {
           .from('customer_order')
           .select('customer_order_id, customer:customer_id(name)')
           .eq('prepared_by_id', staffId)
+          .eq('order_status', 'Preparing')
           .order('customer_order_id');
 
       // Collect order ids for counting products
@@ -98,6 +99,17 @@ class _HomeStaffState extends State<HomeStaff> {
             ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
               )
+              : customers.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No orders Preparing',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
             : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
                 itemCount: customers.length,
