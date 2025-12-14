@@ -27,11 +27,25 @@ class _DeliveryPageState extends State<DeliveryPage> {
       _loading = true;
     });
     try {
-      // Fetch all delivery drivers with profile image
+      // Fetch all delivery drivers
       final driversRes = await supabase
           .from('delivery_driver')
-          .select('delivery_driver_id, name, profile_image')
+          .select('delivery_driver_id, name')
           .order('name', ascending: true) as List<dynamic>;
+
+      // Fetch profile images from user_account_delivery_driver
+      final ids = driversRes.map((d) => d['delivery_driver_id'] as int).toList();
+      Map<int, String?> profileById = {};
+      if (ids.isNotEmpty) {
+        final profiles = await supabase
+            .from('user_account_delivery_driver')
+            .select('delivery_driver_id, profile_image')
+            .filter('delivery_driver_id', 'in', ids);
+        for (final p in profiles as List<dynamic>) {
+          final pid = p['delivery_driver_id'] as int?;
+          if (pid != null) profileById[pid] = p['profile_image'] as String?;
+        }
+      }
 
       List<Map<String, dynamic>> active = [];
       List<Map<String, dynamic>> idle = [];
@@ -39,6 +53,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
       for (final driver in driversRes) {
         final driverId = driver['delivery_driver_id'] as int;
         final driverName = driver['name'] as String;
+        final profileImage = profileById[driverId];
 
         // Check if driver has active orders with status 'Delivery'
         final ordersRes = await supabase
@@ -52,14 +67,14 @@ class _DeliveryPageState extends State<DeliveryPage> {
           // Driver is active (has orders in Delivery status)
           active.add({
             'name': driverName,
-            'profile_image': driver['profile_image'],
+            'profile_image': profileImage,
             'delivery_driver_id': driverId,
           });
         } else {
           // Driver is idle (no active deliveries)
           idle.add({
             'name': driverName,
-            'profile_image': driver['profile_image'],
+            'profile_image': profileImage,
           });
         }
       }

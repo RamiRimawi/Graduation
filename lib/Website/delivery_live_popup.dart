@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -35,6 +34,20 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   Timer? _pollTimer;
   bool _isRouting = false;
 
+  // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
+  double _getZoomForDistance(double distanceMeters) {
+    // تقريبية: كلما زادت المسافة قل الزوم
+    if (distanceMeters < 500) return 16;
+    if (distanceMeters < 1500) return 15;
+    if (distanceMeters < 3000) return 14;
+    if (distanceMeters < 6000) return 13;
+    if (distanceMeters < 12000) return 12;
+    if (distanceMeters < 25000) return 11;
+    if (distanceMeters < 50000) return 10;
+    if (distanceMeters < 100000) return 9;
+    return 8;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +62,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   }
 
   void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchLocations(updateOnly: true));
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchLocations(updateOnly: true));
   }
 
   Future<void> _fetchLocations({bool updateOnly = false}) async {
@@ -69,7 +82,18 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
         setState(() {
           _driverLocation = newDriverLoc;
         });
-        _mapController.move(newDriverLoc, _mapController.zoom);
+        // إذا كان لدينا موقع العميل، احسب المسافة واضبط الزوم
+        if (_customerLocation != null) {
+          final dist = Distance().as(LengthUnit.Meter, newDriverLoc, _customerLocation!);
+          final center = LatLng(
+            (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
+            (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
+          );
+          final zoom = _getZoomForDistance(dist);
+          _mapController.move(center, zoom);
+        } else {
+          _mapController.move(newDriverLoc, _mapController.zoom);
+        }
       } else if (!updateOnly) {
       }
 
@@ -91,8 +115,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           final orderId = primary['customer_order_id'] as int?;
 
           if (custLat != null && custLng != null && mounted) {
+            final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
             setState(() {
-              _customerLocation = LatLng(custLat.toDouble(), custLng.toDouble());
+              _customerLocation = newCustomerLoc;
               _customerName = custName;
               _orderId = orderId;
               _otherOrders = orders
@@ -106,6 +131,16 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                   })
                   .toList();
             });
+            // إذا كان لدينا موقع السائق، احسب المسافة واضبط الزوم
+            if (_driverLocation != null) {
+              final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
+              final center = LatLng(
+                (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
+                (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
+              );
+              final zoom = _getZoomForDistance(dist);
+              _mapController.move(center, zoom);
+            }
           }
         }
       }
@@ -370,9 +405,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           ),
                           children: [
                             TileLayer(
-                              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              subdomains: const ['a', 'b', 'c'],
+                              // Use a provider with an API key to avoid OSM blocking.
+                              // Replace YOUR_KEY below with a valid key (e.g., MapTiler or Mapbox).
+                              urlTemplate:
+                                  'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
                               userAgentPackageName: 'com.example.app',
+                              tileProvider: NetworkTileProvider(),
                             ),
                             if (_routePoints.isNotEmpty)
                               PolylineLayer(

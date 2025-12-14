@@ -58,9 +58,7 @@ class _HomeStaffState extends State<HomeStaff> {
         for (final row in desc) {
           final id = row['customer_order_id'] as int?;
           if (id == null) continue;
-          final qty = (row['quantity'] as num?)?.toInt() ?? 0;
-          if (qty == 0) continue;
-          productCounts[id] = (productCounts[id] ?? 0) + qty;
+          productCounts[id] = (productCounts[id] ?? 0) + 1;
         }
       }
 

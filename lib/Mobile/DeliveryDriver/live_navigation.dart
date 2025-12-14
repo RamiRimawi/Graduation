@@ -283,8 +283,10 @@ class _LiveNavigationState extends State<LiveNavigation> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  // استخدم مزود بمفتاح لتفادي حجب OSM
+                  urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
                   userAgentPackageName: 'com.example.dolphin',
+                  tileProvider: NetworkTileProvider(),
                 ),
                 if (_routePoints.isNotEmpty)
                   PolylineLayer(

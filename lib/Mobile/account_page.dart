@@ -86,7 +86,7 @@ class _AccountPageState extends State<AccountPage> {
       String? idColumn;
       
       if (userRole == 'delivery' || userRole == 'delivery_driver') {
-        tableName = 'delivery_driver';
+        tableName = 'user_account_delivery_driver';
         idColumn = 'delivery_driver_id';
       } else if (userRole == 'supplier') {
         tableName = 'user_account_supplier';
@@ -194,9 +194,16 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadDeliveryDriver(int id) async {
     final profile = await supabase
         .from('delivery_driver')
-        .select('delivery_driver_id,name,mobile_number,telephone_number,address,profile_image')
+        .select('delivery_driver_id,name,mobile_number,telephone_number,address')
         .eq('delivery_driver_id', id)
         .maybeSingle();
+
+    final account = await supabase
+        .from('user_account_delivery_driver')
+        .select('profile_image')
+        .eq('delivery_driver_id', id)
+        .maybeSingle();
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -205,7 +212,7 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['delivery_driver_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : profile['profile_image'] as String?;
+        _profileImageUrl = _profileCached ? _profileImageUrl : account?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();

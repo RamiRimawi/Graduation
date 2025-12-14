@@ -221,8 +221,10 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  // استخدم مزود مفاتيح لتفادي حجب OSM
+                  urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
                   userAgentPackageName: 'com.example.dolphin',
+                  tileProvider: NetworkTileProvider(),
                 ),
                 MarkerLayer(
                   markers: [
