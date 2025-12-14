@@ -120,6 +120,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                 if (value != null && value > 0) {
                   setState(() {
                     products[index]['quantity'] = value;
+                    _isUpdateMode = true; // تفعيل وضع التحديث عند تعديل الكمية
                   });
                 }
                 Navigator.pop(context);
@@ -149,6 +150,11 @@ class _CustomerDetailState extends State<CustomerDetail> {
             .eq('customer_order_id', widget.customerId)
             .eq('product_id', pid);
       }
+      // تحديث حالة الطلب إلى "Updated"
+      await Supabase.instance.client
+          .from('customer_orders')
+          .update({'order_status': 'Updated'})
+          .eq('id', widget.customerId);
       if (mounted) {
         Navigator.pop(context);
       }
@@ -392,7 +398,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _isUpdateMode ? 'Send  Update' : ' Done ',
+                        _isUpdateMode ? 'Send  Update' : ' Save ',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
