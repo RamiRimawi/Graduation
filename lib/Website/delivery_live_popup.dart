@@ -65,6 +65,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchLocations(updateOnly: true));
   }
 
+
+  
+
   Future<void> _fetchLocations({bool updateOnly = false}) async {
     try {
       // Fetch driver location
@@ -132,6 +135,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                   .toList();
             });
             // إذا كان لدينا موقع السائق، احسب المسافة واضبط الزوم
+            // ignore: unnecessary_null_comparison
             if (_driverLocation != null) {
               final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
               final center = LatLng(
