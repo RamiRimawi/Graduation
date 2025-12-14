@@ -791,36 +791,6 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-// 🔹 Filter Button
-class _RoundIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _RoundIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF2D2D2D), width: 3),
-      ),
-      child: Material(
-        color: const Color(0xFF2D2D2D),
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(icon, size: 20, color: const Color(0xFFB7A447)),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // 🔹 Stock Toggle
 class _StockToggle extends StatelessWidget {
   final int selected;

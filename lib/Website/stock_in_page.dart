@@ -5,6 +5,7 @@ import 'stock_out_page.dart';
 import 'stock_in_previous.dart';
 import 'stock_in_receives.dart';
 import '../supabase_config.dart';
+import 'order_detail_popup.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -109,6 +110,7 @@ class _StockInPageState extends State<StockInPage> {
             'id': order['order_id'].toString(),
             'name': order['supplier']?['name'] ?? 'Unknown Supplier',
             'status': displayStatus,
+            'order_status': status,
             'supplier_id': order['supplier']?['supplier_id'],
           });
         }
@@ -142,6 +144,151 @@ class _StockInPageState extends State<StockInPage> {
         }).toList();
       }
     });
+  }
+
+  Future<void> _openOrderPopup(OrderRow order) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black26,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final detail = await _fetchOrderDetail(order.id);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+
+      OrderDetailPopup.show(
+        context,
+        orderType: 'in',
+        status: _mapStatus(order.orderStatus),
+        products: detail.products,
+        partyName: detail.partyName,
+        location: _composeLocation(detail.city, detail.address),
+        orderDate: detail.orderDate,
+        taxPercent: detail.taxPercent,
+        totalPrice: detail.totalPrice,
+        orderId: int.tryParse(order.id) ?? detail.orderId,
+        onOrderUpdated: _loadTodayOrders,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load order details: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<_OrderDetailData> _fetchOrderDetail(String orderId) async {
+    final parsedId = int.tryParse(orderId);
+
+    final order = await supabase
+        .from('supplier_order')
+        .select('''
+          order_date,
+          tax_percent,
+          total_balance,
+          accountant_id,
+          receives_by_id,
+          supplier:supplier_id(name, address, supplier_city:name),
+          accountant:accountant_id(name),
+          storage_manager:receives_by_id(name)
+          ''')
+        .eq('order_id', parsedId ?? orderId)
+        .maybeSingle();
+
+    if (order == null) {
+      throw Exception('Order not found');
+    }
+
+    final items = await supabase
+        .from('supplier_order_description')
+        .select(
+          'product_id, quantity, price_per_product, product:product_id(name, brand:brand_id(name, brand_id), unit:unit_id(unit_name, unit_id))',
+        )
+        .eq('order_id', parsedId ?? orderId);
+
+    final products = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final product = item['product'] as Map<String, dynamic>?;
+      final brand = product?['brand'] as Map<String, dynamic>?;
+      final unit = product?['unit'] as Map<String, dynamic>?;
+      final quantity = (item['quantity'] ?? 0) as num;
+      final total = (item['price_per_product'] ?? 0) as num;
+      final price = total; // since total is price_per_product
+
+      products.add({
+        'id': item['product_id'] ?? 0,
+        'name': item['product_id'] ?? 0,
+        'brand': brand?['brand_id'] ?? 0,
+        'price': price,
+        'quantity': quantity,
+        'total': price * quantity,
+        'unit': unit?['unit_id'] ?? 0,
+      });
+    }
+
+    final orderDateRaw = order['order_date']?.toString();
+    final orderDate = orderDateRaw != null && orderDateRaw.isNotEmpty
+        ? DateTime.parse(orderDateRaw)
+        : DateTime.now();
+
+    return _OrderDetailData(
+      partyName: (order['supplier']?['name'] ?? 'Unknown') as String,
+      city: order['supplier']?['supplier_city']?['name'] as String?,
+      address: order['supplier']?['address'] as String?,
+      orderDate: orderDate,
+      taxPercent: order['tax_percent'] as num?,
+      totalPrice: order['total_balance'] as num?,
+      orderId: parsedId ?? int.tryParse(orderId) ?? 0,
+      products: products,
+      manager:
+          order['accountant'] != null &&
+              order['accountant'] is Map<String, dynamic>
+          ? order['accountant']
+          : null,
+      storageStaff:
+          order['storage_manager'] != null &&
+              order['storage_manager'] is Map<String, dynamic>
+          ? order['storage_manager']
+          : null,
+      deliveryDriver: null,
+    );
+  }
+
+  String _mapStatus(String orderStatus) {
+    switch (orderStatus) {
+      case 'Updated':
+        return 'UPDATE';
+      default:
+        return 'NEW';
+    }
+  }
+
+  String _composeLocation(String? city, String? address) {
+    if ((city == null || city.isEmpty) &&
+        (address == null || address.isEmpty)) {
+      return '-';
+    }
+    if (city != null &&
+        city.isNotEmpty &&
+        address != null &&
+        address.isNotEmpty) {
+      return '$city - $address';
+    }
+    return city?.isNotEmpty == true ? city! : address ?? '-';
+  }
+
+  String _formatMoney(num value) {
+    final asDouble = value.toDouble();
+    if (asDouble == 0) return '-';
+    return '${asDouble.toStringAsFixed(2)}\$';
   }
 
   @override
@@ -317,74 +464,87 @@ class _StockInPageState extends State<StockInPage> {
                                               setState(() => hoveredRow = i),
                                           onExit: (_) =>
                                               setState(() => hoveredRow = null),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 200,
-                                            ),
-                                            height: 64,
-                                            decoration: BoxDecoration(
-                                              color: bg,
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                              border: Border.all(
-                                                color: isHovered
-                                                    ? AppColors.blue
-                                                    : Colors.transparent,
-                                                width: 1.5,
+                                          child: InkWell(
+                                            onTap: () {
+                                              final order = OrderRow(
+                                                id: row['id'],
+                                                name: row['name'],
+                                                status: row['status'],
+                                                orderStatus:
+                                                    row['order_status'],
+                                              );
+                                              _openOrderPopup(order);
+                                            },
+                                            child: AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
                                               ),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 20,
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Text(
-                                                      row['id'] ?? '',
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w800,
+                                              height: 64,
+                                              decoration: BoxDecoration(
+                                                color: bg,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: isHovered
+                                                      ? AppColors.blue
+                                                      : Colors.transparent,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 20,
+                                                  ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: Text(
+                                                        row['id'] ?? '',
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                                Expanded(
-                                                  flex: 5,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Text(
-                                                      row['name'] ?? '',
-                                                      style: const TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
+                                                  Expanded(
+                                                    flex: 5,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: Text(
+                                                        row['name'] ?? '',
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerRight,
-                                                    child: _StatusChip(
-                                                      status:
-                                                          row['status'] ?? '',
+                                                  Expanded(
+                                                    flex: 3,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerRight,
+                                                      child: _StatusChip(
+                                                        status:
+                                                            row['status'] ?? '',
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         );
@@ -404,6 +564,48 @@ class _StockInPageState extends State<StockInPage> {
       ),
     );
   }
+}
+
+// 🔹 Order Row class
+class OrderRow {
+  final String id;
+  final String name;
+  final String status;
+  final String orderStatus;
+  OrderRow({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.orderStatus,
+  });
+}
+
+class _OrderDetailData {
+  final String partyName;
+  final String? city;
+  final String? address;
+  final DateTime orderDate;
+  final num? taxPercent;
+  final num? totalPrice;
+  final int orderId;
+  final List<Map<String, dynamic>> products;
+  final Map<String, dynamic>? manager;
+  final Map<String, dynamic>? storageStaff;
+  final Map<String, dynamic>? deliveryDriver;
+
+  _OrderDetailData({
+    required this.partyName,
+    required this.orderDate,
+    required this.products,
+    required this.orderId,
+    this.city,
+    this.address,
+    this.taxPercent,
+    this.totalPrice,
+    this.manager,
+    this.storageStaff,
+    this.deliveryDriver,
+  });
 }
 
 // 🔹 الأزرار والتفاصيل الثانوية نفسها كما هي من كودك السابق 🔹

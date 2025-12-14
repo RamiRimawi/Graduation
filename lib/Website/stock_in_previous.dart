@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'Orders_stock_in_previous_popup.dart';
 import 'sidebar.dart';
 import 'stock_out_page.dart';

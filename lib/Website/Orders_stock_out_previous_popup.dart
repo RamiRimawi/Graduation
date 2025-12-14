@@ -202,7 +202,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final deliveryDriver = _orderData!['delivery_driver'] as Map?;
     final preparedBy = _orderData!['storage_staff'] as Map?;
     final managedBy = _orderData!['storage_manager'] as Map?;
-    final accountant = _orderData!['accountant'] as Map?;
 
     final orderDate = _orderData!['order_date'] != null
         ? DateTime.parse(_orderData!['order_date'])

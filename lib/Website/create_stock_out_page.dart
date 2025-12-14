@@ -178,7 +178,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
       if (accountantId != null) {
         accountantName = await getAccountantName(accountantId);
       }
-      final now = DateTime.now().toIso8601String();
       // Check available quantity for each product
       final insufficientProducts = <String>[];
       for (final product in allProducts) {
@@ -357,7 +356,6 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
       if (accountantId != null) {
         accountantName = await getAccountantName(accountantId);
       }
-      final now = DateTime.now().toIso8601String();
 
       final orderData = {
         'customer_id': int.parse(selectedCustomerId!),

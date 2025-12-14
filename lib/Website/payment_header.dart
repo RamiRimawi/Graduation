@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'payment_page.dart';
 import 'checks_page.dart';
 import 'archive_payment_page.dart';
-import 'choose_payment.dart';
 
 /// Reusable header for payment pages
 class PaymentHeader extends StatelessWidget {

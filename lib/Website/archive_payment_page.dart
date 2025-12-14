@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
-import 'payment_page.dart';
 import 'sidebar.dart';
-import 'checks_page.dart';
-import 'choose_payment.dart';
 import 'payment_header.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_config.dart';
 
 /// صفحة: Payment - Archive (Incoming / Outgoing)
@@ -546,55 +542,6 @@ class _RoundIconButton extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------
-// Inline Calendar (embedded, not center dialog)
-// ------------------------------------------------------------------
-class _InlineCalendar extends StatelessWidget {
-  final String label;
-  final DateTime? selectedDate;
-  final ValueChanged<DateTime> onChange;
-  final DateTime? firstDate;
-  final DateTime? lastDate;
-
-  const _InlineCalendar({
-    required this.label,
-    required this.selectedDate,
-    required this.onChange,
-    this.firstDate,
-    this.lastDate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF232427),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.blue, width: 1),
-          ),
-          child: CalendarDatePicker(
-            initialDate: selectedDate ?? DateTime.now(),
-            firstDate: firstDate ?? DateTime(2020, 1, 1),
-            lastDate: lastDate ?? DateTime(2030, 12, 31),
-            onDateChanged: onChange,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 // ------------------------------------------------------------------
 // جدول الأرشيف

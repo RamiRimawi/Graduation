@@ -406,7 +406,6 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
     final bool isNew = widget.status == "NEW";
     final bool isHold = widget.status == "HOLD";
     final bool showDiscountField = isCustomerOut && (isNew || isHold);
-    final bool showLaterButton = isNew;
 
     final orderDateValue = widget.orderDate ?? DateTime.now();
     final totalText = _calculateTotal();

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../supabase_config.dart';
 import 'package:intl/intl.dart';
-import '../Website/stock_in_previous.dart';
 
 class AppColors {
   static const white = Color(0xFFFFFFFF);
