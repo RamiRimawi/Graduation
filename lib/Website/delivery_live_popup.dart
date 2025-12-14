@@ -98,10 +98,10 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
             (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
             (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
           );
-          // استخدم زوم ثابت
-          _mapController.move(center, 14);
+          // احتفظ بالزوم الحالي
+          _mapController.move(center, _mapController.zoom);
         } else {
-          _mapController.move(newDriverLoc, 14);
+          _mapController.move(newDriverLoc, _mapController.zoom);
         }
       } else if (!updateOnly) {
       }
