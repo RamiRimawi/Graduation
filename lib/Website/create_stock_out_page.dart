@@ -459,7 +459,11 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
                                   Icons.arrow_back,
                                   color: Colors.white,
                                 ),
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () {
+                                  if (Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                  }
+                                },
                               ),
                             ),
                             const SizedBox(height: 40),

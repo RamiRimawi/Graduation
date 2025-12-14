@@ -973,7 +973,6 @@ class _ProfitChartState extends State<_ProfitChart>
     'Dec',
   ];
 
-  static const double _maxY = 20;
   static const double _barMaxHeight = 230;
   static const int _tickCount = 5;
 

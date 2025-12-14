@@ -110,8 +110,10 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
       final quantity = (product['quantity'] ?? 0) as int;
       _originalQuantities[productId] = quantity;
     }
-    // Validate inventory on init
-    _validateInventory();
+    // Validate inventory on init (only for stock-out orders)
+    if (widget.orderType != 'in') {
+      _validateInventory();
+    }
     _discountCtrl.addListener(() {
       final value = double.tryParse(_discountCtrl.text) ?? 0.0;
       setState(() {
@@ -235,59 +237,62 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
 
   Future<void> _handleSendOrder(BuildContext context) async {
     try {
-      // First, validate that all products have sufficient quantity in stock
-      final insufficientProducts = <String>[];
+      // Skip inventory validation for stock-in orders
+      if (widget.orderType != 'in') {
+        // First, validate that all products have sufficient quantity in stock
+        final insufficientProducts = <String>[];
 
-      for (final product in _products) {
-        final productId = _getProductId(product['id']);
-        final requestedQty = (product['quantity'] ?? 0) as int;
+        for (final product in _products) {
+          final productId = _getProductId(product['id']);
+          final requestedQty = (product['quantity'] ?? 0) as int;
 
-        if (requestedQty <= 0) {
-          insufficientProducts.add(
-            '${product['name']}: Quantity must be greater than 0',
-          );
-          continue;
+          if (requestedQty <= 0) {
+            insufficientProducts.add(
+              '${product['name']}: Quantity must be greater than 0',
+            );
+            continue;
+          }
+
+          // Fetch product total_quantity from database
+          final response = await supabase
+              .from('product')
+              .select('total_quantity')
+              .eq('product_id', productId)
+              .single();
+
+          final availableQty = response['total_quantity'] as int?;
+
+          if (availableQty == null || availableQty < requestedQty) {
+            insufficientProducts.add(
+              '${product['name']}: Insufficient stock (Available: $availableQty, Requested: $requestedQty)',
+            );
+          }
         }
 
-        // Fetch product total_quantity from database
-        final response = await supabase
-            .from('product')
-            .select('total_quantity')
-            .eq('product_id', productId)
-            .single();
+        // If any products don't have enough stock, show error and don't proceed
+        if (insufficientProducts.isNotEmpty) {
+          if (!mounted) return;
 
-        final availableQty = response['total_quantity'] as int?;
-
-        if (availableQty == null || availableQty < requestedQty) {
-          insufficientProducts.add(
-            '${product['name']}: Insufficient stock (Available: $availableQty, Requested: $requestedQty)',
-          );
-        }
-      }
-
-      // If any products don't have enough stock, show error and don't proceed
-      if (insufficientProducts.isNotEmpty) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Insufficient Stock:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                ...insufficientProducts.map((msg) => Text('• $msg')).toList(),
-              ],
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Insufficient Stock:',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  ...insufficientProducts.map((msg) => Text('• $msg')).toList(),
+                ],
+              ),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 5),
             ),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-        return;
+          );
+          return;
+        }
       }
 
       if (!mounted) return;
@@ -670,9 +675,13 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                           ),
                                           decoration: BoxDecoration(
                                             color:
-                                                _insufficientProducts.contains(
-                                                  _getProductId(product["id"]),
-                                                )
+                                                (widget.orderType != 'in' &&
+                                                    _insufficientProducts
+                                                        .contains(
+                                                          _getProductId(
+                                                            product["id"],
+                                                          ),
+                                                        ))
                                                 ? Colors.red.shade700
                                                 : (product["quantity"] ?? 0) > 0
                                                 ? const Color(0xFFB7A447)
@@ -681,9 +690,13 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                               6,
                                             ),
                                             border:
-                                                _insufficientProducts.contains(
-                                                  _getProductId(product["id"]),
-                                                )
+                                                (widget.orderType != 'in' &&
+                                                    _insufficientProducts
+                                                        .contains(
+                                                          _getProductId(
+                                                            product["id"],
+                                                          ),
+                                                        ))
                                                 ? Border.all(
                                                     color: Colors.red.shade300,
                                                     width: 2,
@@ -781,13 +794,19 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                                           _productAvailableQty[productId] ??
                                                           0;
 
-                                                      if (newQty >
-                                                          availableQty) {
-                                                        _insufficientProducts
-                                                            .add(productId);
-                                                      } else {
-                                                        _insufficientProducts
-                                                            .remove(productId);
+                                                      // Check if this product now has sufficient stock (only for stock-out orders)
+                                                      if (widget.orderType !=
+                                                          'in') {
+                                                        if (newQty >
+                                                            availableQty) {
+                                                          _insufficientProducts
+                                                              .add(productId);
+                                                        } else {
+                                                          _insufficientProducts
+                                                              .remove(
+                                                                productId,
+                                                              );
+                                                        }
                                                       }
                                                     });
                                                   },
@@ -821,10 +840,11 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                   ],
                                 ),
                               ),
-                              // Show warning message if product has insufficient stock
-                              if (_insufficientProducts.contains(
-                                _getProductId(product["id"]),
-                              ))
+                              // Show warning message if product has insufficient stock (only for stock-out orders)
+                              if (widget.orderType != 'in' &&
+                                  _insufficientProducts.contains(
+                                    _getProductId(product["id"]),
+                                  ))
                                 Padding(
                                   padding: const EdgeInsets.only(
                                     top: 4,

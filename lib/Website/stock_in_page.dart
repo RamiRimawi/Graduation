@@ -44,9 +44,12 @@ class _StockInPageState extends State<StockInPage> {
     setState(() => isLoading = true);
 
     try {
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59);
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final threeDaysAgo = todayStart.subtract(
+        const Duration(days: 2),
+      ); // includes today, yesterday, day before
 
       // Query supplier_order with supplier details
       final response = await supabase
@@ -55,12 +58,19 @@ class _StockInPageState extends State<StockInPage> {
             order_id,
             order_status,
             order_date,
+            accountant_id,
             supplier:supplier_id (
               supplier_id,
               name
             )
           ''')
-          .inFilter('order_status', ['Sent', 'Accepted', 'Rejected', 'Updated'])
+          .inFilter('order_status', [
+            'Sent',
+            'Accepted',
+            'Rejected',
+            'Delivered',
+            'Updated',
+          ])
           .order('order_date', ascending: false);
 
       final List<Map<String, dynamic>> allOrders = [];
@@ -69,22 +79,36 @@ class _StockInPageState extends State<StockInPage> {
         final orderDate = DateTime.parse(order['order_date']);
         final status = order['order_status'];
 
-        // Include Sent and Updated regardless of date
-        // Include Accepted and Rejected only if same day
+        String displayStatus = status;
+        if (status == 'Sent' && order['accountant_id'] == null) {
+          displayStatus = 'Created By Manager';
+        }
+
         bool shouldInclude = false;
 
-        if (status == 'Sent' || status == 'Updated') {
+        if (status == 'Sent' || status == 'Accepted' || status == 'Updated') {
           shouldInclude = true;
-        } else if (status == 'Accepted' || status == 'Rejected') {
+        } else if (status == 'Rejected') {
+          // Only include if orderDate is within the last 3 days (including today)
           shouldInclude =
-              orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
+              orderDate.isAfter(
+                threeDaysAgo.subtract(const Duration(seconds: 1)),
+              ) &&
+              orderDate.isBefore(todayEnd.add(const Duration(seconds: 1)));
+        } else if (status == 'Delivered') {
+          // Only include if orderDate is today
+          shouldInclude =
+              orderDate.isAfter(
+                todayStart.subtract(const Duration(seconds: 1)),
+              ) &&
+              orderDate.isBefore(todayEnd.add(const Duration(seconds: 1)));
         }
 
         if (shouldInclude) {
           allOrders.add({
             'id': order['order_id'].toString(),
             'name': order['supplier']?['name'] ?? 'Unknown Supplier',
-            'status': status,
+            'status': displayStatus,
             'supplier_id': order['supplier']?['supplier_id'],
           });
         }
@@ -766,25 +790,9 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // All statuses use gold color
     Color text = AppColors.gold;
-    Color bg = AppColors.gold.withOpacity(.12);
-
-    if (status == 'Delivered') {
-      text = AppColors.delivered;
-      bg = AppColors.delivered.withOpacity(.15);
-    } else if (status == 'Rejected') {
-      text = AppColors.danger;
-      bg = AppColors.danger.withOpacity(.15);
-    } else if (status == 'Accepted') {
-      text = Colors.greenAccent.shade400;
-      bg = Colors.greenAccent.shade400.withOpacity(.15);
-    } else if (status == 'Sent') {
-      text = AppColors.blue;
-      bg = AppColors.blue.withOpacity(.15);
-    } else if (status == 'Updated') {
-      text = Colors.orangeAccent.shade400;
-      bg = Colors.orangeAccent.shade400.withOpacity(.15);
-    }
+    Color bg = AppColors.gold.withOpacity(0.12);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
