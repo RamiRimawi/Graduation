@@ -37,7 +37,7 @@ class _InventoryPageState extends State<InventoryPage> {
       // Load inventories
       final inventoriesResponse = await supabase
           .from('inventory')
-          .select('inventory_id, inventory_location')
+          .select('inventory_id, inventory_name')
           .order('inventory_id');
       
       inventories = List<Map<String, dynamic>>.from(inventoriesResponse);
@@ -598,7 +598,7 @@ class _InventoryTabs extends StatelessWidget {
           final index = entry.key + 1; // +1 because 0 is Total
           final inventory = entry.value;
           final inventoryId = inventory['inventory_id'];
-          final location = inventory['inventory_location'] ?? 'Inventory #$inventoryId';
+          final location = inventory['inventory_name'] ?? 'Inventory #$inventoryId';
           
           return Row(
             children: [

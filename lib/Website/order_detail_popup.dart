@@ -639,7 +639,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                       flex: 3,
                                       child: Center(
                                         child: Text(
-                                          product["name"],
+                                          product["name"].toString(),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -648,7 +648,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                       flex: 2,
                                       child: Center(
                                         child: Text(
-                                          product["brand"],
+                                          product["brand"].toString(),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -657,7 +657,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                       flex: 2,
                                       child: Center(
                                         child: Text(
-                                          product["price"],
+                                          product["price"].toString(),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -1409,69 +1409,124 @@ class _ReadOnlyOrderDetailDialog extends StatelessWidget {
                               color: const Color(0xFF252525),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  flex: 1,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      product["id"].toString(),
-                                      style: const TextStyle(
-                                        color: Colors.amberAccent,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 1,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          product["id"].toString(),
+                                          style: const TextStyle(
+                                            color: Colors.amberAccent,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: Center(
-                                    child: Text(
-                                      product["name"],
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Center(
-                                    child: Text(
-                                      product["brand"],
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Center(
-                                    child: Text(
-                                      product["price"],
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Center(
-                                    child: Text(
-                                      product["quantity"].toString(),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                    Expanded(
+                                      flex: 3,
+                                      child: Center(
+                                        child: Text(
+                                          product["name"],
+                                          textAlign: TextAlign.center,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Center(
+                                        child: Text(
+                                          product["brand"],
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Center(
+                                        child: Text(
+                                          product["price"],
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Center(
+                                        child: Text(
+                                          product["quantity"].toString(),
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Text(
+                                          product["total"].toString(),
+                                          textAlign: TextAlign.right,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
-                                      product["total"].toString(),
-                                      textAlign: TextAlign.right,
+                                if (orderType == 'in' &&
+                                    status.toLowerCase() == 'delivered' &&
+                                    (product['inventories'] != null &&
+                                        (product['inventories'] as List)
+                                            .isNotEmpty))
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 8,
+                                      left: 8,
+                                      right: 8,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Inventory allocations:',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        ...List<Widget>.from(
+                                          (product['inventories'] as List).map(
+                                            (inv) => Row(
+                                              children: [
+                                                const Text(
+                                                  '• ',
+                                                  style: TextStyle(
+                                                    color: Colors.white54,
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: Text(
+                                                    '${inv['inventory']}: ${inv['quantity']}',
+                                                    style: const TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
                               ],
                             ),
                           ),

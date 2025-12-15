@@ -6,6 +6,7 @@ import 'stock_in_previous.dart';
 import 'stock_in_receives.dart';
 import '../supabase_config.dart';
 import 'order_detail_popup.dart';
+import 'Orders_stock_in_previous_popup.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -147,6 +148,18 @@ class _StockInPageState extends State<StockInPage> {
   }
 
   Future<void> _openOrderPopup(OrderRow order) async {
+    // For Delivered orders, show inventory breakdown popup
+    if (order.orderStatus == 'Delivered') {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (_) => OrdersStockInPreviousPopup(orderId: order.id),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -157,30 +170,70 @@ class _StockInPageState extends State<StockInPage> {
     try {
       final detail = await _fetchOrderDetail(order.id);
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
 
-      OrderDetailPopup.show(
-        context,
-        orderType: 'in',
-        status: _mapStatus(order.orderStatus),
-        products: detail.products,
-        partyName: detail.partyName,
-        location: _composeLocation(detail.city, detail.address),
-        orderDate: detail.orderDate,
-        taxPercent: detail.taxPercent,
-        totalPrice: detail.totalPrice,
-        orderId: int.tryParse(order.id) ?? detail.orderId,
-        onOrderUpdated: _loadTodayOrders,
-      );
-    } catch (e) {
-      if (mounted) {
+      // Safely pop the loading dialog
+      try {
         Navigator.of(context, rootNavigator: true).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load order details: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
+      } catch (e) {
+        // Dialog already closed
+      }
+
+      if (!mounted) return;
+
+      // For Sent and Updated statuses, show editable popup
+      if (order.orderStatus == 'Sent' || order.orderStatus == 'Updated') {
+        OrderDetailPopup.show(
+          context,
+          orderType: 'in',
+          status: _mapStatus(order.orderStatus),
+          products: detail.products,
+          partyName: detail.partyName,
+          location: _composeLocation(detail.city, detail.address),
+          orderDate: detail.orderDate,
+          taxPercent: detail.taxPercent,
+          totalPrice: detail.totalPrice,
+          orderId: int.tryParse(order.id) ?? detail.orderId,
+          onOrderUpdated: _loadTodayOrders,
         );
+      } else {
+        // For other statuses (Rejected, Accepted), show read-only popup
+        ReadOnlyOrderDetailPopup.show(
+          context,
+          orderType: 'in',
+          status: order.orderStatus,
+          products: detail.products,
+          partyName: detail.partyName,
+          location: _composeLocation(detail.city, detail.address),
+          orderDate: detail.orderDate,
+          taxPercent: detail.taxPercent,
+          totalPrice: detail.totalPrice,
+          orderId: int.tryParse(order.id) ?? detail.orderId,
+          manager: detail.manager,
+          storageStaff: detail.storageStaff,
+          deliveryDriver: detail.deliveryDriver,
+        );
+      }
+    } catch (e, stackTrace) {
+      if (mounted) {
+        try {
+          Navigator.of(context, rootNavigator: true).pop();
+        } catch (_) {
+          // Dialog already closed
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load order details: $e'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        print('Error loading order details:');
+        print('Error: $e');
+        print('StackTrace: $stackTrace');
       }
     }
   }
@@ -196,7 +249,7 @@ class _StockInPageState extends State<StockInPage> {
           total_balance,
           accountant_id,
           receives_by_id,
-          supplier:supplier_id(name, address, supplier_city:name),
+          supplier:supplier_id(name, address, supplier_city(name)),
           accountant:accountant_id(name),
           storage_manager:receives_by_id(name)
           ''')
@@ -225,12 +278,12 @@ class _StockInPageState extends State<StockInPage> {
 
       products.add({
         'id': item['product_id'] ?? 0,
-        'name': item['product_id'] ?? 0,
-        'brand': brand?['brand_id'] ?? 0,
-        'price': price,
+        'name': product?['name'] ?? 'Unknown Product',
+        'brand': brand?['name'] ?? 'Unknown Brand',
+        'price': '${price.toStringAsFixed(2)}\$',
         'quantity': quantity,
         'total': price * quantity,
-        'unit': unit?['unit_id'] ?? 0,
+        'unit': unit?['unit_name'] ?? 'Unknown Unit',
       });
     }
 
@@ -240,9 +293,9 @@ class _StockInPageState extends State<StockInPage> {
         : DateTime.now();
 
     return _OrderDetailData(
-      partyName: (order['supplier']?['name'] ?? 'Unknown') as String,
-      city: order['supplier']?['supplier_city']?['name'] as String?,
-      address: order['supplier']?['address'] as String?,
+      partyName: (order['supplier']?['name'] ?? 'Unknown').toString(),
+      city: order['supplier']?['supplier_city']?['name']?.toString(),
+      address: order['supplier']?['address']?.toString(),
       orderDate: orderDate,
       taxPercent: order['tax_percent'] as num?,
       totalPrice: order['total_balance'] as num?,
@@ -266,6 +319,10 @@ class _StockInPageState extends State<StockInPage> {
     switch (orderStatus) {
       case 'Updated':
         return 'UPDATE';
+      case 'Sent':
+      case 'Accepted':
+      case 'Rejected':
+      case 'Delivered':
       default:
         return 'NEW';
     }
@@ -283,12 +340,6 @@ class _StockInPageState extends State<StockInPage> {
       return '$city - $address';
     }
     return city?.isNotEmpty == true ? city! : address ?? '-';
-  }
-
-  String _formatMoney(num value) {
-    final asDouble = value.toDouble();
-    if (asDouble == 0) return '-';
-    return '${asDouble.toStringAsFixed(2)}\$';
   }
 
   @override
