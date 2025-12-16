@@ -22,11 +22,40 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   bool isUpdated = false;
   List<Map<String, dynamic>> products = [];
   bool isLoading = true;
+  String supplierName = '';
 
   @override
   void initState() {
     super.initState();
+    _loadSupplierName();
     _loadOrderProducts();
+  }
+
+  Future<void> _loadSupplierName() async {
+    final prefs = await SharedPreferences.getInstance();
+    String name = prefs.getString('name') ?? '';
+
+    // Fallback: fetch supplier name by current_user_id if not in prefs
+    if (name.isEmpty) {
+      final String? userIdStr = prefs.getString('current_user_id');
+      final int? supplierId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      if (supplierId != null) {
+        final supplier = await supabase
+            .from('supplier')
+            .select('name')
+            .eq('supplier_id', supplierId)
+            .maybeSingle();
+
+        if (supplier != null && supplier['name'] != null) {
+          name = supplier['name'] as String;
+        }
+      }
+    }
+
+    setState(() {
+      supplierName = name.isEmpty ? 'Supplier' : name;
+    });
   }
 
   Future<void> _loadOrderProducts() async {
@@ -67,9 +96,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           }
 
           productsList.add({
+            'product_id': productId,
             'name': productData['name'] as String,
             'brand': brandName.isEmpty ? 'Unknown' : brandName,
             'quantity': item['quantity'] ?? 0,
+            'original_quantity': item['quantity'] ?? 0,
             'price_per_product': item['price_per_product'] ?? 0,
           });
         }
@@ -189,7 +220,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
             // ---------------- SUBMIT BUTTON ----------------
             GestureDetector(
-              onTap: () {},
+              onTap: isUpdated ? _handleSendUpdate : _handleDone,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 18),
@@ -238,6 +269,100 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         },
       ),
     );
+  }
+
+  // ============= HANDLE DONE BUTTON =============
+  Future<void> _handleDone() async {
+    try {
+      final nowIso = DateTime.now().toIso8601String().split('.').first; // Trim to seconds
+      // Update order status to 'Accepted'
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Accepted',
+            'last_tracing_by': supplierName,
+            'last_tracing_time': nowIso,
+          })
+          .eq('order_id', widget.orderId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order accepted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint('Error accepting order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ============= HANDLE SEND UPDATE BUTTON =============
+  Future<void> _handleSendUpdate() async {
+    try {
+      final nowIso = DateTime.now().toIso8601String().split('.').first; // Trim to seconds
+
+      // Update quantities for changed products
+      for (final product in products) {
+        if (product['quantity'] != product['original_quantity']) {
+          await supabase
+              .from('supplier_order_description')
+              .update({
+                'quantity': product['quantity'],
+                'last_tracing_by': supplierName,
+                'last_tracing_time': nowIso,
+              })
+              .eq('order_id', widget.orderId)
+              .eq('product_id', product['product_id']);
+        }
+      }
+
+      // Update order status to 'Updated'
+      final orderUpdate = await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Updated',
+            'last_tracing_by': supplierName,
+            'last_tracing_time': nowIso,
+          })
+          .eq('order_id', widget.orderId)
+          .select('order_status')
+          .maybeSingle();
+
+      if (orderUpdate == null) {
+        throw Exception('Failed to update order status');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint('Error updating order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ============= EDIT QUANTITY POPUP =============

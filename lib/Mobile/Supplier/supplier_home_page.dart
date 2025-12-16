@@ -24,6 +24,12 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
   }
 
   Future<void> _loadOrders() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _orders = [];
+      });
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? userIdStr = prefs.getString('current_user_id');
@@ -39,6 +45,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
           .from('supplier_order')
           .select('order_id, created_by_id, order_date, order_status')
           .eq('supplier_id', supplierId)
+          .eq('order_status', 'Sent')
           .order('order_date', ascending: false);
 
       final List<Map<String, dynamic>> ordersWithProducts = [];
@@ -152,8 +159,8 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
     required int orderId,
   }) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final shouldRefresh = await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => OrderDetailsPage(
@@ -162,6 +169,10 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
             ),
           ),
         );
+
+        if (shouldRefresh == true) {
+          await _loadOrders();
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 15),
