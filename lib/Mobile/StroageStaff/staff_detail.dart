@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../account_page.dart';
 import '../bottom_navbar.dart';
+import 'staff_home.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerDetail extends StatefulWidget {
@@ -156,7 +157,11 @@ class _CustomerDetailState extends State<CustomerDetail> {
           .update({'order_status': 'Updated'})
           .eq('id', widget.customerId);
       if (mounted) {
-        Navigator.pop(context);
+        // Navigate back to Storage Staff home after successful update
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeStaff()),
+        );
       }
     } catch (_) {
       // تجاهل الخطأ للحفاظ على نفس الـ UI
@@ -376,12 +381,18 @@ class _CustomerDetailState extends State<CustomerDetail> {
                 child: ElevatedButton(
                   onPressed: () {
                     if (!_isUpdateMode) {
-                      // أول ضغطة: نحفظ التعديلات ونبدّل الزر
-                      setState(() {
-                        _isUpdateMode = true;
-                      });
+                      // If user presses Done (non-update mode), return to HomeStaff
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HomeStaff()),
+                      );
                     } else {
+                      // In Send Update mode -> save changes
                       _saveUpdates();
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HomeStaff()),
+                      );
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -398,7 +409,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        _isUpdateMode ? 'Send  Update' : ' Save ',
+                        _isUpdateMode ? 'Send  Update' : ' Done ',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,

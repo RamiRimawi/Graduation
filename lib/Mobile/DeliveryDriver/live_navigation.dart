@@ -41,6 +41,11 @@ class _LiveNavigationState extends State<LiveNavigation> {
   Timer? _routeUpdateTimer;
   Timer? _locationUpdateTimer;
   bool _arrivedAtDestination = false;
+  // Arrival detection helpers
+  DateTime? _arrivalEnteredAt;
+  final Duration _arrivalDwell = const Duration(seconds: 5);
+  final double _arrivalThresholdKm = 0.05; // 50 meters
+  final double _speedThresholdMps = 1.5; // ~5.4 km/h
   DateTime? _lastUpdate;
   int _updateCount = 0;
   bool _compassMode = true;
@@ -148,10 +153,28 @@ class _LiveNavigationState extends State<LiveNavigation> {
             newLocation,
             LatLng(widget.customerLatitude, widget.customerLongitude),
           );
-          
-          if (distanceToDestination < 0.05 && !_arrivedAtDestination) {
-            setState(() => _arrivedAtDestination = true);
-            _showArrivalDialog();
+
+          // Arrival logic: require either low speed OR dwell inside radius
+          if (!_arrivedAtDestination) {
+            final bool withinRadius = distanceToDestination < _arrivalThresholdKm;
+            final double speed = position.speed; // m/s, 0 if unknown/stationary
+
+            if (withinRadius) {
+              // If device moving slowly (stopped/near stopped), treat as arrived
+              if (speed >= 0 && speed <= _speedThresholdMps) {
+                _handleArrival();
+              } else {
+                // not slow enough yet: start dwell timer
+                _arrivalEnteredAt ??= DateTime.now();
+                final entered = _arrivalEnteredAt!;
+                if (DateTime.now().difference(entered) >= _arrivalDwell) {
+                  _handleArrival();
+                }
+              }
+            } else {
+              // left the radius: reset dwell timestamp
+              _arrivalEnteredAt = null;
+            }
           }
 
           debugPrint('🚚 Driver moved to: $newLocation');
@@ -239,7 +262,6 @@ class _LiveNavigationState extends State<LiveNavigation> {
               Navigator.pop(context); // Close dialog
               Navigator.pop(context); // Close live_navigation
               Navigator.pop(context); // Close route_map_deleviry
-              Navigator.pop(context); // Return to deleviry_detail
             },
             child: const Text(
               'OK',
@@ -249,6 +271,16 @@ class _LiveNavigationState extends State<LiveNavigation> {
         ],
       ),
     );
+  }
+
+  void _handleArrival() {
+    if (_arrivedAtDestination) return;
+    setState(() {
+      _arrivedAtDestination = true;
+    });
+
+    // Show arrival dialog (keeps the previous behavior)
+    _showArrivalDialog();
   }
 
   @override
