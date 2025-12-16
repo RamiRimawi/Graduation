@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../supabase_config.dart';
-import '../shared_popup_widgets.dart';
+import '../MobileAccounts_shared_popup_widgets.dart';
 
-class AddSupplierAccountPopup extends StatefulWidget {
+class AddSalesRepAccountPopup extends StatefulWidget {
   final VoidCallback? onAccountCreated;
-  const AddSupplierAccountPopup({super.key, this.onAccountCreated});
+  const AddSalesRepAccountPopup({super.key, this.onAccountCreated});
 
   @override
-  State<AddSupplierAccountPopup> createState() =>
-      _AddSupplierAccountPopupState();
+  State<AddSalesRepAccountPopup> createState() =>
+      _AddSalesRepAccountPopupState();
 }
 
-class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
+class _AddSalesRepAccountPopupState extends State<AddSalesRepAccountPopup> {
   final nameCtrl = TextEditingController();
   final userCtrl = TextEditingController();
   final passCtrl = TextEditingController();
 
-  List<Map<String, dynamic>> _suppliers = [];
+  List<Map<String, dynamic>> _salesReps = [];
   bool _loading = true;
-  int? _selectedSupplierId;
+  int? _selectedSalesRepId;
 
   String? nameError;
   String? passError;
@@ -27,19 +27,19 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
   @override
   void initState() {
     super.initState();
-    _loadSuppliers();
+    _loadSalesReps();
   }
 
-  Future<void> _loadSuppliers() async {
+  Future<void> _loadSalesReps() async {
     try {
-      // Fetch suppliers that don't have an account yet
+      // Fetch sales reps that don't have an account yet
       final response = await supabase
-          .from('supplier')
-          .select('supplier_id, name')
+          .from('sales_representative')
+          .select('sales_rep_id, name')
           .order('name');
 
       setState(() {
-        _suppliers = List<Map<String, dynamic>>.from(response);
+        _salesReps = List<Map<String, dynamic>>.from(response);
         _loading = false;
       });
     } catch (e) {
@@ -49,16 +49,16 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error loading suppliers: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error loading sales reps: $e')));
       }
     }
   }
 
-  void _onSupplierSelected(int supplierId, String supplierName) {
+  void _onSalesRepSelected(int salesRepId, String salesRepName) {
     setState(() {
-      _selectedSupplierId = supplierId;
-      nameCtrl.text = supplierName;
-      userCtrl.text = supplierId.toString();
+      _selectedSalesRepId = salesRepId;
+      nameCtrl.text = salesRepName;
+      userCtrl.text = salesRepId.toString();
     });
   }
 
@@ -72,8 +72,8 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
     bool hasError = false;
 
     // Validate inputs
-    if (_selectedSupplierId == null) {
-      setState(() => nameError = 'Please select a supplier');
+    if (_selectedSalesRepId == null) {
+      setState(() => nameError = 'Please select a sales rep');
       hasError = true;
     }
 
@@ -87,16 +87,16 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
     try {
       // Check if account already exists
       final existing = await supabase
-          .from('user_account_supplier')
-          .select('supplier_id')
-          .eq('supplier_id', _selectedSupplierId!)
+          .from('user_account_sales_rep')
+          .select('sales_rep_id')
+          .eq('sales_rep_id', _selectedSalesRepId!)
           .maybeSingle();
 
       if (existing != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('This supplier already has an account'),
+              content: Text('This sales rep already has an account'),
             ),
           );
         }
@@ -104,8 +104,8 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
       }
 
       // Insert new account
-      await supabase.from('user_account_supplier').insert({
-        'supplier_id': _selectedSupplierId,
+      await supabase.from('user_account_sales_rep').insert({
+        'sales_rep_id': _selectedSalesRepId,
         'password': passCtrl.text.trim(),
         'is_active': 'yes',
         'added_by': 'Admin', // You can replace this with actual logged-in user
@@ -141,7 +141,7 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Add Supplier Account',
+                  'Add Sales Rep Account',
                   style: GoogleFonts.roboto(
                     color: Colors.white,
                     fontSize: 26,
@@ -160,7 +160,7 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Supplier Name',
+                  'Sales Rep Name',
                   style: GoogleFonts.roboto(
                     color: const Color(0xFFB7A447),
                     fontSize: 15.5,
@@ -174,11 +174,11 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
                           color: Color(0xFFF9D949),
                         ),
                       )
-                    : _SupplierDropdown(
-                        suppliers: _suppliers,
-                        selectedSupplierId: _selectedSupplierId,
+                    : _SalesRepDropdown(
+                        salesReps: _salesReps,
+                        selectedSalesRepId: _selectedSalesRepId,
                         onSelected: (id, name) {
-                          _onSupplierSelected(id, name);
+                          _onSalesRepSelected(id, name);
                           setState(() => nameError = null);
                         },
                         hasError: nameError != null,
@@ -230,24 +230,24 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
   }
 }
 
-class _SupplierDropdown extends StatefulWidget {
-  final List<Map<String, dynamic>> suppliers;
-  final int? selectedSupplierId;
+class _SalesRepDropdown extends StatefulWidget {
+  final List<Map<String, dynamic>> salesReps;
+  final int? selectedSalesRepId;
   final Function(int, String) onSelected;
   final bool hasError;
 
-  const _SupplierDropdown({
-    required this.suppliers,
-    required this.selectedSupplierId,
+  const _SalesRepDropdown({
+    required this.salesReps,
+    required this.selectedSalesRepId,
     required this.onSelected,
     this.hasError = false,
   });
 
   @override
-  State<_SupplierDropdown> createState() => _SupplierDropdownState();
+  State<_SalesRepDropdown> createState() => _SalesRepDropdownState();
 }
 
-class _SupplierDropdownState extends State<_SupplierDropdown> {
+class _SalesRepDropdownState extends State<_SalesRepDropdown> {
   final FocusNode _focusNode = FocusNode();
   bool _isFocused = false;
 
@@ -285,9 +285,9 @@ class _SupplierDropdownState extends State<_SupplierDropdown> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
-          value: widget.selectedSupplierId,
+          value: widget.selectedSalesRepId,
           hint: const Text(
-            'Select Supplier Name',
+            'Select Sales Rep Name',
             style: TextStyle(color: Colors.white38, fontSize: 12),
           ),
           isExpanded: true,
@@ -299,18 +299,18 @@ class _SupplierDropdownState extends State<_SupplierDropdown> {
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
-          items: widget.suppliers.map((supplier) {
+          items: widget.salesReps.map((salesRep) {
             return DropdownMenuItem<int>(
-              value: supplier['supplier_id'] as int,
-              child: Text(supplier['name'] ?? 'Unknown'),
+              value: salesRep['sales_rep_id'] as int,
+              child: Text(salesRep['name'] ?? 'Unknown'),
             );
           }).toList(),
-          onChanged: (int? supplierId) {
-            if (supplierId != null) {
-              final supplier = widget.suppliers.firstWhere(
-                (c) => c['supplier_id'] == supplierId,
+          onChanged: (int? salesRepId) {
+            if (salesRepId != null) {
+              final salesRep = widget.salesReps.firstWhere(
+                (c) => c['sales_rep_id'] == salesRepId,
               );
-              widget.onSelected(supplierId, supplier['name'] ?? '');
+              widget.onSelected(salesRepId, salesRep['name'] ?? '');
             }
           },
         ),
@@ -319,13 +319,13 @@ class _SupplierDropdownState extends State<_SupplierDropdown> {
   }
 }
 
-void showAddSupplierAccountPopup(
+void showAddSalesRepAccountPopup(
   BuildContext context, {
   VoidCallback? onAccountCreated,
 }) {
   showDialog(
     context: context,
     barrierDismissible: true,
-    builder: (_) => AddSupplierAccountPopup(onAccountCreated: onAccountCreated),
+    builder: (_) => AddSalesRepAccountPopup(onAccountCreated: onAccountCreated),
   );
 }

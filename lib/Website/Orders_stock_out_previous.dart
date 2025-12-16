@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../supabase_config.dart';
 import 'sidebar.dart';
-import 'stock_in_page.dart';
-import 'stock_out_page.dart'; // عشان نرجع لصفحة Today
-import 'stock_out_receives.dart'; // عشان نروح لصفحة Receives
-import 'create_stock_out_page.dart';
+import 'Orders_stock_in_page.dart';
+import 'Orders_stock_out_page.dart'; // عشان نرجع لصفحة Today
+import 'Orders_stock_out_receives.dart'; // عشان نروح لصفحة Receives
+import 'Orders_create_stock_out_page.dart';
 import 'Orders_stock_out_previous_popup.dart'; // Popup for order details
 
 // 🎨 الألوان نفس الباليت

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'add_incoming_cash.dart';
-import 'add_outgoing_cash.dart';
-import 'add_outgoing_check.dart';
-import 'add_incoming_check.dart';
+import 'Payment_add_incoming_cash.dart';
+import 'Payment_add_outgoing_cash.dart';
+import 'Payment_add_outgoing_check.dart';
+import 'Payment_add_incoming_check.dart';
 
 // ------------------------------------------------------------------
 // Popup: Choose Payment Method (Cash / Check)

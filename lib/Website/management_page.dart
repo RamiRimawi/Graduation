@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'sidebar.dart';
-import 'customer_popup.dart';
-import 'sales_rep_popup.dart';
-import 'supplier_popup.dart';
-import 'one_field_popup.dart';
-import 'customer_detail_popup.dart';
-import 'sales_rep_detail_popup.dart';
-import 'supplier_detail_popup.dart';
-import 'brand_detail_popup.dart';
-import 'category_detail_popup.dart';
-
-// 🔥 مهم
+import 'Management_customer_popup.dart';
+import 'Management_sales_rep_popup.dart';
+import 'Management_supplier_popup.dart';
+import 'Management_one_field_popup.dart';
+import 'Management_customer_detail_popup.dart';
+import 'Management_sales_rep_detail_popup.dart';
+import 'Management_supplier_detail_popup.dart';
+import 'Management_brand_detail_popup.dart';
+import 'Management_category_detail_popup.dart';
+import 'Management_location_popup.dart';
+import 'Management_location_detail_popup.dart';
+import 'Management_bank_popup.dart';
+import 'Management_bank_detail_popup.dart';
 import '../supabase_config.dart';
 
 class UsersManagementPage extends StatefulWidget {
@@ -44,6 +45,15 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   final suppliers = <Map<String, dynamic>>[];
   final brands = <Map<String, dynamic>>[];
   final categories = <Map<String, dynamic>>[];
+  // New: locations (city + quarter) and banks (bank + branch)
+  final locations =
+      <
+        Map<String, dynamic>
+      >[]; // {id: city_id, name: city_name, quarter: quarter_name, quarter_id}
+  final banks =
+      <
+        Map<String, dynamic>
+      >[]; // {id: bank_id, name: bank_name, branch: branch_name, branch_id}
 
   // =============== FILTERED DATA LISTS ===============
   List<Map<String, dynamic>> filteredCustomers = [];
@@ -51,6 +61,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   List<Map<String, dynamic>> filteredSuppliers = [];
   List<Map<String, dynamic>> filteredBrands = [];
   List<Map<String, dynamic>> filteredCategories = [];
+  List<Map<String, dynamic>> filteredLocations = [];
+  List<Map<String, dynamic>> filteredBanks = [];
 
   // =============== SEARCH CONTROLLER ===============
   final TextEditingController searchController = TextEditingController();
@@ -157,6 +169,66 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     });
   }
 
+  Future<void> loadLocations() async {
+    final res = await supabase
+        .from('customer_quarters')
+        .select('''
+          quarter_id,
+          name,
+          customer_city:customer_city (
+            customer_city_id,
+            name
+          )
+        ''')
+        .order('quarter_id', ascending: true);
+
+    setState(() {
+      locations
+        ..clear()
+        ..addAll(
+          res.map(
+            (row) => {
+              'id': row['customer_city']?['customer_city_id'],
+              'name': row['customer_city']?['name'] ?? '—',
+              'quarter': row['name'] ?? '—',
+              'quarter_id': row['quarter_id'],
+            },
+          ),
+        );
+      filteredLocations = List.from(locations);
+    });
+  }
+
+  Future<void> loadBanks() async {
+    final res = await supabase
+        .from('branches')
+        .select('''
+          branch_id,
+          address,
+          bank:bank_id (
+            bank_id,
+            bank_name
+          )
+        ''')
+        .order('branch_id', ascending: true);
+
+    setState(() {
+      banks
+        ..clear()
+        ..addAll(
+          res.map(
+            (row) => {
+              'id': row['bank']?['bank_id'],
+              'name': row['bank']?['bank_name'] ?? '—',
+              'branch': row['address'] ?? '—',
+              'branch_id': row['branch_id'],
+            },
+          ),
+        );
+      filteredBanks = List.from(banks);
+    });
+  }
+
   // =============== SEARCH FILTER ===============
   void _filterData(String query) {
     setState(() {
@@ -167,6 +239,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         filteredSuppliers = List.from(suppliers);
         filteredBrands = List.from(brands);
         filteredCategories = List.from(categories);
+        filteredLocations = List.from(locations);
+        filteredBanks = List.from(banks);
       } else {
         // Filter based on name starting with the query (case-insensitive)
         final lowerQuery = query.toLowerCase();
@@ -200,18 +274,38 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                   item['name'].toString().toLowerCase().startsWith(lowerQuery),
             )
             .toList();
+        filteredLocations = locations
+            .where(
+              (item) =>
+                  item['name'].toString().toLowerCase().startsWith(
+                    lowerQuery,
+                  ) ||
+                  item['quarter'].toString().toLowerCase().startsWith(
+                    lowerQuery,
+                  ),
+            )
+            .toList();
+        filteredBanks = banks
+            .where(
+              (item) =>
+                  item['name'].toString().toLowerCase().startsWith(
+                    lowerQuery,
+                  ) ||
+                  item['branch'].toString().toLowerCase().startsWith(
+                    lowerQuery,
+                  ),
+            )
+            .toList();
       }
     });
   }
-
-
 
   // =============== INIT ===============
   @override
   void initState() {
     super.initState();
 
-    _primary = TabController(length: 2, vsync: this);
+    _primary = TabController(length: 4, vsync: this);
     _usersTabs = TabController(length: 3, vsync: this);
     _productTabs = TabController(length: 2, vsync: this);
     _primary.addListener(() => setState(() {}));
@@ -225,6 +319,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     loadSuppliers();
     loadBrands();
     loadCategories();
+    loadLocations();
+    loadBanks();
   }
 
   @override
@@ -248,7 +344,12 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         'Add supplier',
       ][_usersTabs.index];
     }
-    return ['Add brand', 'Add category'][_productTabs.index];
+    if (_primary.index == 1) {
+      return ['Add brand', 'Add category'][_productTabs.index];
+    }
+    if (_primary.index == 2) return 'Add location';
+    if (_primary.index == 3) return 'Add bank';
+    return 'Add';
   }
 
   IconData get _addIcon {
@@ -310,6 +411,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                         tabs: const [
                           Tab(text: 'Users'),
                           Tab(text: 'Product'),
+                          Tab(text: 'Location'),
+                          Tab(text: 'Bank'),
                         ],
                       ),
 
@@ -350,7 +453,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                                     Tab(text: 'Supplier'),
                                   ],
                                 )
-                              : TabBar(
+                              : _primary.index == 1
+                              ? TabBar(
                                   key: const ValueKey('productTabs'),
                                   controller: _productTabs,
                                   isScrollable: true,
@@ -374,7 +478,8 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                                     Tab(text: 'Brands'),
                                     Tab(text: 'Category'),
                                   ],
-                                ),
+                                )
+                              : const SizedBox.shrink(),
                         ),
                       ),
 
@@ -461,6 +566,24 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                               filteredCategories,
                             ),
                           ],
+                        ),
+
+                        // LOCATION
+                        _buildTable(
+                          "City ID #",
+                          "City Name",
+                          "Quarter Name",
+                          filteredLocations,
+                          "quarter",
+                        ),
+
+                        // BANK
+                        _buildTable(
+                          "Bank ID #",
+                          "Bank Name",
+                          "Branch Name",
+                          filteredBanks,
+                          "branch",
                         ),
                       ],
                     ),
@@ -557,6 +680,26 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         return;
       }
     }
+
+    // LOCATION primary tab
+    if (_primary.index == 2) {
+      showLocationPopup(context, (bool ok) async {
+        Navigator.of(context).pop();
+        await loadLocations();
+        _filterData(searchController.text);
+      });
+      return;
+    }
+
+    // BANK primary tab
+    if (_primary.index == 3) {
+      showBankPopup(context, (bool ok) async {
+        Navigator.of(context).pop();
+        await loadBanks();
+        _filterData(searchController.text);
+      });
+      return;
+    }
   }
 
   // ============================
@@ -635,6 +778,30 @@ class _UsersManagementPageState extends State<UsersManagementPage>
                             },
                           );
                         }
+                      } else if (_primary.index == 2) {
+                        // Location detail (city + quarter)
+                        final quarterId = row['quarter_id'];
+                        showLocationDetailPopup(
+                          context,
+                          cityId: id,
+                          quarterId: quarterId,
+                          onUpdate: () async {
+                            await loadLocations();
+                            _filterData(searchController.text);
+                          },
+                        );
+                      } else if (_primary.index == 3) {
+                        // Bank detail (bank + branch)
+                        final branchId = row['branch_id'];
+                        showBankDetailPopup(
+                          context,
+                          bankId: id,
+                          branchId: branchId,
+                          onUpdate: () async {
+                            await loadBanks();
+                            _filterData(searchController.text);
+                          },
+                        );
                       }
                     },
                     borderRadius: BorderRadius.circular(12),

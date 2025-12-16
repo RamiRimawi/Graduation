@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'sidebar.dart';
 import '../supabase_config.dart';
-import 'add_product_order.dart';
+import 'Orders_add_product_order.dart';
 
 class CreateStockInPage extends StatefulWidget {
   const CreateStockInPage({super.key});

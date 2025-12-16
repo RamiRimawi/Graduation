@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
-import 'add_product_popup.dart';
-import 'add_inventory_pop.dart';
+import 'Inventory_add_product_popup.dart';
+import 'Inventory_add_pop.dart';
 import 'Inventory_product_details_popup.dart';
 import '../supabase_config.dart';
 

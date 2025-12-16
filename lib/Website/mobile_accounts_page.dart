@@ -5,11 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../supabase_config.dart';
 
 import 'sidebar.dart';
-import 'accounts_popups/add_customer_account_popup.dart';
-import 'accounts_popups/add_supplier_account_popup.dart';
-import 'accounts_popups/add_sales_rep_account_popup.dart';
-import 'accounts_popups/add_storage_staff_account_popup.dart';
-import 'accounts_popups/add_delivery_driver_account_popup.dart';
+import 'Mobile_accounts_popups/add_customer_account_popup.dart';
+import 'Mobile_accounts_popups/add_supplier_account_popup.dart';
+import 'Mobile_accounts_popups/add_sales_rep_account_popup.dart';
+import 'Mobile_accounts_popups/add_storage_staff_account_popup.dart';
+import 'Mobile_accounts_popups/add_delivery_driver_account_popup.dart';
 
 class MobileAccountsPage extends StatefulWidget {
   const MobileAccountsPage({super.key});

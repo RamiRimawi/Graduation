@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
-import 'stock_out_page.dart';
-import 'stock_in_page.dart';
-import 'stock_in_previous.dart';
-import 'create_stock_in_page.dart';
-import 'order_detail_popup.dart';
+import 'Orders_stock_out_page.dart';
+import 'Orders_stock_in_page.dart';
+import 'Orders_stock_in_previous.dart';
+import 'Orders_create_stock_in_page.dart';
+import 'Orders_detail_popup.dart';
 import '../supabase_config.dart';
 
 class OrdersStockInReceivesPage extends StatefulWidget {

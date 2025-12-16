@@ -3,39 +3,39 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
-import 'shared_popup_widgets.dart';
+import 'MobileAccounts_shared_popup_widgets.dart';
 import '../supabase_config.dart';
 
-class CustomerFormPopup extends StatefulWidget {
+class SupplierFormPopup extends StatefulWidget {
   final List<String> cities;
   final void Function(Map<String, dynamic>) onSubmit;
 
-  const CustomerFormPopup({
+  const SupplierFormPopup({
     super.key,
     required this.cities,
     required this.onSubmit,
   });
 
   @override
-  State<CustomerFormPopup> createState() => _CustomerFormPopupState();
+  State<SupplierFormPopup> createState() => _SupplierFormPopupState();
 }
 
-class _CustomerFormPopupState extends State<CustomerFormPopup> {
-  final name = TextEditingController();
+class _SupplierFormPopupState extends State<SupplierFormPopup> {
+  final company = TextEditingController();
   final id = TextEditingController();
   final email = TextEditingController();
   final mobile = TextEditingController();
   final tel = TextEditingController();
   final address = TextEditingController();
-  final debit = TextEditingController(text: '0');
+  final creditor = TextEditingController(text: '0');
 
   String cityQuarter = ''; // Will hold "City - Quarter"
-  List<Map<String, dynamic>> _quarters = [];
-  bool _loadingQuarters = true;
+  List<Map<String, String>> _cityQuarters = [];
+  bool _loadingCities = true;
 
   // Error messages for each field
   String? idError;
-  String? nameError;
+  String? companyError;
   String? emailError;
   String? mobileError;
   String? telError;
@@ -45,39 +45,42 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
   @override
   void initState() {
     super.initState();
-    _loadQuarters();
-    // ensure debit shows default 0 and caret at end
-    if (debit.text.isEmpty) debit.text = '0';
-    debit.selection = TextSelection.fromPosition(
-      TextPosition(offset: debit.text.length),
+    _loadCityQuarters();
+    // ensure creditor shows default 0 and caret at end
+    if (creditor.text.isEmpty) creditor.text = '0';
+    creditor.selection = TextSelection.fromPosition(
+      TextPosition(offset: creditor.text.length),
     );
   }
 
-  Future<void> _loadQuarters() async {
+  Future<void> _loadCityQuarters() async {
     try {
+      // For suppliers, we'll create dummy quarters based on cities
+      // In a real scenario, you'd fetch from a supplier_quarters table
       final data = await supabase
-          .from('customer_quarters')
-          .select('name, customer_city(name)')
+          .from('supplier_city')
+          .select('name')
           .order('name');
       if (!mounted) return;
       setState(() {
-        _quarters = (data as List)
-            .where(
-              (e) =>
-                  e['name'] != null &&
-                  e['customer_city'] != null &&
-                  e['customer_city']['name'] != null,
-            )
-            .map<Map<String, dynamic>>(
-              (e) => {'quarter': e['name'], 'city': e['customer_city']['name']},
-            )
-            .toList();
-        _loadingQuarters = false;
+        // Create city-quarter combinations
+        _cityQuarters = (data as List).where((e) => e['name'] != null).expand((
+          e,
+        ) {
+          final cityName = e['name'] as String;
+          // Add default quarters for each city
+          return [
+            {'city': cityName, 'quarter': 'Center'},
+            {'city': cityName, 'quarter': 'Industrial Zone'},
+            {'city': cityName, 'quarter': 'Commercial District'},
+          ];
+        }).toList();
+        _loadingCities = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _loadingQuarters = false;
+        _loadingCities = false;
       });
     }
   }
@@ -88,8 +91,8 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
         case 'id':
           idError = null;
           break;
-        case 'name':
-          nameError = null;
+        case 'company':
+          companyError = null;
           break;
         case 'email':
           emailError = null;
@@ -113,12 +116,12 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
   @override
   void dispose() {
     id.dispose();
-    name.dispose();
+    company.dispose();
     email.dispose();
     mobile.dispose();
     tel.dispose();
     address.dispose();
-    debit.dispose();
+    creditor.dispose();
     super.dispose();
   }
 
@@ -132,10 +135,10 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Add Customer',
+              'Add Supplier',
               style: GoogleFonts.roboto(
                 color: Colors.white,
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -145,13 +148,13 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        const SizedBox(height: 6),
         TwoColRow(
           left: FieldInput(
             controller: id,
-            label: 'Customer ID',
-            hint: 'Enter customer id',
+            label: 'Supplier ID',
+            hint: 'Enter supplier id',
             type: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             maxLength: 9,
@@ -160,15 +163,15 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
           ),
           right: const SizedBox(),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         TwoColRow(
           left: FieldInput(
-            controller: name,
-            label: 'Customer Name',
-            hint: 'Entre full Name',
-            errorText: nameError,
-            onChanged: () => _clearError('name'),
+            controller: company,
+            label: 'Company Name',
+            hint: 'Entre Company Name',
+            errorText: companyError,
+            onChanged: () => _clearError('company'),
           ),
           right: FieldInput(
             controller: email,
@@ -179,6 +182,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             onChanged: () => _clearError('email'),
           ),
         ),
+
         const SizedBox(height: 18),
 
         TwoColRow(
@@ -186,8 +190,9 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             controller: mobile,
             label: 'Mobile Number',
             hint: 'Entre Mobile Number',
-            type: TextInputType.phone,
+            type: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            maxLength: 10,
             errorText: mobileError,
             onChanged: () => _clearError('mobile'),
           ),
@@ -195,16 +200,18 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             controller: tel,
             label: 'Telephone Number',
             hint: 'Entre Telephone Number',
-            type: TextInputType.phone,
+            type: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            maxLength: 9,
             errorText: telError,
             onChanged: () => _clearError('tel'),
           ),
         ),
+
         const SizedBox(height: 18),
 
         TwoColRow(
-          left: _loadingQuarters
+          left: _loadingCities
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -218,7 +225,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      height: 42,
+                      height: 38,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
@@ -229,8 +236,8 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                         ),
                       ),
                       child: const SizedBox(
-                        height: 22,
-                        width: 22,
+                        height: 20,
+                        width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
                           valueColor: AlwaysStoppedAnimation(Color(0xFFB7A447)),
@@ -241,14 +248,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                 )
               : AutocompleteCityQuarter(
                   label: 'Location',
-                  cityQuarters: _quarters
-                      .map(
-                        (e) => {
-                          'city': e['city'] as String,
-                          'quarter': e['quarter'] as String,
-                        },
-                      )
-                      .toList(),
+                  cityQuarters: _cityQuarters,
                   initialValue: cityQuarter.isEmpty ? null : cityQuarter,
                   onChanged: (value) {
                     setState(() {
@@ -266,12 +266,13 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
             onChanged: () => _clearError('address'),
           ),
         ),
+
         const SizedBox(height: 18),
 
         TwoColRow(
           left: FieldInput(
-            controller: debit,
-            label: 'Debit balance',
+            controller: creditor,
+            label: 'Creditor balance',
             hint: '',
             type: TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
@@ -288,7 +289,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
           right: null,
         ),
 
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
 
         Align(
           alignment: Alignment.centerRight,
@@ -301,7 +302,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                 // Clear all previous errors
                 setState(() {
                   idError = null;
-                  nameError = null;
+                  companyError = null;
                   emailError = null;
                   mobileError = null;
                   telError = null;
@@ -326,16 +327,16 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                   hasError = true;
                 }
 
-                // Validate name
-                final nameText = name.text.trim();
-                if (nameText.isEmpty) {
+                // Validate company name
+                final companyText = company.text.trim();
+                if (companyText.isEmpty) {
                   setState(() {
-                    nameError = 'Customer name is required';
+                    companyError = 'Company name is required';
                   });
                   hasError = true;
                 }
 
-                // Validate email format if provided
+                // Validate email
                 final emailText = email.text.trim();
                 if (emailText.isNotEmpty) {
                   final emailRegex = RegExp(r"^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}");
@@ -347,7 +348,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                   }
                 }
 
-                // Validate mobile/telephone lengths
+                // Validate phone lengths
                 final mob = mobile.text.trim();
                 final telText = tel.text.trim();
                 if (mob.isNotEmpty && mob.length != 10) {
@@ -384,82 +385,64 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
 
                 try {
                   // Check if ID already exists
-                  final existingCustomer = await supabase
-                      .from('customer')
-                      .select('customer_id')
-                      .eq('customer_id', idVal!)
+                  final existingSupplier = await supabase
+                      .from('supplier')
+                      .select('supplier_id')
+                      .eq('supplier_id', idVal!)
                       .maybeSingle();
 
-                  if (existingCustomer != null) {
+                  if (existingSupplier != null) {
                     setState(() {
                       idError = 'This ID already exists in database';
                     });
                     return;
                   }
 
-                  // Parse city and quarter
+                  // Parse city from city-quarter format
                   final parts = cityQuarter.split(' - ');
                   final cityName = parts[0].trim();
-                  final quarterName = parts.length > 1 ? parts[1].trim() : '';
 
-                  // ensure customer city exists (or create)
-                  final existingCity = await supabase
-                      .from('customer_city')
-                      .select('customer_city_id')
+                  final existing = await supabase
+                      .from('supplier_city')
+                      .select('supplier_city_id')
                       .eq('name', cityName)
                       .maybeSingle();
                   int cityId;
-                  if (existingCity != null &&
-                      existingCity['customer_city_id'] != null) {
-                    cityId = existingCity['customer_city_id'] as int;
+                  if (existing != null &&
+                      existing['supplier_city_id'] != null) {
+                    cityId = existing['supplier_city_id'] as int;
                   } else {
                     final insertedCity = await supabase
-                        .from('customer_city')
+                        .from('supplier_city')
                         .insert({'name': cityName})
                         .select()
                         .single();
-                    cityId = insertedCity['customer_city_id'] as int;
+                    cityId = insertedCity['supplier_city_id'] as int;
                   }
 
-                  // ensure quarter exists (or create)
-                  if (quarterName.isNotEmpty) {
-                    final existingQuarter = await supabase
-                        .from('customer_quarters')
-                        .select('quarter_id')
-                        .eq('name', quarterName)
-                        .eq('customer_city', cityId)
-                        .maybeSingle();
-                    if (existingQuarter == null) {
-                      await supabase.from('customer_quarters').insert({
-                        'name': quarterName,
-                        'customer_city': cityId,
-                      });
-                    }
-                  }
-
-                  // insert customer
                   final inserted = await supabase
-                      .from('customer')
+                      .from('supplier')
                       .insert({
-                        'customer_id': idVal,
-                        'name': name.text.trim(),
+                        'supplier_id': idVal,
+                        'name': company.text.trim(),
                         'mobile_number': mobile.text.trim(),
                         'telephone_number': tel.text.trim(),
-                        'customer_city': cityId,
+                        'supplier_city': cityId,
                         'address': address.text.trim(),
-                        'email': email.text.trim(),
-                        'balance_debit': double.tryParse(debit.text) ?? 0,
+                        'creditor_balance': double.tryParse(creditor.text) ?? 0,
                       })
                       .select()
                       .maybeSingle();
 
                   if (inserted == null) throw Exception('Insert failed');
 
-                  // call parent callback with the form values (parent will close dialog and update lists)
-                  widget.onSubmit({'name': inserted['name'], 'city': cityName});
+                  widget.onSubmit({
+                    'company': inserted['name'],
+                    'city': cityName,
+                  });
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to add customer: $e')),
+                    SnackBar(content: Text('Failed to add supplier: $e')),
                   );
                 }
               },
@@ -471,7 +454,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
   }
 }
 
-void showCustomerPopup(
+void showSupplierPopup(
   BuildContext context,
   List<String> cities,
   Function(Map<String, dynamic>) onSubmit,
@@ -485,15 +468,15 @@ void showCustomerPopup(
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
           insetPadding: const EdgeInsets.symmetric(
-            horizontal: 120,
+            horizontal: 180,
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: CustomerFormPopup(cities: cities, onSubmit: onSubmit),
+            padding: const EdgeInsets.all(20.0),
+            child: SupplierFormPopup(cities: cities, onSubmit: onSubmit),
           ),
         ),
       );

@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'shared_popup_widgets.dart';
+import 'MobileAccounts_shared_popup_widgets.dart';
 import '../supabase_config.dart';
 
 class OneFieldFormPopup extends StatefulWidget {

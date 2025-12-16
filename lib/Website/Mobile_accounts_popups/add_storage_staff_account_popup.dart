@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../supabase_config.dart';
-import '../shared_popup_widgets.dart';
+import '../MobileAccounts_shared_popup_widgets.dart';
 
 class AddStorageStaffAccountPopup extends StatefulWidget {
   final VoidCallback? onAccountCreated;

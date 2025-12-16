@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../supabase_config.dart';
 import 'sidebar.dart';
-import 'create_stock_out_page.dart';
-import 'stock_in_page.dart';
-import 'stock_out_receives.dart';
-import 'stock_out_previous.dart';
-import 'order_detail_popup.dart';
+import 'Orders_create_stock_out_page.dart';
+import 'Orders_stock_in_page.dart';
+import 'Orders_stock_out_receives.dart';
+import 'Orders_stock_out_previous.dart';
+import 'Orders_detail_popup.dart';
 
 // 🎨 الألوان
 class AppColors {

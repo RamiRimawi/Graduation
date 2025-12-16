@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'sidebar.dart';
-import 'checks_page.dart';
-import 'archive_payment_page.dart';
-import 'choose_payment.dart';
+import 'Payment_checks_page.dart';
+import 'Payment_archive_page.dart';
+import 'Payment_choose_payment.dart';
 import '../supabase_config.dart';
 
 /// صفحة الـ Payment Dashboard
@@ -563,8 +563,7 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
           .gte('exchange_date', startDate)
           .lte('exchange_date', endDate);
 
-      print('Endorsed response: $endorsedResponse');
-      print('Returned response: $returnedResponse');
+
 
       if (mounted)
         setState(() {
@@ -1014,7 +1013,7 @@ class _ProfitChartState extends State<_ProfitChart>
             customer_order_id,
             order_date,
             tax_percent,
-            customer_order_description:customer_order_id (
+            customer_order_description!customer_order_description_customer_order_id_fkey (
               product_id,
               quantity,
               total_price,

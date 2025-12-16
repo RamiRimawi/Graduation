@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'Orders_stock_in_previous_popup.dart';
 import 'sidebar.dart';
-import 'stock_out_page.dart';
-import 'stock_in_page.dart';
-import 'stock_in_receives.dart';
-import 'create_stock_in_page.dart';
+import 'Orders_stock_out_page.dart';
+import 'Orders_stock_in_page.dart';
+import 'Orders_stock_in_receives.dart';
+import 'Orders_create_stock_in_page.dart';
 import '../supabase_config.dart';
 import 'dart:ui' as ui;
 
