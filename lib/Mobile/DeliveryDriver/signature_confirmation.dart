@@ -7,12 +7,14 @@ class SignatureConfirmation extends StatefulWidget {
   final String customerName;
   final int customerId;
   final int orderId;
+  final List<Map<String, dynamic>>? products;
 
   const SignatureConfirmation({
     super.key,
     required this.customerName,
     required this.customerId,
     required this.orderId,
+    this.products,
   });
 
   @override
@@ -227,6 +229,53 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                           }).eq('customer_order_id', widget.orderId);
 
                           debugPrint('Signature saved and order status updated to Delivered for order ${widget.orderId}');
+
+                          // Update order descriptions using edited quantities if provided,
+                          // otherwise fall back to DB values.
+                          try {
+                            if (widget.products != null && widget.products!.isNotEmpty) {
+                              for (final p in widget.products!) {
+                                final productId = p['product_id'] as int?;
+                                final qty = p['quantity'] as int? ?? 0;
+                                if (productId != null) {
+                                  await supabase
+                                      .from('customer_order_description')
+                                      .update({
+                                        'delivered_quantity': qty,
+                                        'delivered_date': DateTime.now().toIso8601String(),
+                                      })
+                                      .eq('customer_order_id', widget.orderId)
+                                      .eq('product_id', productId);
+                                }
+                              }
+                              debugPrint('Delivered quantities updated from UI for order ${widget.orderId}');
+                            } else {
+                              final descRes = await supabase
+                                  .from('customer_order_description')
+                                  .select('product_id,quantity')
+                                  .eq('customer_order_id', widget.orderId) as List<dynamic>?;
+
+                              if (descRes != null && descRes.isNotEmpty) {
+                                for (final desc in descRes) {
+                                  final productId = desc['product_id'] as int?;
+                                  final qty = desc['quantity'] as int? ?? 0;
+                                  if (productId != null) {
+                                    await supabase
+                                        .from('customer_order_description')
+                                        .update({
+                                          'delivered_quantity': qty,
+                                          'delivered_date': DateTime.now().toIso8601String(),
+                                        })
+                                        .eq('customer_order_id', widget.orderId)
+                                        .eq('product_id', productId);
+                                  }
+                                }
+                                debugPrint('Delivered quantities updated from DB for order ${widget.orderId}');
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint('Error updating delivered quantities: $e');
+                          }
 
                           // Return true and navigate back to home
                           if (mounted) {
