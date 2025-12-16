@@ -46,6 +46,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
           customerName: widget.customerName,
           customerId: widget.customerId,
           orderId: orderId!,
+          products: products,
         ),
       );
     }
@@ -104,20 +105,22 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       // Fetch product info embedded: product name, brand name and unit name
       final descRes = await supabase
           .from('customer_order_description')
-          .select('delivered_quantity,quantity,product:product_id(name,brand:brand_id(name),unit:unit_id(unit_name))')
+          .select('product_id,delivered_quantity,quantity,product:product_id(name,brand:brand_id(name),unit:unit_id(unit_name))')
           .eq('customer_order_id', orderId) as List<dynamic>;
 
       final List<Map<String, dynamic>> list = [];
       for (final d in descRes) {
+        final productIdTop = d['product_id'] as int?;
         final prod = d['product'] as Map<String, dynamic>?;
         final name = prod?['name'] as String? ?? 'Unknown';
         final brandMap = prod?['brand'] as Map<String, dynamic>?;
         final brandName = brandMap?['name'] as String? ?? 'Unknown';
         final unitMap = prod?['unit'] as Map<String, dynamic>?;
         final unitName = unitMap?['unit_name'] as String? ?? 'cm';
-        final qty = d['delivered_quantity'] ?? d['quantity'] ?? 0;
+        final qty = d['quantity'] ?? 0;
 
         list.add({
+          'product_id': productIdTop,
           'name': name,
           'brand': brandName,
           'quantity': qty,
