@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
 import '../account_page.dart';

@@ -12,24 +12,17 @@ class CustomerHomePage extends StatefulWidget {
 }
 
 class _CustomerHomePageState extends State<CustomerHomePage> {
-  final TextEditingController _searchController = TextEditingController();
-  final List<Map<String, String>> products = List.generate(
+  final List<Map<String, dynamic>> products = List.generate(
     8,
     (i) => {
+      'id': i + 1,
       'name': 'Hand Shower',
       'brand': 'GROHE',
-      'image':
-          'https://via.placeholder.com/200.png?text=Product', // simple placeholder
+      'inventory': (i % 3) + 1,
     },
   );
 
   int _currentNavIndex = 0;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   void _onNavTap(int i) {
     setState(() => _currentNavIndex = i);
@@ -64,106 +57,31 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = const Color(0xFF1A1A1A);
-    final cardBg = const Color(0xFF2D2D2D);
-    final muted = Colors.white70;
-    final accent = const Color(0xFFF9D949);
-
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: const Color(0xFF202020),
       body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                // small top spacing (matches screenshot)
-                const SizedBox(height: 12),
-
-                // grid of products
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: GridView.builder(
-                      padding: const EdgeInsets.only(bottom: 120, top: 4),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 0.68,
-                          ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final p = products[index];
-                        return _productCard(p, cardBg, accent, muted);
-                      },
-                    ),
+        child: products.isEmpty
+            ? const Center(
+                child: Text(
+                  'No products available',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
                   ),
                 ),
-              ],
-            ),
-
-            // bottom search overlay (floating above grid, above bottom nav)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 10, // adjust this value if you want the bar lower/higher
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'Entre Product Name',
-                            hintStyle: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                            ),
-                            border: InputBorder.none,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 44,
-                        height: 44,
-                        margin: const EdgeInsets.only(left: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white12,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.inventory_2_outlined,
-                            color: Colors.white,
-                          ),
-                          onPressed: () {
-                            // optional: navigate to cart/archive
-                            // Example: go to cart
-                            _onNavTap(1);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildCard(product),
+                  );
+                },
               ),
-            ),
-          ],
-        ),
       ),
-
-      // use your existing BottomNavBar (matches earlier usage in repo)
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentNavIndex,
         onTap: _onNavTap,
@@ -171,111 +89,124 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     );
   }
 
-  Widget _productCard(
-    Map<String, String> p,
-    Color cardBg,
-    Color accent,
-    Color muted,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          // image area
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.black26,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                p['image']!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, _, __) => Container(
-                  color: Colors.grey.shade800,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.image,
-                    color: Colors.white70,
-                    size: 40,
-                  ),
-                ),
-              ),
-            ),
+  Widget _buildCard(Map<String, dynamic> product) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CustomerCartPage(),
           ),
-
-          const SizedBox(height: 10),
-
-          // name & brand (two lines)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Name : ${p['name']}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 1,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
             ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
           ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Brand : ${p['brand']}',
-              style: TextStyle(
-                color: muted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          const Spacer(),
-
-          // Add to cart button row
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 10,
-                    horizontal: 12,
+              Row(
+                children: const [
+                  Text(
+                    'ID #',
+                    style: TextStyle(
+                      color: Color(0xFFB7A447),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(12),
+                  SizedBox(width: 34),
+                  Text(
+                    'Product Name',
+                    style: TextStyle(
+                      color: Color(0xFFB7A447),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Add to cart',
-                        style: TextStyle(
-                          color: Color(0xFF202020),
-                          fontWeight: FontWeight.w700,
+                ],
+              ),
+
+              const SizedBox(height: 2),
+
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    '${product['id']}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 23,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 28),
+
+                  Expanded(
+                    child: Text(
+                      '${product['name']} — ${product['brand']}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF262626),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${product['inventory']}',
+                          style: const TextStyle(
+                            color: Color(0xFFFFEFFF),
+                            fontSize: 25,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(
-                        Icons.shopping_cart_outlined,
-                        color: Color(0xFF202020),
-                      ),
-                    ],
+                        const SizedBox(height: 3),
+                        const Text(
+                          'inventory #',
+                          style: TextStyle(
+                            color: Color(0xFFB7A447),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

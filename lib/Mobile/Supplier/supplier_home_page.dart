@@ -13,7 +13,6 @@ class SupplierHomePage extends StatefulWidget {
 }
 
 class _SupplierHomePageState extends State<SupplierHomePage> {
-  int navIndex = 0;
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
 
@@ -100,40 +99,44 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(15, 60, 15, 20),
+      backgroundColor: const Color(0xFF202020),
+      body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFFF9D949)),
-              )
-            : SingleChildScrollView(
-                child: Column(
-                  children: _orders.isEmpty
-                      ? [
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: Text(
-                                'No orders yet',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                          )
-                        ]
-                      : _orders.map((orderData) {
-                          return _buildCard(
-                            id: orderData['id'],
-                            name: orderData['name'],
-                            products: orderData['productCount'],
-                            orderId: orderData['order']['order_id'],
-                          );
-                        }).toList(),
+                child: CircularProgressIndicator(
+                  color: Color(0xFFB7A447),
                 ),
-              ),
+              )
+            : _orders.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Text(
+                        'No orders yet',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                    itemCount: _orders.length,
+                    itemBuilder: (context, index) {
+                      final orderData = _orders[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _buildCard(
+                          id: orderData['id'],
+                          name: orderData['name'],
+                          products: orderData['productCount'],
+                          orderId: orderData['order']['order_id'],
+                        ),
+                      );
+                    },
+                  ),
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
@@ -175,68 +178,110 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 15),
-        padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           color: const Color(0xFF2D2D2D),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            // ID
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("ID #", style: TextStyle(color: Color(0xFFF9D949))),
-                Text(id,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold)),
-              ],
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 1,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
             ),
-
-            const SizedBox(width: 20),
-
-            // Name
-            Expanded(
-              child: Column(
-                children: [
-                  const Text("Customer Name",
-                      style: TextStyle(color: Color(0xFFF9D949))),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
                   Text(
-                    name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
+                    'ID #',
+                    style: TextStyle(
+                      color: Color(0xFFB7A447),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 34),
+                  Text(
+                    'Customer Name',
+                    style: TextStyle(
+                      color: Color(0xFFB7A447),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
-            ),
 
-            // Product count box
-            Container(
-              width: 55,
-              height: 55,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF9D949), width: 1),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(height: 2),
+
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(products,
+                  Text(
+                    id,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 23,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 28),
+
+                  Expanded(
+                    child: Text(
+                      'Dolphin Company',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold)),
-                  const Text("Product",
-                      style:
-                          TextStyle(color: Color(0xFFF9D949), fontSize: 10)),
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF262626),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          products,
+                          style: const TextStyle(
+                            color: Color(0xFFFFEFFF),
+                            fontSize: 25,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        const Text(
+                          'products',
+                          style: TextStyle(
+                            color: Color(0xFFB7A447),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
