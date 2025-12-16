@@ -520,7 +520,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                                                   '${product['quantity']}',
                                                   style: const TextStyle(
                                                     color: Color(0xFF202020),
-                                                    fontSize: 18,
+                                                    fontSize: 16,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
