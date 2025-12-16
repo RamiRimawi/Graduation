@@ -117,11 +117,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
         final brandName = brandMap?['name'] as String? ?? 'Unknown';
         final unitMap = prod?['unit'] as Map<String, dynamic>?;
         final unitName = unitMap?['unit_name'] as String? ?? 'cm';
-<<<<<<< HEAD
         final qty = d['quantity'] ?? 0;
-=======
-        final qty = d['quantity'] ;
->>>>>>> 23b86ae7495de1cdcec0f01867d66bed1962ac0c
 
         list.add({
           'product_id': productIdTop,
