@@ -158,7 +158,7 @@ class _HomeStaffState extends State<HomeStaff> {
                               'ID #',
                               style: TextStyle(
                                 color: const Color(0xFFB7A447),
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -167,7 +167,7 @@ class _HomeStaffState extends State<HomeStaff> {
                               'Customer Name',
                               style: TextStyle(
                                 color: const Color(0xFFB7A447),
-                                fontSize: 18,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -184,7 +184,7 @@ class _HomeStaffState extends State<HomeStaff> {
                               '${customer['id']}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 32,
+                                fontSize: 23,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -196,7 +196,7 @@ class _HomeStaffState extends State<HomeStaff> {
                                 customer['name'],
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 26,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -219,7 +219,7 @@ class _HomeStaffState extends State<HomeStaff> {
                                     '${customer['products']}',
                                     style: const TextStyle(
                                       color: Color(0xFFFFEFFF),
-                                      fontSize: 30,
+                                      fontSize: 25,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -228,7 +228,7 @@ class _HomeStaffState extends State<HomeStaff> {
                                     'Product',
                                     style: TextStyle(
                                       color: const Color(0xFFB7A447),
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),

@@ -36,20 +36,22 @@ class _CustomerDetailState extends State<CustomerDetail> {
   Future<void> _fetchProducts() async {
     try {
       setState(() => _loading = true);
-      final List<dynamic> rows = await Supabase.instance.client
+        final List<dynamic> rows = await Supabase.instance.client
           .from('customer_order_description')
-          .select('product_id, quantity, product:product_id(name, brand:brand_id(name))')
+          .select('product_id, quantity, product:product_id(name, brand:brand_id(name), unit:unit_id(unit_name))')
           .eq('customer_order_id', widget.customerId)
           .order('product_id');
 
       final mapped = rows.map<Map<String, dynamic>>((row) {
         final product = row['product'] as Map?;
         final brandMap = product?['brand'] as Map?;
+        final unitMap = product?['unit'] as Map?;
         return {
           'product_id': row['product_id'] as int?,
           'name': product?['name']?.toString() ?? 'Unknown',
           'brand': brandMap?['name']?.toString() ?? 'Unknown',
           'quantity': (row['quantity'] as num?)?.toInt() ?? 0,
+          'unit': unitMap?['unit_name']?.toString() ?? 'cm',
         };
       }).toList();
 
@@ -306,7 +308,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                       product['name'],
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -318,7 +320,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                       product['brand'],
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -345,16 +347,16 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                               '${product['quantity']}',
                                               style: const TextStyle(
                                                 color: Color(0xFF202020),
-                                                fontSize: 18,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        const Text(
-                                          'cm',
-                                          style: TextStyle(
+                                        Text(
+                                          product['unit'] ?? 'cm',
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,

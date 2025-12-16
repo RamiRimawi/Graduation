@@ -101,44 +101,27 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
         orderId = ordersRes.first['customer_order_id'] as int;
       }
 
+      // Fetch product info embedded: product name, brand name and unit name
       final descRes = await supabase
           .from('customer_order_description')
-          .select('customer_order_description_id,customer_order_id,product_id,delivered_quantity,quantity,total_price,product(*)')
+          .select('delivered_quantity,quantity,product:product_id(name,brand:brand_id(name),unit:unit_id(unit_name))')
           .eq('customer_order_id', orderId) as List<dynamic>;
-
-      // collect brand ids
-      final brandIds = <int>{};
-      for (final d in descRes) {
-        final prod = d['product'] as Map<String, dynamic>?;
-        if (prod != null && prod['brand_id'] != null) {
-          brandIds.add(prod['brand_id'] as int);
-        }
-      }
-
-      Map<int, String> brandMap = {};
-      if (brandIds.isNotEmpty) {
-        final brandsRes = await supabase.from('brand').select('brand_id,name') as List<dynamic>;
-
-        for (final b in brandsRes) {
-          final id = b['brand_id'] as int;
-          if (brandIds.contains(id)) {
-            brandMap[id] = b['name'] as String? ?? '';
-          }
-        }
-      }
 
       final List<Map<String, dynamic>> list = [];
       for (final d in descRes) {
         final prod = d['product'] as Map<String, dynamic>?;
-        final name = prod != null ? (prod['name'] as String? ?? 'Unknown') : 'Unknown';
-        final brandId = prod != null ? prod['brand_id'] as int? : null;
-        final brandName = brandId != null ? (brandMap[brandId] ?? brandId.toString()) : 'Unknown';
+        final name = prod?['name'] as String? ?? 'Unknown';
+        final brandMap = prod?['brand'] as Map<String, dynamic>?;
+        final brandName = brandMap?['name'] as String? ?? 'Unknown';
+        final unitMap = prod?['unit'] as Map<String, dynamic>?;
+        final unitName = unitMap?['unit_name'] as String? ?? 'cm';
         final qty = d['delivered_quantity'] ?? d['quantity'] ?? 0;
 
         list.add({
           'name': name,
           'brand': brandName,
           'quantity': qty,
+          'unit': unitName,
         });
       }
 
@@ -544,9 +527,9 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
                                               ),
                                             ),
                                             const SizedBox(width: 4),
-                                            const Text(
-                                              'cm',
-                                              style: TextStyle(
+                                            Text(
+                                              product['unit'],
+                                              style: const TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
