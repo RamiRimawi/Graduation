@@ -38,7 +38,6 @@ class DashboardPage extends StatelessWidget {
 class _TopStepsRow extends StatelessWidget {
   const _TopStepsRow();
 
-  static const double totalW = 820;
   static const double cardW = 170;
   static const double cardH = 150;
   static const double arrowW = 30;
@@ -67,6 +66,7 @@ class _TopStepsRow extends StatelessWidget {
 
 class _ArrowSpacer extends StatelessWidget {
   final double width;
+  // ignore: unused_element_parameter
   const _ArrowSpacer({super.key, required this.width});
 
   @override
@@ -88,6 +88,7 @@ class _ArrowSpacer extends StatelessWidget {
 class _StepCard extends StatelessWidget {
   final String title;
   final IconData icon;
+  // ignore: unused_element_parameter
   const _StepCard({super.key, required this.title, required this.icon});
 
   @override

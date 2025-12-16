@@ -423,7 +423,7 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
                   final inserted = await supabase
                       .from('supplier')
                       .insert({
-                        'supplier_id': idVal!,
+                        'supplier_id': idVal,
                         'name': company.text.trim(),
                         'mobile_number': mobile.text.trim(),
                         'telephone_number': tel.text.trim(),

@@ -3,7 +3,6 @@ import 'sidebar.dart';
 import 'checks_page.dart';
 import 'archive_payment_page.dart';
 import 'choose_payment.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_config.dart';
 
 /// صفحة الـ Payment Dashboard
@@ -540,7 +539,7 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
 
   Future<void> _fetchCheckStats() async {
     try {
-      setState(() => isLoading = true);
+      if (mounted) setState(() => isLoading = true);
 
       // Fetch endorsed checks count (customer checks only)
       final endorsedResponse = await supabase
@@ -567,14 +566,19 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
       print('Endorsed response: $endorsedResponse');
       print('Returned response: $returnedResponse');
 
-      setState(() {
-        endorsedCount = endorsedResponse is List ? endorsedResponse.length : 0;
-        returnedCount = returnedResponse is List ? returnedResponse.length : 0;
-        isLoading = false;
-      });
+      if (mounted)
+        setState(() {
+          endorsedCount = endorsedResponse is List
+              ? endorsedResponse.length
+              : 0;
+          returnedCount = returnedResponse is List
+              ? returnedResponse.length
+              : 0;
+          isLoading = false;
+        });
     } catch (e) {
       print('Error fetching check stats: $e');
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 

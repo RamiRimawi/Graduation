@@ -51,8 +51,6 @@ class _ReportPageContentState extends State<ReportPageContent> {
 
   Future<void> _loadProducts() async {
     try {
-      await SupabaseConfig.initialize();
-
       final result = await supabase.from('product').select('''
             product_id,
             name,
@@ -334,8 +332,6 @@ class _SellingProductsCardState extends State<_SellingProductsCard> {
 
   Future<void> _loadProducts() async {
     try {
-      await SupabaseConfig.initialize();
-
       // Get current month start and end dates
       final now = DateTime.now();
       final monthStart = DateTime(now.year, now.month, 1);

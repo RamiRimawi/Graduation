@@ -161,6 +161,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                 .select('inventory_id')
                 .eq('supplier_order_id', order['order_id']);
 
+            // ignore: unnecessary_null_comparison, unnecessary_type_check
             if (invRows != null && invRows is List && invRows.isNotEmpty) {
               // Get all inventory names, deduplicated
               Set<String> inventoryNames = {};
@@ -1667,5 +1668,6 @@ class _InfoItem {
   final String value;
   final IconData icon;
   final Color? valueColor;
+  // ignore: unused_element_parameter
   _InfoItem(this.label, this.value, {required this.icon, this.valueColor});
 }

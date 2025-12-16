@@ -95,6 +95,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
         if (!updateOnly) {
           // إذا كان لدينا موقع العميل، احسب المسافة واضبط الزوم
           if (_customerLocation != null) {
+            // ignore: unused_local_variable
             final dist = Distance().as(LengthUnit.Meter, newDriverLoc, _customerLocation!);
             final center = LatLng(
               (newDriverLoc.latitude + _customerLocation!.latitude) / 2,

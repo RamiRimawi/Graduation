@@ -105,7 +105,7 @@ CREATE TABLE public.customer_order (
   last_action_by text,
   last_action_time timestamp without time zone,
   delivered_date date,
-  discount_value integer DEFAULT 0,
+  discount_value real DEFAULT 0,
   CONSTRAINT customer_order_pkey PRIMARY KEY (customer_order_id),
   CONSTRAINT customer_order_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
   CONSTRAINT customer_order_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id),
@@ -158,7 +158,6 @@ CREATE TABLE public.delivery_driver (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
-  profile_image text,
   longitude_location numeric,
   latitude_location numeric,
   CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id)
@@ -176,7 +175,7 @@ CREATE TABLE public.incoming_payment (
 );
 CREATE TABLE public.inventory (
   inventory_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  inventory_location character varying,
+  inventory_name character varying,
   last_action_by text,
   last_action_time timestamp without time zone,
   CONSTRAINT inventory_pkey PRIMARY KEY (inventory_id)

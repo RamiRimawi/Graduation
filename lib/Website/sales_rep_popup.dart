@@ -721,7 +721,7 @@ class _SalesRepFormPopupState extends State<SalesRepFormPopup> {
                   final inserted = await supabase
                       .from('sales_representative')
                       .insert({
-                        'sales_rep_id': idVal!,
+                        'sales_rep_id': idVal,
                         'name': name.text.trim(),
                         'email': email.text.trim(),
                         'mobile_number': mobile.text.trim(),
@@ -738,7 +738,7 @@ class _SalesRepFormPopupState extends State<SalesRepFormPopup> {
                     try {
                       await supabase
                           .from('customer')
-                          .update({'sales_rep_id': idVal!})
+                          .update({'sales_rep_id': idVal})
                           .eq('customer_id', cust['customer_id']);
                     } catch (_) {
                       // Continue even if single update fails

@@ -441,7 +441,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                   final inserted = await supabase
                       .from('customer')
                       .insert({
-                        'customer_id': idVal!,
+                        'customer_id': idVal,
                         'name': name.text.trim(),
                         'mobile_number': mobile.text.trim(),
                         'telephone_number': tel.text.trim(),

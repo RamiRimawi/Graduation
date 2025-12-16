@@ -518,5 +518,6 @@ class _InfoItem {
   final String value;
   final IconData icon;
   final Color? valueColor;
+  // ignore: unused_element_parameter
   _InfoItem(this.label, this.value, {required this.icon, this.valueColor});
 }

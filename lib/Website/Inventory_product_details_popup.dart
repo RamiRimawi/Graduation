@@ -244,7 +244,7 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
 
   Future<void> _saveChanges() async {
     // Check if any data has changed
-    bool hasProductChanges = 
+    bool hasProductChanges =
         selectedBrandId != widget.brandId ||
         selectedCategoryId != widget.categoryId ||
         wholesalePriceController.text.replaceAll(RegExp(r'[^0-9.]'), '') !=
@@ -259,7 +259,8 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
     bool hasStorageChanges = false;
     for (final loc in storageLocations) {
       final invId = loc['inventory_id'] as int;
-      final originalStorage = (loc['storage_location_descrption'] ?? '').toString();
+      final originalStorage = (loc['storage_location_descrption'] ?? '')
+          .toString();
       final newStorage = storageControllers[invId]?.text ?? '';
       if (originalStorage != newStorage) {
         hasStorageChanges = true;
@@ -362,17 +363,7 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
     if (pid == null) return [];
 
     try {
-      // 1) Get inventories (all or a specific one) to ensure listing even when quantity is 0
-      var invQuery = supabase
-          .from('inventory')
-          .select('inventory_id, inventory_location');
-      if (widget.inventoryIdFilter != null) {
-        invQuery = invQuery.eq('inventory_id', widget.inventoryIdFilter!);
-      }
-      final invResp = await invQuery.order('inventory_id');
-      final allInventories = List<Map<String, dynamic>>.from(invResp);
-
-      // 2) Get batch rows for this product (all or a specific inventory)
+      // Get batch rows for this product (all or a specific inventory)
       var batchQuery = supabase
           .from('batch')
           .select('inventory_id, quantity, storage_location_descrption')
@@ -383,17 +374,50 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
       final batchResp = await batchQuery;
       final rows = List<Map<String, dynamic>>.from(batchResp);
 
-      // 3) Aggregate batch data per inventory
+      // Get unique inventory IDs from batches
+      final Set<int> inventoryIds = {};
+      for (final row in rows) {
+        final invId = row['inventory_id'] as int?;
+        if (invId != null) inventoryIds.add(invId);
+      }
+
+      // Fetch inventory names for these IDs
+      final Map<int, String> invLocations = {};
+      if (inventoryIds.isNotEmpty) {
+        var invQuery = supabase
+            .from('inventory')
+            .select('inventory_id, inventory_name')
+            .inFilter('inventory_id', inventoryIds.toList());
+        final invResp = await invQuery;
+        final invRows = List<Map<String, dynamic>>.from(invResp);
+        for (final invRow in invRows) {
+          final invId = invRow['inventory_id'] as int?;
+          final invName = invRow['inventory_name']?.toString() ?? '';
+          if (invId != null) {
+            invLocations[invId] = invName.isNotEmpty
+                ? invName
+                : 'Inventory #$invId';
+          }
+        }
+      }
+
+      // Aggregate batch data per inventory
       final Map<int, Map<String, dynamic>> byInventory = {};
       for (final row in rows) {
         final invId = row['inventory_id'] as int?;
         if (invId == null) continue;
+
         final qty = (row['quantity'] as int?) ?? 0;
         final stor = (row['storage_location_descrption'] ?? '').toString();
+        final invLoc = invLocations[invId] ?? 'Inventory #$invId';
 
         final entry = byInventory.putIfAbsent(
           invId,
-          () => {'quantity': 0, 'storage_locations': <String>[]},
+          () => {
+            'inventory_location': invLoc,
+            'quantity': 0,
+            'storage_locations': <String>[],
+          },
         );
         entry['quantity'] = (entry['quantity'] as int) + qty;
         if (stor.trim().isNotEmpty) {
@@ -402,23 +426,10 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
         }
       }
 
-      // 4) Merge: include all inventories, fill missing with zeros
-      final List<Map<String, dynamic>> merged = [];
-      for (final inv in allInventories) {
-        final invId = inv['inventory_id'] as int;
-        final invLoc = (inv['inventory_location'] ?? 'Inventory #$invId')
-            .toString();
-        final agg = byInventory[invId];
-        merged.add({
-          'inventory_location': invLoc,
-          'quantity': (agg?['quantity'] as int?) ?? 0,
-          'storage_locations':
-              (agg?['storage_locations'] as List<String>?) ?? <String>[],
-        });
-      }
-
-      return merged;
-    } catch (_) {
+      // Return aggregated data by inventory
+      return byInventory.values.toList();
+    } catch (e) {
+      print('Error fetching inventory data: $e');
       return [];
     }
   }
