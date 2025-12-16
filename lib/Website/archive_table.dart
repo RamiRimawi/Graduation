@@ -23,8 +23,6 @@ class _ArchiveTableState extends State<ArchiveTable> {
 
   Future<void> _loadArchiveRows() async {
     try {
-      await SupabaseConfig.initialize();
-
       final items = await supabase
           .from('customer_order_description')
           .select(
@@ -82,23 +80,11 @@ class _ArchiveTableState extends State<ArchiveTable> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // 🔹 Filter button ABOVE the archive box
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.cardAlt,
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: const Icon(
-              Icons.filter_list,
-              color: AppColors.blue,
-              size: 20,
-            ),
-            onPressed: () {
-              // TODO: Implement filter functionality
-            },
-          ),
+        _RoundIconButton(
+          icon: Icons.filter_alt_rounded,
+          onTap: () {
+            // TODO: Implement filter functionality / overlay
+          },
         ),
         const SizedBox(height: 10),
         // 🔹 Archive box with table
@@ -127,6 +113,37 @@ class _ArchiveTableState extends State<ArchiveTable> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+// 🔹 Round Icon Button (same UI as checks_page.dart)
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RoundIconButton({super.key, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.card, width: 3),
+      ),
+      child: Material(
+        color: AppColors.cardAlt,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, size: 20, color: AppColors.blue),
+          ),
+        ),
+      ),
     );
   }
 }
