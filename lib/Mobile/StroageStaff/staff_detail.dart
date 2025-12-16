@@ -334,7 +334,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                         GestureDetector(
                                           onTap: () => _editQuantity(index),
                                           child: Container(
-                                            width: 60,
+                                            width: 50,
                                             padding: const EdgeInsets.symmetric(
                                               vertical: 12,
                                             ),
