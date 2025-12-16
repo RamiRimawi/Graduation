@@ -381,7 +381,6 @@ class _SuppliersTableState extends State<_SuppliersTable> {
 
   Future<void> _loadSuppliers() async {
     try {
-      await SupabaseConfig.initialize();
       // Query batch table for this product, group by supplier, count
       final batches = await supabase
           .from('batch')
@@ -459,8 +458,6 @@ class _CustomersTableState extends State<_CustomersTable> {
 
   Future<void> _loadTopCustomers() async {
     try {
-      await SupabaseConfig.initialize();
-
       // Query customer_order_description table for this product, join with customer
       // Only include orders with status "delivered"
       final orderItems = await supabase
@@ -595,8 +592,6 @@ class _ProfitChartState extends State<_ProfitChart>
 
   Future<void> _loadProfitData() async {
     try {
-      await SupabaseConfig.initialize();
-
       // Get product wholesale price
       final productData = await supabase
           .from('product')
@@ -704,8 +699,9 @@ class _ProfitChartState extends State<_ProfitChart>
                   ),
                 ),
                 Container(
+                  height: 35,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 17,
+                    horizontal: 26,
                     vertical: 0,
                   ),
                   decoration: BoxDecoration(
@@ -735,7 +731,7 @@ class _ProfitChartState extends State<_ProfitChart>
                       letterSpacing: 1.5,
                     ),
                     borderRadius: BorderRadius.circular(12),
-                    items: const ['2024', '2025', '2026']
+                    items: const ['2023','2024', '2025', '2026']
                         .map(
                           (year) => DropdownMenuItem(
                             value: year,

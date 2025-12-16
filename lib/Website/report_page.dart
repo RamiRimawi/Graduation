@@ -167,7 +167,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'Reports each product',
+                                  'Reports',
                                   style: TextStyle(
                                     color: AppColors.blue,
                                     fontWeight: FontWeight.w900,
@@ -334,34 +334,33 @@ class _SellingProductsCardState extends State<_SellingProductsCard> {
     try {
       // Get current month start and end dates
       final now = DateTime.now();
-      final monthStart = DateTime(now.year, now.month, 1);
-      final monthEnd = DateTime(
-        now.year,
-        now.month + 1,
-        1,
-      ).subtract(const Duration(days: 1));
+      final monthStart = DateTime(now.year, now.month, 1).toIso8601String();
+      final monthEnd = DateTime(now.year, now.month + 1, 0).toIso8601String();
 
-      // First, get all order descriptions for this month with customer orders
+      // Fetch all order descriptions for this month with product name (single query, no N+1)
       final orderDescriptions = await supabase
           .from('customer_order_description')
           .select('''
-            quantity,
             product_id,
-            customer_order!inner(order_date)
+            quantity,
+            product:product_id(name),
+            customer_order(order_date)
           ''')
-          .gte('customer_order.order_date', monthStart.toIso8601String())
-          .lte('customer_order.order_date', monthEnd.toIso8601String());
+          .gte('customer_order.order_date', monthStart)
+          .lte('customer_order.order_date', monthEnd);
 
-      // Group by product_id and calculate totals
+      // Group and aggregate in Dart
       final Map<int, Map<String, dynamic>> productStats = {};
-
-      for (var item in orderDescriptions) {
+      for (var item in orderDescriptions as List) {
         final productId = item['product_id'] as int;
         final quantity = item['quantity'] as int;
+        final productName =
+            (item['product'] as Map?)?['name']?.toString() ?? '';
 
         if (!productStats.containsKey(productId)) {
           productStats[productId] = {
             'product_id': productId,
+            'product_name': productName,
             'total_sold_qty': 0,
             'num_of_sales': 0,
           };
@@ -373,46 +372,26 @@ class _SellingProductsCardState extends State<_SellingProductsCard> {
             (productStats[productId]!['num_of_sales'] as int) + 1;
       }
 
-      // Get product details and combine with stats
-      final List<Map<String, dynamic>> productList = [];
-      for (var stats in productStats.values) {
-        final productId = stats['product_id'];
-        final product = await supabase
-            .from('product')
-            .select('name')
-            .eq('product_id', productId)
-            .single();
-
-        productList.add({
-          'product_id': productId,
-          'product_name': product['name'],
-          'total_sold_qty': stats['total_sold_qty'],
-          'num_of_sales': stats['num_of_sales'],
-        });
-      }
-
-      // Sort by total_sold_qty
+      // Convert to list and sort
+      final productList = productStats.values.toList();
       productList.sort((a, b) {
-        final qtyA = a['total_sold_qty'] as int;
-        final qtyB = b['total_sold_qty'] as int;
+        final qtyA = (a['total_sold_qty'] as int);
+        final qtyB = (b['total_sold_qty'] as int);
         return widget.isTop ? qtyB.compareTo(qtyA) : qtyA.compareTo(qtyB);
       });
 
-      // Take top/lowest 3
       final top3 = productList.take(3).toList();
 
-      if (mounted) {
-        setState(() {
-          _products = top3;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _products = top3;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
       print('Error loading products: $e');
     }
   }
