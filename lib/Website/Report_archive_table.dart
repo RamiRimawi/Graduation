@@ -787,6 +787,7 @@ class _RoundIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
+  // ignore: unused_element_parameter
   const _RoundIconButton({super.key, required this.icon, required this.onTap});
 
   @override
