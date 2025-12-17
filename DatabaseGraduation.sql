@@ -104,7 +104,6 @@ CREATE TABLE public.customer_order (
   accountant_id integer,
   last_action_by text,
   last_action_time timestamp without time zone,
-  delivered_date date,
   discount_value real DEFAULT 0,
   CONSTRAINT customer_order_pkey PRIMARY KEY (customer_order_id),
   CONSTRAINT customer_order_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),

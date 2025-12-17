@@ -21,7 +21,8 @@ class AppColors {
 }
 
 class OrdersPage extends StatefulWidget {
-  const OrdersPage({super.key});
+  final List<String>? initialFilterStatuses;
+  const OrdersPage({super.key, this.initialFilterStatuses});
 
   @override
   State<OrdersPage> createState() => _OrdersPageState();
@@ -100,6 +101,10 @@ class _OrdersPageState extends State<OrdersPage> {
   @override
   void initState() {
     super.initState();
+    // Apply initial filters if provided
+    if (widget.initialFilterStatuses != null) {
+      _selectedStatuses.addAll(widget.initialFilterStatuses!);
+    }
     _fetchOrders();
   }
 
@@ -120,16 +125,39 @@ class _OrdersPageState extends State<OrdersPage> {
       // Fetch orders with status and delivered_date
       final data = await supabase
           .from('customer_order')
-          .select(
-            'customer_order_id, order_status, delivered_date, customer:customer_id(name)',
-          )
+          .select('''
+            customer_order_id,
+            order_status,
+            customer:customer_id(name),
+            customer_order_description(delivered_date)
+            ''')
           .order('customer_order_id', ascending: false);
 
       final list = <OrderRow>[];
       for (final row in data) {
         final id = (row['customer_order_id'] ?? '').toString();
         final status = (row['order_status'] ?? '').toString();
-        final deliveredDate = row['delivered_date']?.toString() ?? '';
+
+        // Get the latest delivered_date from order descriptions
+        final descriptions = row['customer_order_description'] as List?;
+        String deliveredDate = '';
+        if (descriptions != null && descriptions.isNotEmpty) {
+          DateTime? latestDate;
+          for (final desc in descriptions) {
+            final dateStr = desc['delivered_date'] as String?;
+            if (dateStr != null) {
+              final date = DateTime.parse(dateStr);
+              if (latestDate == null || date.isAfter(latestDate)) {
+                latestDate = date;
+              }
+            }
+          }
+          if (latestDate != null) {
+            deliveredDate = latestDate.toIso8601String().split(
+              'T',
+            )[0]; // YYYY-MM-DD format
+          }
+        }
 
         // Filter: Show only specific statuses
         bool shouldShow = false;
@@ -288,6 +316,7 @@ class _OrdersPageState extends State<OrdersPage> {
     const statuses = [
       'Received',
       'Sended to manager',
+      'Preparing',
       'Prepared',
       'Delivery',
       'Updated',

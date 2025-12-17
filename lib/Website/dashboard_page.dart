@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../supabase_config.dart';
 import 'sidebar.dart';
 import 'Orders_detail_popup.dart';
+import 'Orders_stock_out_page.dart';
+
+const Color gold = Color(0xFFB7A447);
+const Color blue = Color(0xFF50B2E7);
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -35,30 +40,152 @@ class DashboardPage extends StatelessWidget {
 /* -------------------------------------------------------------------------- */
 /*                          TOP STEPS ROW (الكروت الأربعة)                   */
 /* -------------------------------------------------------------------------- */
-class _TopStepsRow extends StatelessWidget {
+const double _cardW = 170;
+const double _cardH = 150;
+const double _arrowW = 30;
+
+class _TopStepsRow extends StatefulWidget {
   const _TopStepsRow();
 
-  static const double cardW = 170;
-  static const double cardH = 150;
-  static const double arrowW = 30;
+  @override
+  State<_TopStepsRow> createState() => _TopStepsRowState();
+}
+
+class _TopStepsRowState extends State<_TopStepsRow> {
+  int pendingCount = 0;
+  int preparingCount = 0;
+  int preparedCount = 0;
+  int deliveringCount = 0;
+  int deliveredCount = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrderCounts();
+  }
+
+  Future<void> _fetchOrderCounts() async {
+    try {
+      // Fetch all orders and count by status
+      final data = await supabase.from('customer_order').select('order_status');
+
+      // Count orders by status
+      int pending = 0;
+      int preparing = 0;
+      int prepared = 0;
+      int delivering = 0;
+      int delivered = 0;
+
+      for (final row in data) {
+        final status = (row['order_status'] ?? '').toString();
+        switch (status) {
+          case 'Received':
+          case 'Pinned':
+          case 'Updated':
+          case 'Hold':
+            pending++;
+            break;
+          case 'Preparing':
+            preparing++;
+            break;
+          case 'Prepared':
+            prepared++;
+            break;
+          case 'Delivery':
+            delivering++;
+            break;
+          case 'Delivered':
+            delivered++;
+            break;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          pendingCount = pending;
+          preparingCount = preparing;
+          preparedCount = prepared;
+          deliveringCount = delivering;
+          deliveredCount = delivered;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+      // Handle error silently or show snackbar if needed
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: cardH,
+      height: _cardH,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: const [
-            _StepCard(title: 'Pending', icon: FontAwesomeIcons.clipboardList),
-            _ArrowSpacer(width: arrowW),
-            _StepCard(title: 'Preparing', icon: FontAwesomeIcons.boxOpen),
-            _ArrowSpacer(width: arrowW),
-            _StepCard(title: 'Delivering', icon: FontAwesomeIcons.truck),
-            _ArrowSpacer(width: arrowW),
-            _StepCard(title: 'Delivered', icon: FontAwesomeIcons.box),
+          children: [
+            _StepCard(
+              title: 'Pending',
+              icon: FontAwesomeIcons.clipboardList,
+              count: isLoading ? 0 : pendingCount,
+              isLoading: isLoading,
+              onTap: () => _navigateToOrdersWithFilter(context, [
+                'Received',
+                'Sended to manager',
+                'Updated',
+              ]),
+            ),
+            _ArrowSpacer(width: _arrowW),
+            _StepCard(
+              title: 'Preparing',
+              icon: FontAwesomeIcons.boxOpen,
+              count: isLoading ? 0 : preparingCount,
+              isLoading: isLoading,
+              onTap: () => _navigateToOrdersWithFilter(context, ['Preparing']),
+            ),
+            _ArrowSpacer(width: _arrowW),
+            _StepCard(
+              title: 'Prepared',
+              icon: FontAwesomeIcons.clipboardCheck,
+              count: isLoading ? 0 : preparedCount,
+              isLoading: isLoading,
+              onTap: () => _navigateToOrdersWithFilter(context, ['Prepared']),
+            ),
+            _ArrowSpacer(width: _arrowW),
+            _StepCard(
+              title: 'Delivering',
+              icon: FontAwesomeIcons.truck,
+              count: isLoading ? 0 : deliveringCount,
+              isLoading: isLoading,
+              onTap: () => _navigateToOrdersWithFilter(context, ['Delivery']),
+            ),
+            _ArrowSpacer(width: _arrowW),
+            _StepCard(
+              title: 'Delivered',
+              icon: FontAwesomeIcons.box,
+              count: isLoading ? 0 : deliveredCount,
+              isLoading: isLoading,
+              onTap: () => _navigateToOrdersWithFilter(context, ['Delivered']),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _navigateToOrdersWithFilter(
+    BuildContext context,
+    List<String> statuses,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OrdersPage(initialFilterStatuses: statuses),
       ),
     );
   }
@@ -73,7 +200,7 @@ class _ArrowSpacer extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      height: _TopStepsRow.cardH,
+      height: _cardH,
       child: const Center(
         child: Icon(
           Icons.arrow_forward_ios_rounded,
@@ -88,45 +215,73 @@ class _ArrowSpacer extends StatelessWidget {
 class _StepCard extends StatelessWidget {
   final String title;
   final IconData icon;
+  final int count;
+  final bool isLoading;
+  final VoidCallback? onTap;
   // ignore: unused_element_parameter
-  const _StepCard({super.key, required this.title, required this.icon});
+  const _StepCard({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.count,
+    required this.isLoading,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: _TopStepsRow.cardW,
-      height: _TopStepsRow.cardH,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black45,
-              offset: Offset(0, 6),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 26, color: Colors.amberAccent),
-            const SizedBox(height: 6),
-            const Text(
-              '15',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            const Text('Order', style: TextStyle(color: Colors.grey)),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFFB7A447),
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+      width: _cardW,
+      height: _cardH,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2D2D2D),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black45,
+                offset: Offset(0, 6),
+                blurRadius: 10,
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 26, color: Colors.amberAccent),
+              const SizedBox(height: 6),
+              isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.amberAccent,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      count.toString(),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+              const Text('Order', style: TextStyle(color: Colors.grey)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFFB7A447),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -270,24 +425,161 @@ class _ActiveWorkersCard extends StatelessWidget {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               ORDERS TABLE                                 */
+/*                              RECEIVES ORDERS CARD                           */
 /* -------------------------------------------------------------------------- */
-class _OrdersCard extends StatelessWidget {
+class _OrdersCard extends StatefulWidget {
   const _OrdersCard();
 
+  @override
+  State<_OrdersCard> createState() => _OrdersCardState();
+}
+
+class _OrdersCardState extends State<_OrdersCard> {
   static const double _leadIconSpace = 30;
+
+  List<Map<String, dynamic>> receivesOrders = [];
+  bool isLoading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReceivesOrders();
+  }
+
+  Future<void> _fetchReceivesOrders() async {
+    try {
+      setState(() => isLoading = true);
+
+      // Fetch customer orders (stock-out receives)
+      final customerOrdersResponse = await supabase
+          .from('customer_order')
+          .select(
+            'customer_order_id, order_status, order_date, last_action_by, customer:customer_id(name)',
+          )
+          .inFilter('order_status', ['Received', 'Updated'])
+          .order('customer_order_id', ascending: false);
+
+      // Fetch supplier orders (stock-in receives)
+      final supplierOrdersResponse = await supabase
+          .from('supplier_order')
+          .select('''
+            order_id,
+            supplier_id,
+            order_date,
+            order_status,
+            created_by_id,
+            accountant_id,
+            last_tracing_by,
+            supplier:supplier_id (
+              name
+            )
+          ''')
+          .or('order_status.eq.Sent,order_status.eq.Updated')
+          .order('order_date', ascending: false);
+
+      final List<Map<String, dynamic>> allOrders = [];
+
+      // Process customer orders
+      for (final order in customerOrdersResponse) {
+        final orderDate = DateTime.parse(order['order_date']);
+        final time =
+            '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
+        final date = '${orderDate.day}/${orderDate.month}';
+
+        String type = 'out (NEW)';
+        if (order['order_status'] == 'Updated') {
+          type = 'out (UPDATE)';
+        }
+
+        allOrders.add({
+          'id': order['customer_order_id'].toString(),
+          'name': (order['customer'] is Map)
+              ? (order['customer']['name'] ?? 'Unknown')
+              : 'Unknown',
+          'type': type,
+          'createdBy': order['last_action_by'] ?? 'System',
+          'time': time,
+          'date': date,
+          'orderType': 'customer',
+          'orderDate': orderDate,
+        });
+      }
+
+      // Process supplier orders
+      for (final order in supplierOrdersResponse) {
+        final orderDate = DateTime.parse(order['order_date']);
+        final time =
+            '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
+        final date = '${orderDate.day}/${orderDate.month}';
+
+        String type = 'in (NEW)';
+        if (order['order_status'] == 'Updated') {
+          type = 'in (UPDATE)';
+        }
+
+        // Get creator name
+        String createdBy = order['last_tracing_by'] ?? 'System';
+        if (order['created_by_id'] != null) {
+          // Try to get from storage_manager or accountant tables
+          try {
+            final managerResponse = await supabase
+                .from('storage_manager')
+                .select('name')
+                .eq('storage_manager_id', order['created_by_id'])
+                .maybeSingle();
+
+            if (managerResponse != null) {
+              createdBy = managerResponse['name'];
+            } else {
+              final accountantResponse = await supabase
+                  .from('accountant')
+                  .select('name')
+                  .eq('accountant_id', order['created_by_id'])
+                  .maybeSingle();
+
+              if (accountantResponse != null) {
+                createdBy = accountantResponse['name'];
+              }
+            }
+          } catch (e) {
+            // Keep default createdBy if lookup fails
+          }
+        }
+
+        allOrders.add({
+          'id': order['order_id'].toString(),
+          'name': order['supplier']['name'] ?? 'Unknown',
+          'type': type,
+          'createdBy': createdBy,
+          'time': time,
+          'date': date,
+          'orderType': 'supplier',
+          'orderDate': orderDate,
+        });
+      }
+
+      // Sort by order date (most recent first)
+      allOrders.sort(
+        (a, b) =>
+            (b['orderDate'] as DateTime).compareTo(a['orderDate'] as DateTime),
+      );
+
+      setState(() {
+        receivesOrders = allOrders;
+        isLoading = false;
+        error = null;
+      });
+    } catch (e) {
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final rows = [
-      ['Saed Rimawi', 'out (NEW)', 'Sender', '12:30 AM', '14/8'],
-      ['Ahmad Nizar', 'out (UPDATE)', 'Sender', '10:43 AM', '14/8'],
-      ['Akef Al Asmar', 'out (NEW)', 'Sender', '9:30 AM', '14/8'],
-      ['Nizar Fares', 'in (NEW)', 'Ayman Rimawi', '8:43 AM', '14/8'],
-      ['Eyass Barghouthi', 'out (UPDATE)', 'Sender', '2:30 PM', '13/8'],
-      ['Sami Jaber', 'out (UPDATE)', 'Ayman Rimawi', '8:43 AM', '13/8'],
-    ];
-
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2D2D2D),
@@ -316,13 +608,29 @@ class _OrdersCard extends StatelessWidget {
           _tableHeader(),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              itemCount: rows.length,
-              itemBuilder: (context, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _orderRow(context, rows[i]),
-              ),
-            ),
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : error != null
+                ? Center(
+                    child: Text(
+                      'Error: $error',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  )
+                : receivesOrders.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No receives orders found',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: receivesOrders.length,
+                    itemBuilder: (context, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _orderRow(context, receivesOrders[i]),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -367,42 +675,134 @@ class _OrdersCard extends StatelessWidget {
     );
   }
 
-  Widget _orderRow(BuildContext context, List<String> r) {
-    final typeColor = r[1].startsWith('in') ? Colors.greenAccent : Colors.white;
+  Widget _orderRow(BuildContext context, Map<String, dynamic> order) {
+    final typeColor = order['type'].startsWith('in') ? blue : gold;
 
     return InkWell(
-      onTap: () {
-        OrderDetailPopup.show(
-          context,
-          orderType: r[1].startsWith('in') ? 'in' : 'out',
-          status: r[1].contains('UPDATE') ? 'UPDATE' : 'NEW',
-          products: [
-            {
-              "id": 1,
-              "name": "Hand Shower",
-              "brand": "GROHE",
-              "price": "26\$",
-              "quantity": 26,
-              "total": "26\$",
-            },
-            {
-              "id": 2,
-              "name": "Wall-Hung Toilet",
-              "brand": "Royal",
-              "price": "150\$",
-              "quantity": 30,
-              "total": "150\$",
-            },
-            {
-              "id": 3,
-              "name": "Kitchen Sink",
-              "brand": "GROHE",
-              "price": "200\$",
-              "quantity": 30,
-              "total": "200\$",
-            },
-          ],
-        );
+      onTap: () async {
+        // Fetch order details based on order type
+        List<Map<String, dynamic>> products = [];
+        String orderType = order['orderType'];
+        String status = 'NEW';
+
+        if (order['type'].contains('UPDATE')) {
+          status = 'UPDATE';
+        }
+
+        try {
+          if (orderType == 'customer') {
+            // Fetch customer order details
+            final orderDetails = await supabase
+                .from('customer_order')
+                .select(
+                  'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
+                )
+                .eq('customer_order_id', int.parse(order['id']))
+                .maybeSingle();
+
+            if (orderDetails != null) {
+              final items = await supabase
+                  .from('customer_order_description')
+                  .select(
+                    'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+                  )
+                  .eq('customer_order_id', int.parse(order['id']));
+
+              for (final item in items) {
+                final product = item['product'] as Map<String, dynamic>?;
+                final brand = product?['brand'] as Map<String, dynamic>?;
+                final unit = product?['unit'] as Map<String, dynamic>?;
+                final quantity = (item['quantity'] ?? 0) as num;
+                final total = (item['total_price'] ?? 0) as num;
+                final price = (product?['selling_price'] ?? 0) as num;
+
+                products.add({
+                  'id': item['product_id']?.toString() ?? '-',
+                  'name': product?['name'] ?? 'Unknown',
+                  'brand': brand?['name'] ?? '-',
+                  'price': price == 0 ? '-' : '${price.toStringAsFixed(2)}\$',
+                  'quantity': quantity,
+                  'total': total == 0 ? '-' : '${total.toStringAsFixed(2)}\$',
+                  'unit_name': unit?['unit_name'] ?? 'pcs',
+                });
+              }
+
+              if (!context.mounted) return;
+
+              OrderDetailPopup.show(
+                context,
+                orderType: 'out',
+                status: status,
+                products: products,
+                partyName: orderDetails['customer']?['name'] ?? 'Unknown',
+                location: _composeLocation(
+                  orderDetails['customer']?['customer_city']?['name'],
+                  orderDetails['customer']?['address'],
+                ),
+                orderDate: DateTime.parse(orderDetails['order_date']),
+                taxPercent: orderDetails['tax_percent'] as num?,
+                totalPrice: orderDetails['total_balance'] as num?,
+                orderId: int.parse(order['id']),
+              );
+            }
+          } else {
+            // Fetch supplier order details
+            final orderDetails = await supabase
+                .from('supplier_order')
+                .select('order_date, supplier:supplier_id(name)')
+                .eq('order_id', int.parse(order['id']))
+                .maybeSingle();
+
+            if (orderDetails != null) {
+              final items = await supabase
+                  .from('supplier_order_description')
+                  .select(
+                    'product_id, quantity, price_per_product, product:product_id(name, brand:brand_id(name), unit:unit_id(unit_name))',
+                  )
+                  .eq('order_id', int.parse(order['id']));
+
+              for (final item in items) {
+                final product = item['product'] as Map<String, dynamic>?;
+                final brand = product?['brand'] as Map<String, dynamic>?;
+                final unit = product?['unit'] as Map<String, dynamic>?;
+                final quantity = (item['quantity'] ?? 0) as num;
+                final price = (item['price_per_product'] ?? 0) as num;
+
+                products.add({
+                  'id': item['product_id']?.toString() ?? '-',
+                  'name': product?['name'] ?? 'Unknown',
+                  'brand': brand?['name'] ?? '-',
+                  'price': price == 0 ? '-' : '${price.toStringAsFixed(2)}\$',
+                  'quantity': quantity,
+                  'total': (price * quantity) == 0
+                      ? '-'
+                      : '${(price * quantity).toStringAsFixed(2)}\$',
+                  'unit_name': unit?['unit_name'] ?? 'pcs',
+                });
+              }
+
+              if (!context.mounted) return;
+
+              OrderDetailPopup.show(
+                context,
+                orderType: 'in',
+                status: status,
+                products: products,
+                partyName: orderDetails['supplier']?['name'] ?? 'Unknown',
+                orderDate: DateTime.parse(orderDetails['order_date']),
+                orderId: int.parse(order['id']),
+              );
+            }
+          }
+        } catch (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load order details: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -424,21 +824,21 @@ class _OrdersCard extends StatelessWidget {
             Expanded(
               flex: 3,
               child: Text(
-                r[0],
+                order['name'],
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
             Expanded(
               flex: 2,
               child: Text(
-                r[1],
+                order['type'],
                 style: TextStyle(fontWeight: FontWeight.bold, color: typeColor),
               ),
             ),
             Expanded(
               flex: 2,
               child: Text(
-                r[2],
+                order['createdBy'],
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -447,7 +847,7 @@ class _OrdersCard extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  r[3],
+                  order['time'],
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -457,7 +857,7 @@ class _OrdersCard extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  r[4],
+                  order['date'],
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -466,5 +866,19 @@ class _OrdersCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _composeLocation(String? city, String? address) {
+    if ((city == null || city.isEmpty) &&
+        (address == null || address.isEmpty)) {
+      return '-';
+    }
+    if (city != null &&
+        city.isNotEmpty &&
+        address != null &&
+        address.isNotEmpty) {
+      return '$city - $address';
+    }
+    return city?.isNotEmpty == true ? city! : address ?? '-';
   }
 }

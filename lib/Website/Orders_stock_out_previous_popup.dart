@@ -42,7 +42,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
           .select('''
             customer_order_id,
             order_date,
-            delivered_date,
             total_cost,
             tax_percent,
             total_balance,
@@ -52,7 +51,8 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
             delivery_driver:delivered_by_id(name, mobile_number),
             storage_staff:prepared_by_id(name),
             storage_manager:managed_by_id(name),
-            accountant:accountant_id(name)
+            accountant:accountant_id(name),
+            customer_order_description!inner(delivered_date)
           ''')
           .eq('customer_order_id', orderIdInt)
           .single();
@@ -206,9 +206,22 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final orderDate = _orderData!['order_date'] != null
         ? DateTime.parse(_orderData!['order_date'])
         : null;
-    final deliveredDate = _orderData!['delivered_date'] != null
-        ? DateTime.parse(_orderData!['delivered_date'])
-        : null;
+
+    // Get the latest delivered_date from all order items
+    final orderDescriptions =
+        _orderData!['customer_order_description'] as List?;
+    DateTime? deliveredDate;
+    if (orderDescriptions != null && orderDescriptions.isNotEmpty) {
+      for (final desc in orderDescriptions) {
+        final dateStr = desc['delivered_date'] as String?;
+        if (dateStr != null) {
+          final date = DateTime.parse(dateStr);
+          if (deliveredDate == null || date.isAfter(deliveredDate)) {
+            deliveredDate = date;
+          }
+        }
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

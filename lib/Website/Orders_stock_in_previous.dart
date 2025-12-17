@@ -976,7 +976,6 @@ class _OrderDetailsPopupState extends State<_OrderDetailsPopup> {
           .select('''
             order_id,
             order_date,
-            delivered_date,
             order_status,
             receives_by_id,
             supplier:supplier_id(name),
@@ -1046,9 +1045,8 @@ class _OrderDetailsPopupState extends State<_OrderDetailsPopup> {
     final orderDate = _orderData!['order_date'] != null
         ? DateTime.parse(_orderData!['order_date'])
         : null;
-    final deliveredDate = _orderData!['delivered_date'] != null
-        ? DateTime.parse(_orderData!['delivered_date'])
-        : null;
+    // Supplier orders don't have delivered_date, so set it to null
+    final DateTime? deliveredDate = null;
     final status = _orderData!['order_status'] ?? '';
 
     return Column(
