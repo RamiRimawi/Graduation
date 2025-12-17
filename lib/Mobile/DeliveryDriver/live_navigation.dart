@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'dart:convert';
 import 'dart:async';
 import '../../supabase_config.dart';
@@ -33,21 +34,16 @@ class _LiveNavigationState extends State<LiveNavigation> {
   MapController? _mapController;
   LatLng? _currentDriverLocation;
   List<LatLng> _routePoints = [];
-  double _currentZoom = 16.0;
   double _remainingDistance = 0;
   double _remainingTime = 0;
   StreamSubscription<Position>? _positionStream;
+  StreamSubscription<CompassEvent>? _compassStream;
   Timer? _routeUpdateTimer;
   Timer? _locationUpdateTimer;
   bool _arrivedAtDestination = false;
-  // Arrival detection helpers
-  DateTime? _arrivalEnteredAt;
-  final Duration _arrivalDwell = const Duration(seconds: 5);
-  final double _arrivalThresholdKm = 0.05; // 50 meters
-  final double _speedThresholdMps = 1.5; // ~5.4 km/h
   DateTime? _lastUpdate;
   int _updateCount = 0;
-  // compass mode removed
+  bool _compassMode = true;
 
   @override
   void initState() {
@@ -55,12 +51,13 @@ class _LiveNavigationState extends State<LiveNavigation> {
     _mapController = MapController();
     _startLiveTracking();
     _startLocationUpdates();
-    // compass removed
+    _startCompassTracking();
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
+    _compassStream?.cancel();
     _routeUpdateTimer?.cancel();
     _locationUpdateTimer?.cancel();
     super.dispose();
@@ -73,7 +70,22 @@ class _LiveNavigationState extends State<LiveNavigation> {
     );
   }
 
-  // compass tracking removed
+  void _startCompassTracking() {
+    _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
+      if (_compassMode && _currentDriverLocation != null) {
+        double heading = event.heading ?? 0;
+
+        // تحويل الاتجاه من 0-360 درجة إلى راديان للخريطة
+        // نستخدم القيمة السالبة لأن الدوران في الخريطة عكس عقارب الساعة
+        double rotation = -heading * (3.141592653589793 / 180.0);
+
+        // تدوير الخريطة بناءً على اتجاه الجهاز
+        _mapController?.rotate(rotation);
+
+        debugPrint('🧭 Compass heading: ${heading.toStringAsFixed(1)}°');
+      }
+    });
+  }
 
   Future<void> _updateLocationInDatabase() async {
     if (_currentDriverLocation == null) return;
@@ -106,7 +118,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
         final initialPosition = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
         );
-        
+
         setState(() {
           _currentDriverLocation = LatLng(
             initialPosition.latitude, 
@@ -125,40 +137,21 @@ class _LiveNavigationState extends State<LiveNavigation> {
           locationSettings: locationSettings,
         ).listen((Position position) {
           final newLocation = LatLng(position.latitude, position.longitude);
-          
+
           setState(() {
             _currentDriverLocation = newLocation;
           });
 
-          // Move the map to the new location but keep the current zoom level
-          _mapController?.move(newLocation, _currentZoom);
-          
+          _mapController?.move(newLocation, 17.0);
+
           final distanceToDestination = _calculateDistance(
             newLocation,
             LatLng(widget.customerLatitude, widget.customerLongitude),
           );
 
-          // Arrival logic: require either low speed OR dwell inside radius
-          if (!_arrivedAtDestination) {
-            final bool withinRadius = distanceToDestination < _arrivalThresholdKm;
-            final double speed = position.speed; // m/s, 0 if unknown/stationary
-
-            if (withinRadius) {
-              // If device moving slowly (stopped/near stopped), treat as arrived
-              if (speed >= 0 && speed <= _speedThresholdMps) {
-                _handleArrival();
-              } else {
-                // not slow enough yet: start dwell timer
-                _arrivalEnteredAt ??= DateTime.now();
-                final entered = _arrivalEnteredAt!;
-                if (DateTime.now().difference(entered) >= _arrivalDwell) {
-                  _handleArrival();
-                }
-              }
-            } else {
-              // left the radius: reset dwell timestamp
-              _arrivalEnteredAt = null;
-            }
+          if (distanceToDestination < 0.05 && !_arrivedAtDestination) {
+            setState(() => _arrivedAtDestination = true);
+            _showArrivalDialog();
           }
 
           debugPrint('🚚 Driver moved to: $newLocation');
@@ -193,7 +186,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
-          
+
           final coordinates = route['geometry']['coordinates'] as List;
           final newRoutePoints = coordinates
               .map((coord) => LatLng(coord[1] as double, coord[0] as double))
@@ -257,16 +250,6 @@ class _LiveNavigationState extends State<LiveNavigation> {
     );
   }
 
-  void _handleArrival() {
-    if (_arrivedAtDestination) return;
-    setState(() {
-      _arrivedAtDestination = true;
-    });
-
-    // Show arrival dialog (keeps the previous behavior)
-    _showArrivalDialog();
-  }
-
   @override
   Widget build(BuildContext context) {
     final destinationLocation = LatLng(
@@ -284,11 +267,6 @@ class _LiveNavigationState extends State<LiveNavigation> {
               options: MapOptions(
                 initialCenter: _currentDriverLocation ?? destinationLocation,
                 initialZoom: 16.0,
-                onPositionChanged: (MapPosition pos, bool hasGesture) {
-                  if (pos.zoom != null) {
-                    _currentZoom = pos.zoom!;
-                  }
-                },
                 minZoom: 8.0,
                 maxZoom: 18.0,
                 bounds: LatLngBounds(
@@ -298,14 +276,14 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 boundsOptions: const FitBoundsOptions(
                   padding: EdgeInsets.all(50.0),
                 ),
-                interactiveFlags: InteractiveFlag.all,
+                interactiveFlags: _compassMode 
+                    ? InteractiveFlag.all 
+                    : InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
               children: [
                 TileLayer(
-                  // استخدم مزود بمفتاح لتفادي حجب OSM
-                  urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.example.dolphin',
-                  tileProvider: NetworkTileProvider(),
                 ),
                 if (_routePoints.isNotEmpty)
                   PolylineLayer(
@@ -469,7 +447,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
                       color: const Color(0xFF2D2D2D).withOpacity(0.95),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFFB7A447).withOpacity(0.3),
+                        color: _compassMode 
+                            ? const Color(0xFF2196F3) 
+                            : const Color(0xFFB7A447).withOpacity(0.3),
                         width: 2,
                       ),
                       boxShadow: [
@@ -479,7 +459,27 @@ class _LiveNavigationState extends State<LiveNavigation> {
                         ),
                       ],
                     ),
-                    // compass button removed
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.explore,
+                        color: _compassMode 
+                            ? const Color(0xFF2196F3) 
+                            : Colors.white70,
+                        size: 28,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _compassMode = !_compassMode;
+                          if (!_compassMode) {
+                            // إعادة تعيين دوران الخريطة عند إيقاف وضع البوصلة
+                            _mapController?.rotate(0);
+                          }
+                        });
+                      },
+                      tooltip: _compassMode 
+                          ? 'تعطيل وضع البوصلة' 
+                          : 'تفعيل وضع البوصلة',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // زر العودة إلى الموقع الحالي
@@ -506,8 +506,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                       ),
                       onPressed: () {
                         if (_currentDriverLocation != null) {
-                          // Move to current location without changing zoom
-                          _mapController?.move(_currentDriverLocation!, _currentZoom);
+                          _mapController?.move(_currentDriverLocation!, 16.0);
                         }
                       },
                       tooltip: 'العودة إلى موقعي',
