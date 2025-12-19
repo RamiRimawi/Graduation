@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
 import 'customer_home_page.dart';
 import 'customer_archive_page.dart';
@@ -12,15 +15,9 @@ class CustomerCartPage extends StatefulWidget {
 }
 
 class _CustomerCartPageState extends State<CustomerCartPage> {
-  // sample in-memory cart data (replace with your real data)
-  final List<Map<String, dynamic>> _items = [
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'price': 200.0, 'qty': 1},
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'price': 200.0, 'qty': 1},
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'price': 200.0, 'qty': 1},
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'price': 200.0, 'qty': 1},
-    {'name': 'Hand Shower', 'brand': 'GROHE', 'price': 200.0, 'qty': 1},
-  ];
-
+  List<Map<String, dynamic>> _items = [];
+  bool _isLoading = true;
+  int? _orderId; // current cart order id
   int _currentIndex = 1; // Cart tab index
 
   Color get _bg => const Color(0xFF1A1A1A);
@@ -32,10 +29,89 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     return _items.fold(0.0, (s, i) => s + (i['price'] as double) * (i['qty'] as int));
   }
 
+  // ===== navigation handler for bottom bar (Customer layout indices) =====
+  void _onNavTap(int i) {
+    setState(() => _currentIndex = i);
+
+    if (i == 0) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+      );
+    } else if (i == 1) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
+      );
+    } else if (i == 2) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
+      );
+    } else if (i == 3) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AccountPage()),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCart();
+  }
+
+  Future<void> _loadCart() async {
+    setState(() {
+      _isLoading = true;
+      _items = [];
+      _orderId = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userIdStr = prefs.getString('current_user_id');
+      final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      if (customerId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Load cart items from local storage only
+      final cartJson = prefs.getString('cart_items') ?? '{}';
+      final cartMap = jsonDecode(cartJson) as Map<String, dynamic>;
+
+      final parsedItems = cartMap.entries.map<Map<String, dynamic>>((entry) {
+        final item = entry.value as Map<String, dynamic>;
+        final priceRaw = item['price'];
+        final price = priceRaw is num ? priceRaw.toDouble() : 0.0;
+        return {
+          'product_id': item['product_id'],
+          'name': item['name'] ?? '—',
+          'brand': item['brand'] ?? '—',
+          'price': price,
+          'qty': item['qty'] ?? 1,
+        };
+      }).toList();
+
+      setState(() {
+        _orderId = null; // will be set on submit
+        _items = parsedItems;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading cart: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
   void _increaseQty(int index) {
     setState(() {
       _items[index]['qty'] = (_items[index]['qty'] as int) + 1;
     });
+    _persistLocalQuantity(index);
   }
 
   void _decreaseQty(int index) {
@@ -43,13 +119,114 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       final current = _items[index]['qty'] as int;
       if (current > 1) _items[index]['qty'] = current - 1;
     });
+    _persistLocalQuantity(index);
+  }
+
+  Future<void> _persistLocalQuantity(int index) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = prefs.getString('cart_items') ?? '{}';
+      final cartMap = jsonDecode(cartJson) as Map<String, dynamic>;
+      final productId = _items[index]['product_id'];
+      if (productId == null) return;
+
+      final key = productId.toString();
+      if (cartMap.containsKey(key)) {
+        final item = Map<String, dynamic>.from(cartMap[key] as Map);
+        item['qty'] = _items[index]['qty'];
+        cartMap[key] = item;
+        await prefs.setString('cart_items', jsonEncode(cartMap));
+      }
+    } catch (e) {
+      debugPrint('Error persisting quantity: $e');
+    }
   }
 
   void _sendOrder() {
-    // implement sending order logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Order sent (demo)')),
-    );
+    _submitOrder();
+  }
+
+  Future<void> _submitOrder() async {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items to send')),
+      );
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userIdStr = prefs.getString('current_user_id');
+      final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      if (customerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No customer id found')),
+        );
+        return;
+      }
+
+      // Fetch customer name for auditing fields
+      final customerRow = await supabase
+          .from('customer')
+          .select('name')
+          .eq('customer_id', customerId)
+          .maybeSingle();
+
+      final actorName = (customerRow?['name'] as String?)?.trim();
+      final actionBy = (actorName != null && actorName.isNotEmpty) ? actorName : 'customer_$customerId';
+      final actionTime = DateTime.now().toIso8601String();
+
+      // Create order and insert items
+      double totalCost = _total;
+      final createOrder = await supabase
+          .from('customer_order')
+          .insert({
+            'customer_id': customerId,
+            'order_status': 'Received',
+            'order_date': actionTime,
+            'total_cost': totalCost,
+            'total_balance': totalCost,
+            'last_action_by': actionBy,
+            'last_action_time': actionTime,
+          })
+          .select()
+          .single();
+
+      final newOrderId = createOrder['customer_order_id'] as int?;
+
+      if (newOrderId != null) {
+        for (final item in _items) {
+          try {
+            await supabase.from('customer_order_description').insert({
+              'customer_order_id': newOrderId,
+              'product_id': item['product_id'],
+              'quantity': item['qty'],
+              'total_price': (item['price'] as double) * (item['qty'] as int),
+              'last_action_by': actionBy,
+              'last_action_time': actionTime,
+            });
+          } catch (e) {
+            debugPrint('Error inserting line item: $e');
+          }
+        }
+      }
+
+      // Clear cart from local storage
+      await prefs.remove('cart_items');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order sent and saved to database')),
+        );
+        await _loadCart();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send order: $e')),
+        );
+      }
+    }
   }
 
   // ========== Edit quantity dialog (similar to OrderDetailsPage) ==========
@@ -89,6 +266,7 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
                   setState(() {
                     _items[index]['qty'] = val;
                   });
+                  _persistLocalQuantity(index);
                 }
                 Navigator.pop(context);
               },
@@ -100,43 +278,18 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     );
   }
 
-  // ===== navigation handler for bottom bar (Customer layout indices) =====
-  void _onNavTap(int i) {
-    setState(() => _currentIndex = i);
-
-    if (i == 0) {
-      // Home
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
-      );
-    } else if (i == 1) {
-      // Cart (this page) - replace to refresh / keep behavior consistent
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
-      );
-    } else if (i == 2) {
-      // Archive
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
-      );
-    } else if (i == 3) {
-      // Account (shared)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: Column(
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFB7A447),
+                ),
+              )
+            : Column(
           children: [
             const SizedBox(height: 12),
 
@@ -163,83 +316,90 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: ListView.separated(
-                  itemCount: _items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final item = _items[i];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: _card,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      child: Row(
-                        children: [
-                          // Name (two lines)
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              item['name'] as String,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                child: _items.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Cart is empty',
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, i) {
+                          final item = _items[i];
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: _card,
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                          ),
-
-                          // Brand
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              item['brand'] as String,
-                              style: TextStyle(color: _muted, fontWeight: FontWeight.w700),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-
-                          // Price
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              '${(item['price'] as double).toStringAsFixed(0)}\$',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                              textAlign: TextAlign.left,
-                            ),
-                          ),
-
-                          // Quantity pill + unit (tappable)
-                          SizedBox(
-                            width: 86,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                GestureDetector(
-                                  onTap: () => _editQuantity(i),
-                                  child: Container(
-                                    width: 44,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: _accent,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '${item['qty']}',
-                                      style: const TextStyle(
-                                        color: Color(0xFF202020),
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
+                                // Name (two lines)
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    item['name'] as String,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                const Text('cm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+
+                                // Brand
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    item['brand'] as String,
+                                    style: TextStyle(color: _muted, fontWeight: FontWeight.w700),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+
+                                // Price
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    '${(item['price'] as double).toStringAsFixed(0)}\$',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                    textAlign: TextAlign.left,
+                                  ),
+                                ),
+
+                                // Quantity pill + unit (tappable)
+                                SizedBox(
+                                  width: 86,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => _editQuantity(i),
+                                        child: Container(
+                                          width: 44,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: _accent,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${item['qty']}',
+                                            style: const TextStyle(
+                                              color: Color(0xFF202020),
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      const Text('cm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ),
 
