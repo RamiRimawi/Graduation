@@ -193,8 +193,7 @@ class _TopStepsRowState extends State<_TopStepsRow> {
 
 class _ArrowSpacer extends StatelessWidget {
   final double width;
-  // ignore: unused_element_parameter
-  const _ArrowSpacer({super.key, required this.width});
+  const _ArrowSpacer({required this.width});
 
   @override
   Widget build(BuildContext context) {
@@ -212,15 +211,13 @@ class _ArrowSpacer extends StatelessWidget {
   }
 }
 
-class _StepCard extends StatelessWidget {
+class _StepCard extends StatefulWidget {
   final String title;
   final IconData icon;
   final int count;
   final bool isLoading;
   final VoidCallback? onTap;
-  // ignore: unused_element_parameter
   const _StepCard({
-    super.key,
     required this.title,
     required this.icon,
     required this.count,
@@ -229,58 +226,83 @@ class _StepCard extends StatelessWidget {
   });
 
   @override
+  State<_StepCard> createState() => _StepCardState();
+}
+
+class _StepCardState extends State<_StepCard> {
+  bool _hovered = false;
+
+  static const _radius = 18.0;
+  static const _anim = Duration(milliseconds: 180);
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: _cardW,
       height: _cardH,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D2D2D),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black45,
-                offset: Offset(0, 6),
-                blurRadius: 10,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 26, color: Colors.amberAccent),
-              const SizedBox(height: 6),
-              isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.amberAccent,
-                        ),
-                      ),
-                    )
-                  : Text(
-                      count.toString(),
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedScale(
+          duration: _anim,
+          scale: _hovered ? 1.02 : 1.0,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(_radius),
+            child: AnimatedContainer(
+              duration: _anim,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2D2D2D),
+                borderRadius: BorderRadius.circular(_radius),
+                boxShadow: [
+                  const BoxShadow(
+                    color: Colors.black45,
+                    offset: Offset(0, 6),
+                    blurRadius: 10,
+                  ),
+                  if (_hovered)
+                    BoxShadow(
+                      color: gold.withValues(alpha: 0.55),
+                      blurRadius: 24,
+                      spreadRadius: 2,
                     ),
-              const Text('Order', style: TextStyle(color: Colors.grey)),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Color(0xFFB7A447),
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                ],
               ),
-            ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, size: 26, color: Colors.amberAccent),
+                  const SizedBox(height: 6),
+                  widget.isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.amberAccent,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          widget.count.toString(),
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                  const Text('Order', style: TextStyle(color: Colors.grey)),
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      color: Color(0xFFB7A447),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -440,6 +462,8 @@ class _OrdersCardState extends State<_OrdersCard> {
   List<Map<String, dynamic>> receivesOrders = [];
   bool isLoading = true;
   String? error;
+  // Hover state tracking (match other pages animation)
+  int? hoveredRow;
 
   @override
   void initState() {
@@ -626,10 +650,21 @@ class _OrdersCardState extends State<_OrdersCard> {
                   )
                 : ListView.builder(
                     itemCount: receivesOrders.length,
-                    itemBuilder: (context, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _orderRow(context, receivesOrders[i]),
-                    ),
+                    itemBuilder: (context, i) {
+                      final isHovered = hoveredRow == i;
+                      return MouseRegion(
+                        onEnter: (_) => setState(() => hoveredRow = i),
+                        onExit: (_) => setState(() => hoveredRow = null),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _orderRow(
+                            context,
+                            receivesOrders[i],
+                            isHovered,
+                          ),
+                        ),
+                      );
+                    },
                   ),
           ),
         ],
@@ -675,7 +710,11 @@ class _OrdersCardState extends State<_OrdersCard> {
     );
   }
 
-  Widget _orderRow(BuildContext context, Map<String, dynamic> order) {
+  Widget _orderRow(
+    BuildContext context,
+    Map<String, dynamic> order,
+    bool isHovered,
+  ) {
     final typeColor = order['type'].startsWith('in') ? blue : gold;
 
     return InkWell(
@@ -804,10 +843,16 @@ class _OrdersCardState extends State<_OrdersCard> {
           );
         }
       },
-      child: Container(
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: const Color(0xFF252525),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isHovered ? blue : Colors.transparent,
+            width: 1.5,
+          ),
           boxShadow: const [
             BoxShadow(
               color: Colors.black26,

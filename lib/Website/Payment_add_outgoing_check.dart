@@ -1,5 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'sidebar.dart';
+
+Future<int?> getAccountantId() async {
+  final prefs = await SharedPreferences.getInstance();
+  final id = prefs.getInt('accountant_id');
+  if (id != null) return id;
+  // If not found in prefs, get from DB where is_active = 'yes'
+  final response = await Supabase.instance.client
+      .from('user_account_accountant')
+      .select('accountant_id')
+      .eq('is_active', 'yes')
+      .maybeSingle();
+  return response != null ? response['accountant_id'] as int? : null;
+}
+
+Future<String?> getAccountantName(int accountantId) async {
+  final response = await Supabase.instance.client
+      .from('accountant')
+      .select('name')
+      .eq('accountant_id', accountantId)
+      .maybeSingle();
+  return response != null ? response['name'] as String? : null;
+}
 
 // ================= COLORS =================
 class AppColors {
@@ -27,21 +51,153 @@ class _AddOutgoingCheckPageState extends State<AddOutgoingCheckPage> {
   String? selectedBranch;
   late TextEditingController _checkRateController;
   late TextEditingController _descriptionController;
+  late TextEditingController _supplierSearchController;
   DateTime? selectedDate;
   String? selectedCheckImage;
+
+  List<Map<String, dynamic>> suppliers = [];
+  bool isLoadingSuppliers = true;
+  List<Map<String, dynamic>> filteredSuppliers = [];
+
+  OverlayEntry? _supplierOverlayEntry;
+  final LayerLink _supplierLayerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
     _checkRateController = TextEditingController();
     _descriptionController = TextEditingController();
+    _supplierSearchController = TextEditingController();
+    _fetchSuppliers();
   }
 
   @override
   void dispose() {
     _checkRateController.dispose();
     _descriptionController.dispose();
+    _supplierSearchController.dispose();
+    _hideSupplierOverlay();
     super.dispose();
+  }
+
+  Future<void> _fetchSuppliers() async {
+    try {
+      setState(() => isLoadingSuppliers = true);
+
+      final response = await Supabase.instance.client
+          .from('supplier')
+          .select('supplier_id, name')
+          .order('name', ascending: true);
+
+      setState(() {
+        suppliers = List<Map<String, dynamic>>.from(response);
+        filteredSuppliers = suppliers;
+        isLoadingSuppliers = false;
+      });
+    } catch (e) {
+      setState(() => isLoadingSuppliers = false);
+      // Handle error - could show a snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load suppliers: $e')));
+      }
+    }
+  }
+
+  void _filterSuppliers(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredSuppliers = suppliers;
+      } else {
+        filteredSuppliers = suppliers
+            .where(
+              (supplier) => supplier['name']
+                  .toString()
+                  .toLowerCase()
+                  .startsWith(query.toLowerCase()),
+            )
+            .toList();
+      }
+    });
+  }
+
+  void _showSupplierOverlay() {
+    _hideSupplierOverlay(); // Remove existing overlay first to force rebuild
+
+    _supplierOverlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Transparent background to detect taps outside dropdown
+          GestureDetector(
+            onTap: _hideSupplierOverlay,
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.transparent,
+            ),
+          ),
+          // The actual dropdown
+          Positioned(
+            width: 720, // Match the ConstrainedBox width
+            child: CompositedTransformFollower(
+              link: _supplierLayerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 60), // Position below the text field
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.cardBorder, width: 1),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filteredSuppliers.length,
+                    itemBuilder: (context, index) {
+                      final supplier = filteredSuppliers[index];
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            selectedSupplier = supplier['supplier_id']
+                                .toString();
+                            _supplierSearchController.text = supplier['name'];
+                          });
+                          _hideSupplierOverlay();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            supplier['name'] ?? 'Unknown',
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_supplierOverlayEntry!);
+  }
+
+  void _hideSupplierOverlay() {
+    _supplierOverlayEntry?.remove();
+    _supplierOverlayEntry = null;
   }
 
   void _submitForm() {
@@ -156,73 +312,109 @@ class _AddOutgoingCheckPageState extends State<AddOutgoingCheckPage> {
                                       // ========== Supplier Name ==========
                                       _label("Supplier Name"),
                                       const SizedBox(height: 10),
-                                      DropdownButtonFormField<String>(
-                                        initialValue: selectedSupplier,
-                                        dropdownColor: AppColors.card,
-                                        style: const TextStyle(
-                                          color: AppColors.white,
-                                          fontSize: 15,
-                                        ),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: AppColors.card,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 14,
-                                                vertical: 12,
+
+                                      StatefulBuilder(
+                                        builder: (context, setState) {
+                                          return CompositedTransformTarget(
+                                            link: _supplierLayerLink,
+                                            child: TextFormField(
+                                              controller:
+                                                  _supplierSearchController,
+                                              style: const TextStyle(
+                                                color: AppColors.white,
+                                                fontSize: 15,
                                               ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
+                                              decoration: InputDecoration(
+                                                filled: true,
+                                                fillColor: isLoadingSuppliers
+                                                    ? AppColors.cardAlt
+                                                    : AppColors.card,
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 12,
+                                                    ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  borderSide: const BorderSide(
+                                                    color: AppColors.cardBorder,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                      borderSide:
+                                                          const BorderSide(
+                                                            color: AppColors
+                                                                .cardBorder,
+                                                            width: 1,
+                                                          ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                      borderSide:
+                                                          const BorderSide(
+                                                            color:
+                                                                AppColors.blue,
+                                                            width: 1.8,
+                                                          ),
+                                                    ),
+                                                hintText: isLoadingSuppliers
+                                                    ? 'Loading suppliers...'
+                                                    : 'Search suppliers...',
+                                                hintStyle: TextStyle(
+                                                  color: AppColors.white
+                                                      .withOpacity(0.6),
+                                                ),
+                                                suffixIcon: const Icon(
+                                                  Icons.arrow_drop_down,
+                                                  color: AppColors.white,
+                                                ),
+                                              ),
+                                              onChanged: (value) {
+                                                _filterSuppliers(value);
+                                                if (value.isEmpty) {
+                                                  _hideSupplierOverlay();
+                                                } else {
+                                                  _showSupplierOverlay();
+                                                }
+                                              },
+                                              onTap: () {
+                                                if (_supplierSearchController
+                                                    .text
+                                                    .isEmpty) {
+                                                  // Show all suppliers when field is empty and tapped
+                                                  setState(() {
+                                                    filteredSuppliers =
+                                                        suppliers;
+                                                  });
+                                                  _showSupplierOverlay();
+                                                } else {
+                                                  _filterSuppliers(
+                                                    _supplierSearchController
+                                                        .text,
+                                                  );
+                                                  _showSupplierOverlay();
+                                                }
+                                              },
+                                              validator: (value) {
+                                                if (selectedSupplier == null ||
+                                                    selectedSupplier!.isEmpty) {
+                                                  return "Please select supplier";
+                                                }
+                                                return null;
+                                              },
                                             ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.cardBorder,
-                                              width: 1,
-                                            ),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.cardBorder,
-                                              width: 1,
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.blue,
-                                              width: 1.8,
-                                            ),
-                                          ),
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: "Supplier 1",
-                                            child: Text("Supplier 1"),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: "Supplier 2",
-                                            child: Text("Supplier 2"),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: "Supplier 3",
-                                            child: Text("Supplier 3"),
-                                          ),
-                                        ],
-                                        onChanged: (value) {
-                                          setState(
-                                            () => selectedSupplier = value,
                                           );
-                                        },
-                                        validator: (value) {
-                                          if (value == null) {
-                                            return "Please select supplier";
-                                          }
-                                          return null;
                                         },
                                       ),
 

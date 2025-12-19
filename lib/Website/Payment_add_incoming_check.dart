@@ -1,5 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'sidebar.dart';
+
+Future<int?> getAccountantId() async {
+  final prefs = await SharedPreferences.getInstance();
+  final id = prefs.getInt('accountant_id');
+  if (id != null) return id;
+  // If not found in prefs, get from DB where is_active = 'yes'
+  final response = await Supabase.instance.client
+      .from('user_account_accountant')
+      .select('accountant_id')
+      .eq('is_active', 'yes')
+      .maybeSingle();
+  return response != null ? response['accountant_id'] as int? : null;
+}
+
+Future<String?> getAccountantName(int accountantId) async {
+  final response = await Supabase.instance.client
+      .from('accountant')
+      .select('name')
+      .eq('accountant_id', accountantId)
+      .maybeSingle();
+  return response != null ? response['name'] as String? : null;
+}
 
 // ================= COLORS =================
 class AppColors {
@@ -27,21 +51,153 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
   String? selectedBranch;
   late TextEditingController _checkRateController;
   late TextEditingController _descriptionController;
+  late TextEditingController _customerSearchController;
   DateTime? selectedDate;
   String? selectedCheckImage;
+
+  List<Map<String, dynamic>> customers = [];
+  bool isLoadingCustomers = true;
+  List<Map<String, dynamic>> filteredCustomers = [];
+
+  OverlayEntry? _customerOverlayEntry;
+  final LayerLink _customerLayerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
     _checkRateController = TextEditingController();
     _descriptionController = TextEditingController();
+    _customerSearchController = TextEditingController();
+    _fetchCustomers();
   }
 
   @override
   void dispose() {
     _checkRateController.dispose();
     _descriptionController.dispose();
+    _customerSearchController.dispose();
+    _hideCustomerOverlay();
     super.dispose();
+  }
+
+  Future<void> _fetchCustomers() async {
+    try {
+      setState(() => isLoadingCustomers = true);
+
+      final response = await Supabase.instance.client
+          .from('customer')
+          .select('customer_id, name')
+          .order('name', ascending: true);
+
+      setState(() {
+        customers = List<Map<String, dynamic>>.from(response);
+        filteredCustomers = customers;
+        isLoadingCustomers = false;
+      });
+    } catch (e) {
+      setState(() => isLoadingCustomers = false);
+      // Handle error - could show a snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load customers: $e')));
+      }
+    }
+  }
+
+  void _filterCustomers(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        filteredCustomers = customers;
+      } else {
+        filteredCustomers = customers
+            .where(
+              (customer) => customer['name']
+                  .toString()
+                  .toLowerCase()
+                  .startsWith(query.toLowerCase()),
+            )
+            .toList();
+      }
+    });
+  }
+
+  void _showCustomerOverlay() {
+    _hideCustomerOverlay(); // Remove existing overlay first to force rebuild
+
+    _customerOverlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Transparent background to detect taps outside dropdown
+          GestureDetector(
+            onTap: _hideCustomerOverlay,
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              color: Colors.transparent,
+            ),
+          ),
+          // The actual dropdown
+          Positioned(
+            width: 720, // Match the ConstrainedBox width
+            child: CompositedTransformFollower(
+              link: _customerLayerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 60), // Position below the text field
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.cardBorder, width: 1),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filteredCustomers.length,
+                    itemBuilder: (context, index) {
+                      final customer = filteredCustomers[index];
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            selectedCustomer = customer['customer_id']
+                                .toString();
+                            _customerSearchController.text = customer['name'];
+                          });
+                          _hideCustomerOverlay();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            customer['name'] ?? 'Unknown',
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_customerOverlayEntry!);
+  }
+
+  void _hideCustomerOverlay() {
+    _customerOverlayEntry?.remove();
+    _customerOverlayEntry = null;
   }
 
   void _submitForm() {
@@ -156,73 +312,109 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
                                       // ========== Customer Name ==========
                                       _label("Customer Name"),
                                       const SizedBox(height: 10),
-                                      DropdownButtonFormField<String>(
-                                        initialValue: selectedCustomer,
-                                        dropdownColor: AppColors.card,
-                                        style: const TextStyle(
-                                          color: AppColors.white,
-                                          fontSize: 15,
-                                        ),
-                                        decoration: InputDecoration(
-                                          filled: true,
-                                          fillColor: AppColors.card,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 14,
-                                                vertical: 12,
+
+                                      StatefulBuilder(
+                                        builder: (context, setState) {
+                                          return CompositedTransformTarget(
+                                            link: _customerLayerLink,
+                                            child: TextFormField(
+                                              controller:
+                                                  _customerSearchController,
+                                              style: const TextStyle(
+                                                color: AppColors.white,
+                                                fontSize: 15,
                                               ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
+                                              decoration: InputDecoration(
+                                                filled: true,
+                                                fillColor: isLoadingCustomers
+                                                    ? AppColors.cardAlt
+                                                    : AppColors.card,
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 12,
+                                                    ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  borderSide: const BorderSide(
+                                                    color: AppColors.cardBorder,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                      borderSide:
+                                                          const BorderSide(
+                                                            color: AppColors
+                                                                .cardBorder,
+                                                            width: 1,
+                                                          ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                      borderSide:
+                                                          const BorderSide(
+                                                            color:
+                                                                AppColors.blue,
+                                                            width: 1.8,
+                                                          ),
+                                                    ),
+                                                hintText: isLoadingCustomers
+                                                    ? 'Loading customers...'
+                                                    : 'Search customers...',
+                                                hintStyle: TextStyle(
+                                                  color: AppColors.white
+                                                      .withOpacity(0.6),
+                                                ),
+                                                suffixIcon: const Icon(
+                                                  Icons.arrow_drop_down,
+                                                  color: AppColors.white,
+                                                ),
+                                              ),
+                                              onChanged: (value) {
+                                                _filterCustomers(value);
+                                                if (value.isEmpty) {
+                                                  _hideCustomerOverlay();
+                                                } else {
+                                                  _showCustomerOverlay();
+                                                }
+                                              },
+                                              onTap: () {
+                                                if (_customerSearchController
+                                                    .text
+                                                    .isEmpty) {
+                                                  // Show all customers when field is empty and tapped
+                                                  setState(() {
+                                                    filteredCustomers =
+                                                        customers;
+                                                  });
+                                                  _showCustomerOverlay();
+                                                } else {
+                                                  _filterCustomers(
+                                                    _customerSearchController
+                                                        .text,
+                                                  );
+                                                  _showCustomerOverlay();
+                                                }
+                                              },
+                                              validator: (value) {
+                                                if (selectedCustomer == null ||
+                                                    selectedCustomer!.isEmpty) {
+                                                  return "Please select customer";
+                                                }
+                                                return null;
+                                              },
                                             ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.cardBorder,
-                                              width: 1,
-                                            ),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.cardBorder,
-                                              width: 1,
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: AppColors.blue,
-                                              width: 1.8,
-                                            ),
-                                          ),
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: "Customer 1",
-                                            child: Text("Customer 1"),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: "Customer 2",
-                                            child: Text("Customer 2"),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: "Customer 3",
-                                            child: Text("Customer 3"),
-                                          ),
-                                        ],
-                                        onChanged: (value) {
-                                          setState(
-                                            () => selectedCustomer = value,
                                           );
-                                        },
-                                        validator: (value) {
-                                          if (value == null) {
-                                            return "Please select customer";
-                                          }
-                                          return null;
                                         },
                                       ),
 
