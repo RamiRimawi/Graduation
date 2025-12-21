@@ -32,7 +32,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
   String? profileImage;
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
-  
+
   late TextEditingController nameController;
   late TextEditingController mobileController;
   late TextEditingController telephoneController;
@@ -47,7 +47,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
     addressController = TextEditingController();
     _loadAccountantData();
   }
-  
+
   @override
   void dispose() {
     nameController.dispose();
@@ -62,14 +62,14 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
       // Get accountant ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       accountantId = prefs.getInt('accountant_id');
-      
+
       if (accountantId == null) {
         if (mounted) {
           setState(() => isLoading = false);
         }
         return;
       }
-      
+
       final response = await supabase
           .from('user_account_accountant')
           .select('''
@@ -87,7 +87,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
 
       if (mounted) {
         final accountantData = response['accountant'] as Map<String, dynamic>;
-        
+
         setState(() {
           name = accountantData['name'] ?? 'N/A';
           mobileNumber = accountantData['mobile_number'] ?? 'N/A';
@@ -108,7 +108,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
+
       if (image != null) {
         final bytes = await image.readAsBytes();
         setState(() {
@@ -129,23 +129,24 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
   }
 
   Future<String?> _uploadImageToStorage() async {
-    if (_selectedImageBytes == null || _selectedImageName == null || accountantId == null) return null;
-    
+    if (_selectedImageBytes == null ||
+        _selectedImageName == null ||
+        accountantId == null)
+      return null;
+
     try {
       final extension = _selectedImageName!.toLowerCase().split('.').last;
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'accountant_${accountantId}_$timestamp.$extension';
-      
+
       // Upload to Supabase Storage
       await supabase.storage
           .from('images')
           .uploadBinary(fileName, _selectedImageBytes!);
-      
+
       // Get public URL
-      final publicUrl = supabase.storage
-          .from('images')
-          .getPublicUrl(fileName);
-      
+      final publicUrl = supabase.storage.from('images').getPublicUrl(fileName);
+
       return publicUrl;
     } catch (e) {
       if (mounted) {
@@ -178,12 +179,13 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
 
   Future<void> _saveChanges() async {
     // Check if any data has changed
-    bool hasChanges = nameController.text.trim() != name ||
+    bool hasChanges =
+        nameController.text.trim() != name ||
         mobileController.text.trim() != mobileNumber ||
         telephoneController.text.trim() != telephoneNumber ||
         addressController.text.trim() != address ||
         _selectedImageBytes != null;
-    
+
     // If no changes, just exit edit mode without saving
     if (!hasChanges) {
       setState(() {
@@ -191,14 +193,15 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
       });
       return;
     }
-    
+
+    if (!mounted) return;
     setState(() => isSaving = true);
-    
+
     try {
       if (accountantId == null) {
         throw 'No accountant ID found';
       }
-      
+
       // Prepare accountant data
       final Map<String, dynamic> accountantData = {
         'name': nameController.text.trim(),
@@ -206,13 +209,13 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
         'telephone_number': telephoneController.text.trim(),
         'address': addressController.text.trim(),
       };
-      
+
       // Update accountant table
       await supabase
           .from('accountant')
           .update(accountantData)
           .eq('accountant_id', accountantId!);
-      
+
       // Update profile image if changed
       if (_selectedImageBytes != null) {
         final imageUrl = await _uploadImageToStorage();
@@ -222,14 +225,15 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
               .update({'profile_image': imageUrl})
               .eq('accountant_id', accountantId!);
           profileImage = imageUrl;
-          
+
           // Update cached profile image
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('profile_image', imageUrl);
         }
       }
-      
+
       // Update local state
+      if (!mounted) return;
       setState(() {
         name = nameController.text.trim();
         mobileNumber = mobileController.text.trim();
@@ -240,7 +244,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
         _selectedImageBytes = null;
         _selectedImageName = null;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -254,10 +258,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
       if (mounted) {
         setState(() => isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -274,177 +275,192 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
           Expanded(
             child: isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.yellow,
-                    ),
+                    child: CircularProgressIndicator(color: AppColors.yellow),
                   )
                 : SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: width > 900 ? 60 : 28,
-                  vertical: 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // أزرار أعلى الصفحة
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        _TopButton(
-                          label: isEditMode ? 'Save' : 'Edit Profile',
-                          icon: isEditMode ? Icons.check : Icons.edit,
-                          background: isEditMode ? Colors.green : AppColors.card,
-                          textColor: AppColors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 22,
-                            vertical: 16,
-                          ),
-                          onTap: isSaving ? () {} : _toggleEditMode,
-                        ),
-                        const SizedBox(width: 12),
-                        _TopButton(
-                          label: 'Logout',
-                          icon: Icons.logout,
-                          background: AppColors.red,
-                          textColor: AppColors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 26,
-                            vertical: 14,
-                          ),
-                          onTap: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.remove('accountant_id');
-                            if (context.mounted) {
-                              Navigator.pushReplacementNamed(context, '/login');
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: IconButton(
-                            onPressed: () {},
-                            icon: const Icon(
-                              Icons.notifications_none_rounded,
-                              color: AppColors.white,
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 26),
-
-                    // الصورة + الاسم + الوظيفة
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _ProfileAvatar(
-                          imageUrl: profileImage,
-                          selectedImageBytes: _selectedImageBytes,
-                          isEditMode: isEditMode,
-                          onEditPressed: _pickImage,
-                        ),
-                        const SizedBox(width: 40),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: width > 900 ? 60 : 28,
+                        vertical: 24,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // أزرار أعلى الصفحة
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              isEditMode
-                                  ? IntrinsicHeight(
-                                      child: TextFormField(
-                                        controller: nameController,
-                                        style: const TextStyle(
-                                          color: AppColors.white,
-                                          fontSize: 42,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                        decoration: InputDecoration(
-                                          border: UnderlineInputBorder(
-                                            borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
-                                          ),
-                                          focusedBorder: const UnderlineInputBorder(
-                                            borderSide: BorderSide(color: AppColors.yellow, width: 2),
-                                          ),
-                                          enabledBorder: UnderlineInputBorder(
-                                            borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
-                                          ),
-                                          contentPadding: EdgeInsets.zero,
-                                          isDense: true,
-                                        ),
-                                      ),
-                                    )
-                                  : Text(
-                                      name,
-                                      style: const TextStyle(
-                                        color: AppColors.white,
-                                        fontSize: 42,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Accountant',
-                                style: TextStyle(
-                                  color: AppColors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w500,
+                              _TopButton(
+                                label: isEditMode ? 'Save' : 'Edit Profile',
+                                icon: isEditMode ? Icons.check : Icons.edit,
+                                background: isEditMode
+                                    ? Colors.green
+                                    : AppColors.card,
+                                textColor: AppColors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 22,
+                                  vertical: 16,
+                                ),
+                                onTap: isSaving ? () {} : _toggleEditMode,
+                              ),
+                              const SizedBox(width: 12),
+                              _TopButton(
+                                label: 'Logout',
+                                icon: Icons.logout,
+                                background: AppColors.red,
+                                textColor: AppColors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 26,
+                                  vertical: 14,
+                                ),
+                                onTap: () async {
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  await prefs.remove('accountant_id');
+                                  if (context.mounted) {
+                                    Navigator.pushReplacementNamed(
+                                      context,
+                                      '/login',
+                                    );
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 16),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: IconButton(
+                                  onPressed: () {},
+                                  icon: const Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: AppColors.white,
+                                    size: 28,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 26),
 
-                    const SizedBox(height: 40),
-
-                    // أرقام التواصل
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _EditableInfoCard(
-                            title: 'Mobile Number',
-                            value: mobileNumber,
-                            controller: mobileController,
-                            isEditMode: isEditMode,
+                          // الصورة + الاسم + الوظيفة
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              _ProfileAvatar(
+                                imageUrl: profileImage,
+                                selectedImageBytes: _selectedImageBytes,
+                                isEditMode: isEditMode,
+                                onEditPressed: _pickImage,
+                              ),
+                              const SizedBox(width: 40),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    isEditMode
+                                        ? IntrinsicHeight(
+                                            child: TextFormField(
+                                              controller: nameController,
+                                              style: const TextStyle(
+                                                color: AppColors.white,
+                                                fontSize: 42,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                              decoration: InputDecoration(
+                                                border: UnderlineInputBorder(
+                                                  borderSide: BorderSide(
+                                                    color: AppColors.yellow
+                                                        .withOpacity(0.3),
+                                                  ),
+                                                ),
+                                                focusedBorder:
+                                                    const UnderlineInputBorder(
+                                                      borderSide: BorderSide(
+                                                        color: AppColors.yellow,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                enabledBorder:
+                                                    UnderlineInputBorder(
+                                                      borderSide: BorderSide(
+                                                        color: AppColors.yellow
+                                                            .withOpacity(0.3),
+                                                      ),
+                                                    ),
+                                                contentPadding: EdgeInsets.zero,
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          )
+                                        : Text(
+                                            name,
+                                            style: const TextStyle(
+                                              color: AppColors.white,
+                                              fontSize: 42,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Accountant',
+                                      style: TextStyle(
+                                        color: AppColors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: _EditableInfoCard(
-                            title: 'Telephone Number',
-                            value: telephoneNumber,
-                            controller: telephoneController,
-                            isEditMode: isEditMode,
+
+                          const SizedBox(height: 40),
+
+                          // أرقام التواصل
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _EditableInfoCard(
+                                  title: 'Mobile Number',
+                                  value: mobileNumber,
+                                  controller: mobileController,
+                                  isEditMode: isEditMode,
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: _EditableInfoCard(
+                                  title: 'Telephone Number',
+                                  value: telephoneNumber,
+                                  controller: telephoneController,
+                                  isEditMode: isEditMode,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 30),
+                          const SizedBox(height: 30),
 
-                    // العنوان
-                    Align(
-                      alignment: Alignment.center,
-                      child: SizedBox(
-                        width: width > 900 ? 520 : double.infinity,
-                        child: _EditableAddressCard(
-                          title: 'Address',
-                          value: address,
-                          controller: addressController,
-                          isEditMode: isEditMode,
-                        ),
+                          // العنوان
+                          Align(
+                            alignment: Alignment.center,
+                            child: SizedBox(
+                              width: width > 900 ? 520 : double.infinity,
+                              child: _EditableAddressCard(
+                                title: 'Address',
+                                value: address,
+                                controller: addressController,
+                                isEditMode: isEditMode,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         ],
       ),
@@ -557,13 +573,20 @@ class _EditableInfoCard extends StatelessWidget {
                     ),
                     decoration: InputDecoration(
                       border: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow.withOpacity(0.3),
+                        ),
                       ),
                       focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow, width: 2),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow,
+                          width: 2,
+                        ),
                       ),
                       enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow.withOpacity(0.3),
+                        ),
                       ),
                       contentPadding: EdgeInsets.zero,
                       counterText: '',
@@ -591,7 +614,7 @@ class _ProfileAvatar extends StatelessWidget {
   final Uint8List? selectedImageBytes;
   final bool isEditMode;
   final VoidCallback? onEditPressed;
-  
+
   const _ProfileAvatar({
     this.imageUrl,
     this.selectedImageBytes,
@@ -637,15 +660,18 @@ class _ProfileAvatar extends StatelessWidget {
                     height: 220,
                   )
                 : imageUrl != null && imageUrl!.isNotEmpty
-                    ? Image.network(
-                        imageUrl!,
-                        fit: BoxFit.cover,
-                        width: 220,
-                        height: 220,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.person, size: 110, color: AppColors.white),
-                      )
-                    : const Icon(Icons.person, size: 110, color: AppColors.white),
+                ? Image.network(
+                    imageUrl!,
+                    fit: BoxFit.cover,
+                    width: 220,
+                    height: 220,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.person,
+                      size: 110,
+                      color: AppColors.white,
+                    ),
+                  )
+                : const Icon(Icons.person, size: 110, color: AppColors.white),
           ),
         ),
 
@@ -720,13 +746,20 @@ class _EditableAddressCard extends StatelessWidget {
                     ),
                     decoration: InputDecoration(
                       border: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow.withOpacity(0.3),
+                        ),
                       ),
                       focusedBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow, width: 2),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow,
+                          width: 2,
+                        ),
                       ),
                       enabledBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.yellow.withOpacity(0.3)),
+                        borderSide: BorderSide(
+                          color: AppColors.yellow.withOpacity(0.3),
+                        ),
                       ),
                       contentPadding: EdgeInsets.zero,
                       isDense: true,

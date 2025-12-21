@@ -473,6 +473,7 @@ class _OrdersCardState extends State<_OrdersCard> {
 
   Future<void> _fetchReceivesOrders() async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
 
       // Fetch customer orders (stock-out receives)
@@ -589,12 +590,14 @@ class _OrdersCardState extends State<_OrdersCard> {
             (b['orderDate'] as DateTime).compareTo(a['orderDate'] as DateTime),
       );
 
+      if (!mounted) return;
       setState(() {
         receivesOrders = allOrders;
         isLoading = false;
         error = null;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         error = e.toString();
         isLoading = false;

@@ -17,7 +17,7 @@ class _InventoryPageState extends State<InventoryPage> {
   bool showAddProductPopup = false;
   bool showAddInventoryPopup = false;
   int? selectedProductIndex;
-  
+
   List<Map<String, dynamic>> products = [];
   List<Map<String, dynamic>> allProducts = [];
   List<Map<String, dynamic>> inventories = [];
@@ -31,17 +31,18 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
-    
+
     try {
       // Load inventories
       final inventoriesResponse = await supabase
           .from('inventory')
           .select('inventory_id, inventory_name')
           .order('inventory_id');
-      
+
       inventories = List<Map<String, dynamic>>.from(inventoriesResponse);
-      
+
       // Load all products
       final productsResponse = await supabase
           .from('product')
@@ -57,15 +58,17 @@ class _InventoryPageState extends State<InventoryPage> {
           ''')
           .eq('is_active', true)
           .order('product_id');
-      
+
       allProducts = List<Map<String, dynamic>>.from(productsResponse);
-      
+
       // Load products with batch quantities per inventory
       await _loadProductsByInventory();
-      
+
+      if (!mounted) return;
       setState(() => isLoading = false);
     } catch (e) {
       print('Error loading data: $e');
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -80,7 +83,7 @@ class _InventoryPageState extends State<InventoryPage> {
       // Specific inventory - map tab index to inventory from list
       // selectedTab 1 -> first inventory, 2 -> second inventory, etc.
       final inventoryIndex = selectedTab - 1;
-      
+
       if (inventoryIndex < 0 || inventoryIndex >= inventories.length) {
         print('Invalid inventory tab index');
         setState(() {
@@ -88,9 +91,9 @@ class _InventoryPageState extends State<InventoryPage> {
         });
         return;
       }
-      
+
       final inventoryId = inventories[inventoryIndex]['inventory_id'] as int;
-      
+
       try {
         final batchResponse = await supabase
             .from('batch')
@@ -100,31 +103,32 @@ class _InventoryPageState extends State<InventoryPage> {
               inventory_id
             ''')
             .eq('inventory_id', inventoryId);
-        
+
         final batches = List<Map<String, dynamic>>.from(batchResponse);
-        
+
         // Group batches by product_id and sum quantities
         Map<int, int> productQuantities = {};
         for (var batch in batches) {
           final productId = batch['product_id'] as int;
           final quantity = batch['quantity'] as int? ?? 0;
-          productQuantities[productId] = (productQuantities[productId] ?? 0) + quantity;
+          productQuantities[productId] =
+              (productQuantities[productId] ?? 0) + quantity;
         }
-        
+
         // Show only products that exist in this inventory (quantity > 0)
         setState(() {
           products = allProducts
-              .where((product) => productQuantities.containsKey(product['product_id']))
+              .where(
+                (product) =>
+                    productQuantities.containsKey(product['product_id']),
+              )
               .map((product) {
-            final productId = product['product_id'] as int;
-            final qty = productQuantities[productId] ?? 0;
-            return {
-              ...product,
-              'inventory_quantity': qty,
-            };
-          }).toList();
+                final productId = product['product_id'] as int;
+                final qty = productQuantities[productId] ?? 0;
+                return {...product, 'inventory_quantity': qty};
+              })
+              .toList();
         });
-        
       } catch (e) {
         print('Error loading inventory products: $e');
         setState(() {
@@ -142,10 +146,12 @@ class _InventoryPageState extends State<InventoryPage> {
 
   List<Map<String, dynamic>> get filteredProducts {
     if (searchQuery.isEmpty) return products;
-    
+
     return products.where((product) {
       final name = (product['name'] ?? '').toString().toLowerCase();
-      final brand = ((product['brand'] as Map?)?['name'] ?? '').toString().toLowerCase();
+      final brand = ((product['brand'] as Map?)?['name'] ?? '')
+          .toString()
+          .toLowerCase();
       final query = searchQuery.toLowerCase();
       return name.startsWith(query) || brand.startsWith(query);
     }).toList();
@@ -233,7 +239,6 @@ class _InventoryPageState extends State<InventoryPage> {
                                 onChanged: _filterProducts,
                               ),
                             ),
-
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -251,115 +256,128 @@ class _InventoryPageState extends State<InventoryPage> {
                                   ),
                                 )
                               : filteredProducts.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                        'No products found',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    )
-                                  : ListView.separated(
-                                      itemCount: filteredProducts.length,
-                                      separatorBuilder: (_, __) =>
-                                          const SizedBox(height: 8),
-                                      itemBuilder: (context, i) {
-                                        final p = filteredProducts[i];
-                              final bg = i.isEven
-                                  ? const Color(0xFF2D2D2D)
-                                  : const Color(0xFF262626);
-                              return Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        selectedProductIndex = i;
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: bg,
+                              ? const Center(
+                                  child: Text(
+                                    'No products found',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: filteredProducts.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 8),
+                                  itemBuilder: (context, i) {
+                                    final p = filteredProducts[i];
+                                    final bg = i.isEven
+                                        ? const Color(0xFF2D2D2D)
+                                        : const Color(0xFF262626);
+                                    return Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            selectedProductIndex = i;
+                                          });
+                                        },
                                         borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 14,
-                                      ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              flex: 2,
-                                              child: Center(
-                                                child: Text(
-                                                  p['product_id'].toString(),
-                                                  style: _cellStyle(),
-                                                ),
-                                              ),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bg,
+                                            borderRadius: BorderRadius.circular(
+                                              14,
                                             ),
-                                            Expanded(
-                                              flex: 4,
-                                              child: Center(
-                                                child: Text(
-                                                  p['name'] ?? '',
-                                                  style: _cellStyle(),
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Center(
-                                                child: Text(
-                                                  (p['brand'] as Map?)?['name']?.toString() ?? '',
-                                                  style: _cellStyle(),
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Center(
-                                                child: Text(
-                                                  (p['product_category'] as Map?)?['name']?.toString() ?? '',
-                                                  style: _cellStyle(),
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 3,
-                                              child: Center(
-                                                child: Text(
-                                                  '\$${(p['selling_price'] ?? 0).toStringAsFixed(0)}',
-                                                  style: _cellStyle(),
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              flex: 2,
-                                              child: Center(
-                                                child: Text(
-                                                  selectedTab == 0
-                                                      ? (p['total_quantity'] ?? 0).toString()
-                                                      : (p['inventory_quantity'] ?? 0).toString(),
-                                                  style: _cellStyle().copyWith(
-                                                    color: const Color(
-                                                      0xFFB7A447,
-                                                    ),
-                                                    fontWeight: FontWeight.w700,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: Center(
+                                                  child: Text(
+                                                    p['product_id'].toString(),
+                                                    style: _cellStyle(),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              Expanded(
+                                                flex: 4,
+                                                child: Center(
+                                                  child: Text(
+                                                    p['name'] ?? '',
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    (p['brand'] as Map?)?['name']
+                                                            ?.toString() ??
+                                                        '',
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    (p['product_category']
+                                                                as Map?)?['name']
+                                                            ?.toString() ??
+                                                        '',
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    '\$${(p['selling_price'] ?? 0).toStringAsFixed(0)}',
+                                                    style: _cellStyle(),
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Center(
+                                                  child: Text(
+                                                    selectedTab == 0
+                                                        ? (p['total_quantity'] ??
+                                                                  0)
+                                                              .toString()
+                                                        : (p['inventory_quantity'] ??
+                                                                  0)
+                                                              .toString(),
+                                                    style: _cellStyle()
+                                                        .copyWith(
+                                                          color: const Color(
+                                                            0xFFB7A447,
+                                                          ),
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                              },
-                            ),
+                                    );
+                                  },
+                                ),
                         ),
                       ],
                     ),
@@ -371,11 +389,12 @@ class _InventoryPageState extends State<InventoryPage> {
           // Add Product Popup
           if (showAddProductPopup)
             AddProductPopup(
-              selectedInventoryId: selectedTab == 0 
-                  ? null 
-                  : (selectedTab - 1 >= 0 && selectedTab - 1 < inventories.length)
-                      ? inventories[selectedTab - 1]['inventory_id'] as int
-                      : null,
+              selectedInventoryId: selectedTab == 0
+                  ? null
+                  : (selectedTab - 1 >= 0 &&
+                        selectedTab - 1 < inventories.length)
+                  ? inventories[selectedTab - 1]['inventory_id'] as int
+                  : null,
               onClose: () {
                 setState(() {
                   showAddProductPopup = false;
@@ -404,19 +423,31 @@ class _InventoryPageState extends State<InventoryPage> {
                 final product = filteredProducts[selectedProductIndex!];
                 final invFilter = selectedTab == 0
                     ? null
-                    : (inventories.isNotEmpty && selectedTab - 1 >= 0 && selectedTab - 1 < inventories.length)
-                        ? inventories[selectedTab - 1]['inventory_id'] as int
-                        : null;
+                    : (inventories.isNotEmpty &&
+                          selectedTab - 1 >= 0 &&
+                          selectedTab - 1 < inventories.length)
+                    ? inventories[selectedTab - 1]['inventory_id'] as int
+                    : null;
                 return ProductDetailsPopup(
                   productId: product['product_id'].toString(),
                   productName: product['name'] ?? '',
-                  brandName: (product['brand'] as Map?)?['name']?.toString() ?? '',
-                  category: (product['product_category'] as Map?)?['name']?.toString() ?? '',
-                  wholesalePrice: '\$${(product['wholesale_price'] ?? 0).toStringAsFixed(0)}',
-                  sellingPrice: '\$${(product['selling_price'] ?? 0).toStringAsFixed(0)}',
-                  minProfit: '${(product['minimum_profit_percent'] ?? 0).toStringAsFixed(0)}%',
+                  brandName:
+                      (product['brand'] as Map?)?['name']?.toString() ?? '',
+                  category:
+                      (product['product_category'] as Map?)?['name']
+                          ?.toString() ??
+                      '',
+                  wholesalePrice:
+                      '\$${(product['wholesale_price'] ?? 0).toStringAsFixed(0)}',
+                  sellingPrice:
+                      '\$${(product['selling_price'] ?? 0).toStringAsFixed(0)}',
+                  minProfit:
+                      '${(product['minimum_profit_percent'] ?? 0).toStringAsFixed(0)}%',
                   brandId: (product['brand'] as Map?)?['brand_id'] as int?,
-                  categoryId: (product['product_category'] as Map?)?['product_category_id'] as int?,
+                  categoryId:
+                      (product['product_category']
+                              as Map?)?['product_category_id']
+                          as int?,
                   inventoryIdFilter: invFilter,
                   onClose: () {
                     setState(() {
@@ -592,14 +623,15 @@ class _InventoryTabs extends StatelessWidget {
           onTap: () => onTabChanged(0),
         ),
         const SizedBox(width: 12),
-        
+
         // Dynamic Inventory Tabs
         ...inventories.asMap().entries.map((entry) {
           final index = entry.key + 1; // +1 because 0 is Total
           final inventory = entry.value;
           final inventoryId = inventory['inventory_id'];
-          final location = inventory['inventory_name'] ?? 'Inventory #$inventoryId';
-          
+          final location =
+              inventory['inventory_name'] ?? 'Inventory #$inventoryId';
+
           return Row(
             children: [
               _TabButton(
@@ -706,5 +738,3 @@ class _SearchField extends StatelessWidget {
     );
   }
 }
-
-

@@ -44,6 +44,9 @@ dependencies:
   
   # Shared preferences for storing user session
   shared_preferences: ^2.2.2
+  
+  # Calendar picker with action buttons
+  calendar_date_picker2: ^0.5.6
 
 dev_dependencies:
   flutter_test:

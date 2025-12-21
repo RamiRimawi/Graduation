@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../supabase_config.dart';
 
 class Sidebar extends StatelessWidget {
-
   const Sidebar({super.key, required this.activeIndex});
 
   final int activeIndex;
@@ -131,7 +130,11 @@ class Sidebar extends StatelessWidget {
         return;
     }
 
-    Navigator.pushReplacementNamed(context, routeName);
+    // Use pushReplacementNamed with a callback to ensure smooth navigation
+    Navigator.pushReplacementNamed(context, routeName).catchError((error) {
+      // Silently handle navigation errors
+      return null;
+    });
   }
 }
 
@@ -215,7 +218,7 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
   Future<void> _loadProfileImage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Check if image is already cached
       final cachedImage = prefs.getString('profile_image');
       if (cachedImage != null && cachedImage.isNotEmpty) {
@@ -227,7 +230,7 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
         }
         return;
       }
-      
+
       // If not cached, fetch from database
       final accountantId = prefs.getInt('accountant_id');
       if (accountantId != null) {
@@ -236,14 +239,14 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
             .select('profile_image')
             .eq('accountant_id', accountantId)
             .single();
-        
+
         final imageUrl = response['profile_image'] as String?;
-        
+
         // Cache the image URL
         if (imageUrl != null && imageUrl.isNotEmpty) {
           await prefs.setString('profile_image', imageUrl);
         }
-        
+
         if (mounted) {
           setState(() {
             _profileImage = imageUrl;
@@ -266,11 +269,19 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: (_) {
+        if (mounted) setState(() => _isHovered = true);
+      },
+      onExit: (_) {
+        if (mounted) setState(() => _isHovered = false);
+      },
       child: GestureDetector(
         onTap: () {
-          Navigator.pushReplacementNamed(context, '/account');
+          Navigator.pushReplacementNamed(context, '/account').catchError((
+            error,
+          ) {
+            return null;
+          });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -282,7 +293,9 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
             color: const Color(0xFF2D2D2D),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF50B2E7).withOpacity(_isHovered ? 0.35 : 0.1),
+                color: const Color(
+                  0xFF50B2E7,
+                ).withOpacity(_isHovered ? 0.35 : 0.1),
                 blurRadius: _isHovered ? 22 : 10,
                 spreadRadius: _isHovered ? 3 : 1,
               ),
@@ -301,20 +314,13 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
                     ),
                   )
                 : _profileImage != null && _profileImage!.isNotEmpty
-                    ? Image.network(
-                        _profileImage!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 28,
-                      ),
+                ? Image.network(
+                    _profileImage!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.person, color: Colors.white, size: 28),
+                  )
+                : const Icon(Icons.person, color: Colors.white, size: 28),
           ),
         ),
       ),

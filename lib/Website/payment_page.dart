@@ -252,6 +252,7 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
 
   Future<void> _fetchUpcomingChecks() async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
 
       // Calculate date range - next 7 days
@@ -332,12 +333,14 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
         return dateA.compareTo(dateB);
       });
 
+      if (!mounted) return;
       setState(() {
         upcomingChecks = combinedChecks;
         isLoading = false;
       });
     } catch (e) {
       print('Error fetching upcoming checks: $e');
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -562,8 +565,6 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
           .eq('status', 'Returned')
           .gte('exchange_date', startDate)
           .lte('exchange_date', endDate);
-
-
 
       if (mounted)
         setState(() {
@@ -802,6 +803,7 @@ class _MostDebtorsCardState extends State<_MostDebtorsCard> {
 
   Future<void> _fetchTopSuppliers() async {
     try {
+      if (!mounted) return;
       setState(() => isLoading = true);
 
       // Fetch top 5 suppliers ordered by creditor_balance (highest first)
@@ -813,15 +815,18 @@ class _MostDebtorsCardState extends State<_MostDebtorsCard> {
           .limit(5);
 
       if (response is List) {
+        if (!mounted) return;
         setState(() {
           topSuppliers = List<Map<String, dynamic>>.from(response);
           isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() => isLoading = false);
       }
     } catch (e) {
       print('Error fetching top suppliers: $e');
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
