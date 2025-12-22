@@ -28,6 +28,9 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
   final TextEditingController _fromDateController = TextEditingController();
   final TextEditingController _toDateController = TextEditingController();
 
+  // Hover state tracking
+  int? hoveredRow;
+
   @override
   void initState() {
     super.initState();
@@ -144,9 +147,27 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
             amount,
             date_time,
             description,
+            payment_method,
+            check_id,
             customer_id,
             customer:customer_id (
               name
+            ),
+            customer_checks!check_id (
+              check_id,
+              bank_id,
+              bank_branch,
+              check_image,
+              exchange_rate,
+              exchange_date,
+              status,
+              description,
+              banks!bank_id (
+                bank_name
+              ),
+              branches!bank_branch (
+                address
+              )
             )
           ''')
           .order('date_time', ascending: false);
@@ -155,10 +176,16 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
         final List<Map<String, dynamic>> payments = [];
         for (var payment in response) {
           payments.add({
+            'payment_id': payment['payment_id'],
             'payer': payment['customer']?['name'] ?? 'Unknown',
+            'payment_method': payment['payment_method'] ?? 'cash',
             'price': '\$${payment['amount']?.toString() ?? '0'}',
             'date': _formatDate(payment['date_time']),
             'description': payment['description'] ?? '',
+            'check_details': payment['customer_checks'],
+            'customer_id': payment['customer_id'],
+            'amount': payment['amount'],
+            'date_time': payment['date_time'],
           });
         }
         setState(() {
@@ -180,9 +207,27 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
             amount,
             date_time,
             description,
+            payment_method,
+            check_id,
             supplier_id,
             supplier:supplier_id (
               name
+            ),
+            supplier_checks!check_id (
+              check_id,
+              bank_id,
+              bank_branch,
+              check_image,
+              exchange_rate,
+              exchange_date,
+              status,
+              description,
+              banks!bank_id (
+                bank_name
+              ),
+              branches!bank_branch (
+                address
+              )
             )
           ''')
           .order('date_time', ascending: false);
@@ -191,10 +236,16 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
         final List<Map<String, dynamic>> payments = [];
         for (var payment in response) {
           payments.add({
+            'payment_voucher_id': payment['payment_voucher_id'],
             'payee': payment['supplier']?['name'] ?? 'Unknown',
+            'payment_method': payment['payment_method'] ?? 'cash',
             'price': '\$${payment['amount']?.toString() ?? '0'}',
             'date': _formatDate(payment['date_time']),
             'description': payment['description'] ?? '',
+            'check_details': payment['supplier_checks'],
+            'supplier_id': payment['supplier_id'],
+            'amount': payment['amount'],
+            'date_time': payment['date_time'],
           });
         }
         setState(() {
@@ -214,6 +265,592 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
       return '${date.day}/${date.month}/${date.year}';
     } catch (e) {
       return dateStr;
+    }
+  }
+
+  void _showPaymentDetailsDialog(
+    Map<String, dynamic> payment,
+    bool isIncoming,
+  ) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.7,
+            constraints: const BoxConstraints(maxWidth: 650, maxHeight: 700),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.blue.withOpacity(0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Modern Header
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.blue.withOpacity(0.1),
+                        AppColors.cardAlt,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isIncoming
+                              ? Icons.arrow_circle_down
+                              : Icons.arrow_circle_up,
+                          color: AppColors.blue,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${isIncoming ? 'Incoming' : 'Outgoing'} Payment',
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              'Payment ID: ${isIncoming ? payment['payment_id'] : payment['payment_voucher_id']}',
+                              style: TextStyle(
+                                color: AppColors.grey,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: AppColors.white.withOpacity(0.7),
+                          size: 24,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          hoverColor: AppColors.blue.withOpacity(0.1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Amount Card
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardAlt,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.blue.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.attach_money,
+                                  color: AppColors.blue,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Total Amount',
+                                      style: TextStyle(
+                                        color: AppColors.grey,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      '\$${payment['amount']?.toString() ?? '0'}',
+                                      style: const TextStyle(
+                                        color: AppColors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: payment['payment_method'] == 'check'
+                                      ? AppColors.blue.withOpacity(0.1)
+                                      : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: payment['payment_method'] == 'check'
+                                        ? AppColors.blue
+                                        : Colors.green,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  payment['payment_method']?.toUpperCase() ??
+                                      'CASH',
+                                  style: TextStyle(
+                                    color: payment['payment_method'] == 'check'
+                                        ? AppColors.blue
+                                        : Colors.green,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Details Grid
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left Column (Name, Payment Method)
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDetailCard(
+                                    icon: isIncoming
+                                        ? Icons.person
+                                        : Icons.business,
+                                    title: isIncoming
+                                        ? 'Customer Name'
+                                        : 'Supplier Name',
+                                    value: isIncoming
+                                        ? payment['payer']
+                                        : payment['payee'],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildDetailCard(
+                                    icon: Icons.payment,
+                                    title: 'Payment Method',
+                                    value:
+                                        payment['payment_method']
+                                            ?.toUpperCase() ??
+                                        'CASH',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Right Column (Date, Time)
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDetailCard(
+                                    icon: Icons.calendar_today,
+                                    title: 'Date',
+                                    value: _formatDate(payment['date_time']),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildDetailCard(
+                                    icon: Icons.schedule,
+                                    title: 'Time',
+                                    value: _formatTime(payment['date_time']),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Full-width description section
+                        if (payment['description']?.isNotEmpty ?? false) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardAlt,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.blue.withOpacity(0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.description,
+                                      color: AppColors.blue,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Description',
+                                      style: TextStyle(
+                                        color: AppColors.blue,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  payment['description'],
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Check Details Section (only for check payments)
+                        if (payment['payment_method'] == 'check') ...[
+                          const SizedBox(height: 24),
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardAlt,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.blue.withOpacity(0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.account_balance,
+                                      color: AppColors.blue,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Check Information',
+                                      style: TextStyle(
+                                        color: AppColors.blue,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                if (payment['check_details'] != null) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Check ID',
+                                          payment['check_details']['check_id']
+                                                  ?.toString() ??
+                                              'N/A',
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Bank',
+                                          payment['check_details']['banks']?['bank_name'] ??
+                                              'N/A',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Exchange Rate',
+                                          payment['check_details']['exchange_rate']
+                                                  ?.toString() ??
+                                              'N/A',
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Exchange Date',
+                                          _formatDate(
+                                            payment['check_details']['exchange_date']
+                                                ?.toString(),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Status',
+                                          payment['check_details']['status'] ??
+                                              'N/A',
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: _buildCheckDetail(
+                                          'Branch',
+                                          payment['check_details']['branches']?['address'] ??
+                                              'N/A',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  if (payment['check_details']['check_image'] !=
+                                      null) ...[
+                                    Container(
+                                      width: double.infinity,
+                                      height: 200,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.blue.withOpacity(
+                                            0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.network(
+                                          payment['check_details']['check_image'],
+                                          fit: BoxFit.cover,
+                                          loadingBuilder:
+                                              (
+                                                context,
+                                                child,
+                                                loadingProgress,
+                                              ) {
+                                                if (loadingProgress == null)
+                                                  return child;
+                                                return Center(
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        color: AppColors.blue,
+                                                      ),
+                                                );
+                                              },
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                                return Center(
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.error,
+                                                        color: AppColors.grey,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Failed to load image',
+                                                        style: TextStyle(
+                                                          color: AppColors.grey,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ] else ...[
+                                  Center(
+                                    child: Text(
+                                      'Check details not available',
+                                      style: TextStyle(
+                                        color: AppColors.grey,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailCard({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.blue.withOpacity(0.1), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: AppColors.blue, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: AppColors.grey,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckDetail(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppColors.grey,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: AppColors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  String _formatDateTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  String _formatTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '';
     }
   }
 
@@ -263,6 +900,10 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                         incomingPayments: filteredIncomingPayments,
                         outgoingPayments: filteredOutgoingPayments,
                         isLoading: isLoading,
+                        onPaymentTap: _showPaymentDetailsDialog,
+                        hoveredRow: hoveredRow,
+                        onHoverChanged: (index) =>
+                            setState(() => hoveredRow = index),
                       ),
                     ),
                   ],
@@ -542,7 +1183,6 @@ class _RoundIconButton extends StatelessWidget {
   }
 }
 
-
 // ------------------------------------------------------------------
 // جدول الأرشيف
 // ------------------------------------------------------------------
@@ -551,12 +1191,18 @@ class _ArchiveTable extends StatelessWidget {
   final List<Map<String, dynamic>> incomingPayments;
   final List<Map<String, dynamic>> outgoingPayments;
   final bool isLoading;
+  final Function(Map<String, dynamic>, bool) onPaymentTap;
+  final int? hoveredRow;
+  final Function(int?) onHoverChanged;
 
   const _ArchiveTable({
     required this.isIncoming,
     required this.incomingPayments,
     required this.outgoingPayments,
     required this.isLoading,
+    required this.onPaymentTap,
+    required this.hoveredRow,
+    required this.onHoverChanged,
   });
 
   @override
@@ -593,8 +1239,15 @@ class _ArchiveTable extends StatelessWidget {
             Expanded(
               flex: 4,
               child: Text(
-                isIncoming ? 'Payer Name' : 'Payee Name',
+                isIncoming ? 'Customer Name' : 'Supplier Name',
                 style: headerStyle,
+              ),
+            ),
+            const Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.center,
+                child: Text('Payment Method', style: headerStyle),
               ),
             ),
             const Expanded(
@@ -642,61 +1295,94 @@ class _ArchiveTable extends StatelessWidget {
               final Color rowColor = isEven
                   ? AppColors.cardAlt
                   : AppColors.card;
+              final isHovered = hoveredRow == index;
 
-              return Container(
-                margin: const EdgeInsets.only(top: 10),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: rowColor,
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Text(
-                        isIncoming
-                            ? (row['payer'] ?? '')
-                            : (row['payee'] ?? ''),
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+              return MouseRegion(
+                onEnter: (_) => onHoverChanged(index),
+                onExit: (_) => onHoverChanged(null),
+                child: GestureDetector(
+                  onTap: () => onPaymentTap(row, isIncoming),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
                     ),
-                    Expanded(
-                      flex: 2,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          row['price'] ?? '',
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                    decoration: BoxDecoration(
+                      color: rowColor,
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: isHovered ? AppColors.blue : Colors.transparent,
+                        width: 1.5,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 4,
+                          child: Text(
+                            isIncoming
+                                ? (row['payer'] ?? '')
+                                : (row['payee'] ?? ''),
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          row['date'] ?? '',
-                          style: const TextStyle(
-                            color: AppColors.blue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
+                        Expanded(
+                          flex: 2,
+                          child: Align(
+                            alignment: Alignment.center,
+                            child: Text(
+                              row['payment_method'] ?? 'cash',
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        Expanded(
+                          flex: 2,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              row['price'] ?? '',
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              row['date'] ?? '',
+                              style: const TextStyle(
+                                color: AppColors.blue,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               );
             },

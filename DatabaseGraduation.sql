@@ -69,7 +69,7 @@ CREATE TABLE public.customer_checks (
   customer_id integer,
   bank_id integer,
   bank_branch integer,
-  check_image bytea,
+  check_image text,
   exchange_rate numeric,
   exchange_date date,
   status USER-DEFINED,
@@ -169,8 +169,11 @@ CREATE TABLE public.incoming_payment (
   description text,
   last_action_by text,
   last_action_time timestamp without time zone,
+  payment_method USER-DEFINED DEFAULT 'cash'::payment_method_enum,
+  check_id integer,
   CONSTRAINT incoming_payment_pkey PRIMARY KEY (payment_id),
-  CONSTRAINT incoming_payment_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id)
+  CONSTRAINT incoming_payment_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
+  CONSTRAINT incoming_payment_check_id_fkey FOREIGN KEY (check_id) REFERENCES public.customer_checks(check_id)
 );
 CREATE TABLE public.inventory (
   inventory_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -187,8 +190,11 @@ CREATE TABLE public.outgoing_payment (
   description text,
   last_action_by text,
   last_action_time timestamp without time zone,
+  payment_method USER-DEFINED DEFAULT 'cash'::payment_method_enum,
+  check_id integer,
   CONSTRAINT outgoing_payment_pkey PRIMARY KEY (payment_voucher_id),
-  CONSTRAINT outgoing_payment_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id)
+  CONSTRAINT outgoing_payment_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
+  CONSTRAINT outgoing_payment_check_id_fkey FOREIGN KEY (check_id) REFERENCES public.supplier_checks(check_id)
 );
 CREATE TABLE public.product (
   product_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -283,7 +289,7 @@ CREATE TABLE public.supplier_checks (
   supplier_id integer,
   bank_id integer,
   bank_branch bigint,
-  check_image bytea,
+  check_image text,
   exchange_rate numeric,
   exchange_date date,
   status USER-DEFINED,
