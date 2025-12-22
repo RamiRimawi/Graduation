@@ -64,7 +64,6 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
   Future<void> _loadAccounts() async {
     try {
       // Ensure Supabase is initialized (safe if already initialized)
-      await SupabaseConfig.initialize();
 
       // Fetch names by role from corresponding tables
       final client = supabase;

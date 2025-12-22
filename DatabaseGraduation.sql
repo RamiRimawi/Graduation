@@ -76,10 +76,14 @@ CREATE TABLE public.customer_checks (
   description text,
   last_action_by text,
   last_action_time timestamp without time zone,
+  endorsed_to integer,
+  endorsed_description text,
   CONSTRAINT customer_checks_pkey PRIMARY KEY (check_id),
   CONSTRAINT customer_checks_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
   CONSTRAINT customer_checks_bank_id_fkey FOREIGN KEY (bank_id) REFERENCES public.banks(bank_id),
-  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id)
+  CONSTRAINT customer_checks_bank_branch_fkey FOREIGN KEY (bank_branch) REFERENCES public.branches(branch_id),
+  CONSTRAINT customer_checks_endorsed _to_fkey FOREIGN KEY (endorsed_to) REFERENCES public.supplier(supplier_id),
+  CONSTRAINT customer_checks_endorsed_to_fkey FOREIGN KEY (endorsed_to) REFERENCES public.supplier(supplier_id)
 );
 CREATE TABLE public.customer_city (
   customer_city_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
