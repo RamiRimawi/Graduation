@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'MobileAccounts_shared_popup_widgets.dart';
 import '../supabase_config.dart';
+import 'Management_map_picker.dart';
 
 class CustomerFormPopup extends StatefulWidget {
   final List<String> cities;
@@ -28,10 +29,32 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
   final tel = TextEditingController();
   final address = TextEditingController();
   final debit = TextEditingController(text: '0');
+  final latitude = TextEditingController(text: '0');
+  final longitude = TextEditingController(text: '0');
 
   String cityQuarter = ''; // Will hold "City - Quarter"
   List<Map<String, dynamic>> _quarters = [];
   bool _loadingQuarters = true;
+  String? selectedCityName;
+  double? cityLatitude;
+  double? cityLongitude;
+
+  // Default city center coordinates for major Iraqi cities
+  final Map<String, Map<String, double>> cityCenters = {
+    'Baghdad': {'lat': 33.3128, 'lng': 44.3615},
+    'Basra': {'lat': 30.5433, 'lng': 47.8027},
+    'Mosul': {'lat': 36.3400, 'lng': 43.1575},
+    'Kirkuk': {'lat': 35.4776, 'lng': 44.3910},
+    'Najaf': {'lat': 31.9454, 'lng': 44.3661},
+    'Karbala': {'lat': 32.5269, 'lng': 44.0247},
+    'Diwaniyah': {'lat': 31.9917, 'lng': 44.9236},
+    'Hilla': {'lat': 32.4725, 'lng': 44.4250},
+    'Nasiriyah': {'lat': 30.9569, 'lng': 46.2570},
+    'Samarra': {'lat': 34.1937, 'lng': 43.8751},
+    'Sulaymaniyah': {'lat': 35.5627, 'lng': 45.4375},
+    'Erbil': {'lat': 36.1914, 'lng': 44.0091},
+    'Duhok': {'lat': 36.8706, 'lng': 42.9881},
+  };
 
   // Error messages for each field
   String? idError;
@@ -110,15 +133,90 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
     });
   }
 
+  Future<void> _fetchCityCenterCoordinates(String cityName) async {
+    try {
+      // First get the city ID
+      final cityData = await supabase
+          .from('customer_city')
+          .select('customer_city_id')
+          .eq('name', cityName)
+          .maybeSingle();
+
+      if (cityData == null) return;
+
+      final cityId = cityData['customer_city_id'];
+
+      // Get all customers in this city with coordinates
+      final customers = await supabase
+          .from('customer')
+          .select('latitude_location, longitude_location')
+          .eq('customer_city', cityId)
+          .neq('latitude_location', 0)
+          .neq('longitude_location', 0);
+
+      if (customers.isNotEmpty && customers is List) {
+        double sumLat = 0;
+        double sumLng = 0;
+        int count = 0;
+
+        for (var customer in customers) {
+          final lat = customer['latitude_location'];
+          final lng = customer['longitude_location'];
+          if (lat != null && lng != null && lat != 0 && lng != 0) {
+            sumLat += (lat as num).toDouble();
+            sumLng += (lng as num).toDouble();
+            count++;
+          }
+        }
+
+        if (count > 0 && mounted) {
+          setState(() {
+            cityLatitude = sumLat / count;
+            cityLongitude = sumLng / count;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching city center: $e');
+      // If no existing customers, just use defaults
+      if (mounted) {
+        setState(() {
+          cityLatitude = null;
+          cityLongitude = null;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
-    id.dispose();
-    name.dispose();
-    email.dispose();
-    mobile.dispose();
-    tel.dispose();
-    address.dispose();
-    debit.dispose();
+    try {
+      id.dispose();
+    } catch (_) {}
+    try {
+      name.dispose();
+    } catch (_) {}
+    try {
+      email.dispose();
+    } catch (_) {}
+    try {
+      mobile.dispose();
+    } catch (_) {}
+    try {
+      tel.dispose();
+    } catch (_) {}
+    try {
+      address.dispose();
+    } catch (_) {}
+    try {
+      debit.dispose();
+    } catch (_) {}
+    try {
+      latitude.dispose();
+    } catch (_) {}
+    try {
+      longitude.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -218,7 +316,7 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      height: 42,
+                      height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: const Color(0xFF1E1E1E),
@@ -237,26 +335,77 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    const SizedBox(height: 14),
                   ],
                 )
-              : AutocompleteCityQuarter(
-                  label: 'Location',
-                  cityQuarters: _quarters
-                      .map(
-                        (e) => {
-                          'city': e['city'] as String,
-                          'quarter': e['quarter'] as String,
-                        },
-                      )
-                      .toList(),
-                  initialValue: cityQuarter.isEmpty ? null : cityQuarter,
-                  onChanged: (value) {
-                    setState(() {
-                      cityQuarter = value;
-                      cityQuarterError = null;
-                    });
-                  },
-                  errorText: cityQuarterError,
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AutocompleteCityQuarter(
+                      label: 'Location',
+                      cityQuarters: _quarters
+                          .map(
+                            (e) => {
+                              'city': e['city'] as String,
+                              'quarter': e['quarter'] as String,
+                            },
+                          )
+                          .toList(),
+                      initialValue: cityQuarter.isEmpty ? null : cityQuarter,
+                      onChanged: (value) async {
+                        setState(() {
+                          cityQuarter = value;
+                          cityQuarterError = null;
+                          // Extract city name from "City - Quarter" format
+                          final parts = value.split(' - ');
+                          selectedCityName = parts[0].trim();
+                        });
+
+                        // Fetch city center coordinates from existing customers in this city
+                        await _fetchCityCenterCoordinates(selectedCityName!);
+
+                        // Auto-open map popup
+                        if (mounted) {
+                          final initialLat =
+                              cityLatitude ??
+                              cityCenters[selectedCityName!]?['lat'] ??
+                              33.3128;
+                          final initialLng =
+                              cityLongitude ??
+                              cityCenters[selectedCityName!]?['lng'] ??
+                              44.3615;
+
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => MapPickerPopup(
+                              cityName: selectedCityName!,
+                              initialLat: initialLat,
+                              initialLng: initialLng,
+                              onSave: (lat, lng) {
+                                setState(() {
+                                  latitude.text = lat.toString();
+                                  longitude.text = lng.toString();
+                                });
+                              },
+                            ),
+                          );
+                        }
+                      },
+                      errorText: cityQuarterError,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      latitude.text == '0' && longitude.text == '0'
+                          ? 'lat : not set , lng : not set'
+                          : 'lat : ${double.parse(latitude.text).toStringAsFixed(6)} , lng : ${double.parse(longitude.text).toStringAsFixed(6)}',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
                 ),
           right: FieldInput(
             controller: address,
@@ -449,6 +598,10 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                         'address': address.text.trim(),
                         'email': email.text.trim(),
                         'balance_debit': double.tryParse(debit.text) ?? 0,
+                        'latitude_location':
+                            double.tryParse(latitude.text) ?? 0,
+                        'longitude_location':
+                            double.tryParse(longitude.text) ?? 0,
                       })
                       .select()
                       .maybeSingle();
@@ -484,8 +637,9 @@ void showCustomerPopup(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 120,
+          insetPadding: EdgeInsets.symmetric(
+            // Reduce width to ~75% of screen by increasing horizontal inset
+            horizontal: MediaQuery.of(ctx).size.width * 0.2,
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(

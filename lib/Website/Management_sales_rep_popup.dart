@@ -172,11 +172,21 @@ class _SalesRepFormPopupState extends State<SalesRepFormPopup> {
 
   @override
   void dispose() {
-    id.dispose();
-    name.dispose();
-    email.dispose();
-    mobile.dispose();
-    tel.dispose();
+    try {
+      id.dispose();
+    } catch (_) {}
+    try {
+      name.dispose();
+    } catch (_) {}
+    try {
+      email.dispose();
+    } catch (_) {}
+    try {
+      mobile.dispose();
+    } catch (_) {}
+    try {
+      tel.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -773,8 +783,8 @@ void showSalesRepPopup(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 180,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(ctx).size.width * 0.2, // ~60% width
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(

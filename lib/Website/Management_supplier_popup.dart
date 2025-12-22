@@ -115,13 +115,27 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
 
   @override
   void dispose() {
-    id.dispose();
-    company.dispose();
-    email.dispose();
-    mobile.dispose();
-    tel.dispose();
-    address.dispose();
-    creditor.dispose();
+    try {
+      id.dispose();
+    } catch (_) {}
+    try {
+      company.dispose();
+    } catch (_) {}
+    try {
+      email.dispose();
+    } catch (_) {}
+    try {
+      mobile.dispose();
+    } catch (_) {}
+    try {
+      tel.dispose();
+    } catch (_) {}
+    try {
+      address.dispose();
+    } catch (_) {}
+    try {
+      creditor.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -467,8 +481,8 @@ void showSupplierPopup(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Dialog(
           backgroundColor: const Color(0xFF2D2D2D),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 180,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(ctx).size.width * 0.2, // ~60% width
             vertical: 40,
           ),
           shape: RoundedRectangleBorder(
