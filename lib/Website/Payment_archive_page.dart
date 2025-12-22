@@ -174,7 +174,6 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           ''')
           .order('date_time', ascending: false);
 
-      if (response is List) {
         final List<Map<String, dynamic>> payments = [];
         for (var payment in response) {
           payments.add({
@@ -198,7 +197,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           incomingPayments = payments;
           filteredIncomingPayments = payments;
         });
-      }
+      
     } catch (e) {
       print('Error fetching incoming payments: $e');
     }
@@ -227,7 +226,6 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           .eq('status', 'Returned')
           .order('exchange_date', ascending: false);
 
-      if (response is List) {
         for (var check in response) {
           payments.add({
             'payment_id': 'RC-${check['check_id']}',
@@ -242,7 +240,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
             'date_time': check['exchange_date'],
           });
         }
-      }
+      
     } catch (e) {
       print('Error fetching returned incoming checks: $e');
     }
@@ -269,7 +267,6 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           .eq('status', 'Returned')
           .order('exchange_date', ascending: false);
 
-      if (response is List) {
         for (var check in response) {
           payments.add({
             'payment_voucher_id': 'RC-${check['check_id']}',
@@ -284,7 +281,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
             'date_time': check['exchange_date'],
           });
         }
-      }
+      
     } catch (e) {
       print('Error fetching returned outgoing checks: $e');
     }
@@ -324,22 +321,20 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           ''')
           .order('date_time', ascending: false);
 
-      if (response is List) {
-        final List<Map<String, dynamic>> payments = [];
-        for (var payment in response) {
-          payments.add({
-            'payment_voucher_id': payment['payment_voucher_id'],
-            'payee': payment['supplier']?['name'] ?? 'Unknown',
-            'payment_method': payment['payment_method'] ?? 'cash',
-            'price': '\$${payment['amount']?.toString() ?? '0'}',
-            'date': _formatDate(payment['date_time']),
-            'description': payment['description'] ?? '',
-            'check_details': payment['supplier_checks'],
-            'supplier_id': payment['supplier_id'],
-            'amount': payment['amount'],
-            'date_time': payment['date_time'],
-          });
-        }
+      final List<Map<String, dynamic>> payments = [];
+      for (var payment in response) {
+        payments.add({
+          'payment_voucher_id': payment['payment_voucher_id'],
+          'payee': payment['supplier']?['name'] ?? 'Unknown',
+          'payment_method': payment['payment_method'] ?? 'cash',
+          'price': '\$${payment['amount']?.toString() ?? '0'}',
+          'date': _formatDate(payment['date_time']),
+          'description': payment['description'] ?? '',
+          'check_details': payment['supplier_checks'],
+          'supplier_id': payment['supplier_id'],
+          'amount': payment['amount'],
+          'date_time': payment['date_time'],
+        });
 
         // Append returned supplier checks as payment_method = returned_check
         await _fetchReturnedOutgoingChecks(payments);
@@ -406,7 +401,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                 .maybeSingle();
 
             if (response != null) {
-              endorsedCheckDetails = response as Map<String, dynamic>;
+              endorsedCheckDetails = response;
             }
           } catch (e) {
             print('Error fetching endorsed check details: $e');

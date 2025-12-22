@@ -301,29 +301,25 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
       final List<Map<String, dynamic>> combinedChecks = [];
 
       // Add customer checks
-      if (customerChecksResponse is List) {
-        for (var check in customerChecksResponse) {
-          combinedChecks.add({
-            'owner': check['customer']?['name'] ?? 'Unknown',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']),
-            'status': _capitalizeStatus(check['status']),
-            'type': 'customer',
-          });
-        }
+      for (var check in customerChecksResponse) {
+        combinedChecks.add({
+          'owner': check['customer']?['name'] ?? 'Unknown',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']),
+          'status': _capitalizeStatus(check['status']),
+          'type': 'customer',
+        });
       }
 
       // Add supplier checks
-      if (supplierChecksResponse is List) {
-        for (var check in supplierChecksResponse) {
-          combinedChecks.add({
-            'owner': check['supplier']?['name'] ?? 'Unknown',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']),
-            'status': _capitalizeStatus(check['status']),
-            'type': 'supplier',
-          });
-        }
+      for (var check in supplierChecksResponse) {
+        combinedChecks.add({
+          'owner': check['supplier']?['name'] ?? 'Unknown',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']),
+          'status': _capitalizeStatus(check['status']),
+          'type': 'supplier',
+        });
       }
 
       // Sort by date
@@ -566,16 +562,13 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
           .gte('exchange_date', startDate)
           .lte('exchange_date', endDate);
 
-      if (mounted)
+      if (mounted) {
         setState(() {
-          endorsedCount = endorsedResponse is List
-              ? endorsedResponse.length
-              : 0;
-          returnedCount = returnedResponse is List
-              ? returnedResponse.length
-              : 0;
+          endorsedCount = endorsedResponse.length;
+          returnedCount = returnedResponse.length;
           isLoading = false;
         });
+      }
     } catch (e) {
       print('Error fetching check stats: $e');
       if (mounted) setState(() => isLoading = false);
@@ -814,16 +807,11 @@ class _MostDebtorsCardState extends State<_MostDebtorsCard> {
           .order('creditor_balance', ascending: false)
           .limit(5);
 
-      if (response is List) {
-        if (!mounted) return;
-        setState(() {
-          topSuppliers = List<Map<String, dynamic>>.from(response);
-          isLoading = false;
-        });
-      } else {
-        if (!mounted) return;
-        setState(() => isLoading = false);
-      }
+      if (!mounted) return;
+      setState(() {
+        topSuppliers = List<Map<String, dynamic>>.from(response);
+        isLoading = false;
+      });
     } catch (e) {
       print('Error fetching top suppliers: $e');
       if (!mounted) return;
@@ -1033,30 +1021,29 @@ class _ProfitChartState extends State<_ProfitChart>
       // Prepare monthly profit array
       List<double> monthlyProfit = List.filled(12, 0.0);
 
-      if (response is List) {
-        for (var order in response) {
-          final orderDate = DateTime.tryParse(order['order_date'] ?? '');
-          if (orderDate == null) continue;
-          final monthIndex = orderDate.month - 1;
-          final taxPercent = (order['tax_percent'] ?? 0).toDouble();
-          final descriptions =
-              order['customer_order_description'] as List<dynamic>? ?? [];
+      for (var order in response) {
+        final orderDate = DateTime.tryParse(order['order_date'] ?? '');
+        if (orderDate == null) continue;
+        final monthIndex = orderDate.month - 1;
+        final taxPercent = (order['tax_percent'] ?? 0).toDouble();
+        final descriptions =
+            order['customer_order_description'] as List<dynamic>? ?? [];
 
-          double orderProfit = 0.0;
-          for (var desc in descriptions) {
-            final totalPrice = (desc['total_price'] ?? 0).toDouble();
-            final quantity = (desc['quantity'] ?? 0).toDouble();
-            final wholesalePrice = (desc['product']?['wholesale_price'] ?? 0)
-                .toDouble();
-            // Profit for this product in the order
-            final productProfit =
-                (totalPrice - (wholesalePrice * quantity)) *
-                (1 - (taxPercent / 100));
-            orderProfit += productProfit;
-          }
-          monthlyProfit[monthIndex] += orderProfit;
+        double orderProfit = 0.0;
+        for (var desc in descriptions) {
+          final totalPrice = (desc['total_price'] ?? 0).toDouble();
+          final quantity = (desc['quantity'] ?? 0).toDouble();
+          final wholesalePrice = (desc['product']?['wholesale_price'] ?? 0)
+              .toDouble();
+          // Profit for this product in the order
+          final productProfit =
+              (totalPrice - (wholesalePrice * quantity)) *
+              (1 - (taxPercent / 100));
+          orderProfit += productProfit;
         }
+        monthlyProfit[monthIndex] += orderProfit;
       }
+
       setState(() {
         profitData = monthlyProfit;
         isLoading = false;

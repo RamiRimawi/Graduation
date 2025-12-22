@@ -102,12 +102,11 @@ class _CheckPageState extends State<CheckPage> {
           .from('supplier')
           .select('supplier_id, name')
           .order('name', ascending: true);
-      if (response is List) {
         setState(() {
           suppliers = List<Map<String, dynamic>>.from(response);
           isLoadingSuppliers = false;
         });
-      }
+      
     } catch (e) {
       setState(() => isLoadingSuppliers = false);
       print('Error fetching suppliers: $e');
@@ -147,7 +146,6 @@ class _CheckPageState extends State<CheckPage> {
           .inFilter('status', ['Company Box', 'Endorsed'])
           .order('exchange_date', ascending: true);
 
-      if (response is List) {
         // Collect endorsed_to supplier IDs to resolve names in one query
         final endorsedIds = <int>{};
         for (final check in response) {
@@ -165,14 +163,14 @@ class _CheckPageState extends State<CheckPage> {
                 .select('supplier_id, name')
                 .inFilter('supplier_id', endorsedIds.toList());
 
-            if (supplierResponse is List) {
+            
               for (final supplier in supplierResponse) {
                 final id = supplier['supplier_id'];
                 if (id is int) {
                   supplierNames[id] = supplier['name']?.toString() ?? '';
                 }
               }
-            }
+            
           } catch (e) {
             print('Error fetching endorsed supplier names: $e');
           }
@@ -209,7 +207,7 @@ class _CheckPageState extends State<CheckPage> {
           incomingChecks = checks;
           filteredIncomingChecks = checks;
         });
-      }
+      
     } catch (e) {
       print('Error fetching incoming checks: $e');
     }
@@ -236,7 +234,6 @@ class _CheckPageState extends State<CheckPage> {
           .inFilter('status', ['Pending'])
           .order('exchange_date', ascending: true);
 
-      if (response is List) {
         final List<Map<String, dynamic>> checks = [];
         for (var check in response) {
           checks.add({
@@ -262,7 +259,7 @@ class _CheckPageState extends State<CheckPage> {
           outgoingChecks = checks;
           filteredOutgoingChecks = checks;
         });
-      }
+      
     } catch (e) {
       print('Error fetching outgoing checks: $e');
     }
@@ -278,15 +275,7 @@ class _CheckPageState extends State<CheckPage> {
     }
   }
 
-  String _formatTime(String? dateStr) {
-    if (dateStr == null) return '';
-    try {
-      final date = DateTime.parse(dateStr);
-      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return '';
-    }
-  }
+
 
   Future<void> _updateCheckStatus(
     int checkId,
