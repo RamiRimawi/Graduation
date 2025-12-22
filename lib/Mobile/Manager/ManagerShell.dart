@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'Bar.dart';
+import '../bottom_navbar.dart';
+import 'manager_theme.dart';
 import 'HomeManager.dart';
 import 'StockOutPage.dart';
 import 'Stock-inPage.dart';
@@ -44,7 +45,7 @@ class _ManagerShellState extends State<ManagerShell> {
             const NeverScrollableScrollPhysics(), // يمنع السحب باليد – التنقل من البار فقط
         children: _pages,
       ),
-      bottomNavigationBar: BottomNav(
+      bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onNavTap,
       ),

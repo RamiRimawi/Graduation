@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Bar.dart';
+import 'manager_theme.dart';
 
 const double kGap = 16;
 const double kStatHeight = 144;

@@ -4,7 +4,7 @@ import '../supabase_config.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
 import 'StroageStaff/staff_home.dart';
-import 'Manager/HomeManager.dart';
+import 'Manager/ManagerShell.dart';
 import 'Customer/customer_home_page.dart';
 
 class DolphinApp extends StatelessWidget {
@@ -47,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   late FocusNode _usernameFocus;
   late FocusNode _passwordFocus;
-  
+
   final TextEditingController _userIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -182,7 +182,7 @@ class _LoginPageState extends State<LoginPage> {
       // Save for account_page.dart compatibility
       await prefs.setString('current_user_id', userId);
       await prefs.setString('current_user_role', userType);
-      
+
       if (rememberMe) {
         await prefs.setString('password', password);
         await prefs.setBool('rememberMe', true);
@@ -202,7 +202,7 @@ class _LoginPageState extends State<LoginPage> {
             homePage = const HomeStaff();
             break;
           case 'manager':
-            homePage = const HomeManagerPage();
+            homePage = const ManagerShell();
             break;
           case 'customer':
             homePage = const CustomerHomePage();
@@ -338,7 +338,9 @@ class _LoginPageState extends State<LoginPage> {
                           shape: const StadiumBorder(),
                           padding: EdgeInsets.zero,
                           elevation: 4,
-                          disabledBackgroundColor: AppColors.yellow.withOpacity(0.5),
+                          disabledBackgroundColor: AppColors.yellow.withOpacity(
+                            0.5,
+                          ),
                         ),
                         child: SizedBox(
                           height: 50,
