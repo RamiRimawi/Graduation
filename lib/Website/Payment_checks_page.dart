@@ -102,11 +102,10 @@ class _CheckPageState extends State<CheckPage> {
           .from('supplier')
           .select('supplier_id, name')
           .order('name', ascending: true);
-        setState(() {
-          suppliers = List<Map<String, dynamic>>.from(response);
-          isLoadingSuppliers = false;
-        });
-      
+      setState(() {
+        suppliers = List<Map<String, dynamic>>.from(response);
+        isLoadingSuppliers = false;
+      });
     } catch (e) {
       setState(() => isLoadingSuppliers = false);
       print('Error fetching suppliers: $e');
@@ -116,7 +115,17 @@ class _CheckPageState extends State<CheckPage> {
   Future<String> _getLoggedInAccountantName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('accountant_name') ?? 'System';
+      final accountantId = prefs.getInt('accountant_id');
+
+      if (accountantId == null) return 'System';
+
+      final response = await supabase
+          .from('accountant')
+          .select('name')
+          .eq('accountant_id', accountantId)
+          .maybeSingle();
+
+      return response?['name']?.toString() ?? 'System';
     } catch (e) {
       print('Error getting accountant name: $e');
       return 'System';
@@ -146,68 +155,65 @@ class _CheckPageState extends State<CheckPage> {
           .inFilter('status', ['Company Box', 'Endorsed'])
           .order('exchange_date', ascending: true);
 
-        // Collect endorsed_to supplier IDs to resolve names in one query
-        final endorsedIds = <int>{};
-        for (final check in response) {
-          final endorsedTo = check['endorsed_to'];
-          if (endorsedTo is int) {
-            endorsedIds.add(endorsedTo);
-          }
+      // Collect endorsed_to supplier IDs to resolve names in one query
+      final endorsedIds = <int>{};
+      for (final check in response) {
+        final endorsedTo = check['endorsed_to'];
+        if (endorsedTo is int) {
+          endorsedIds.add(endorsedTo);
         }
+      }
 
-        final Map<int, String> supplierNames = {};
-        if (endorsedIds.isNotEmpty) {
-          try {
-            final supplierResponse = await supabase
-                .from('supplier')
-                .select('supplier_id, name')
-                .inFilter('supplier_id', endorsedIds.toList());
+      final Map<int, String> supplierNames = {};
+      if (endorsedIds.isNotEmpty) {
+        try {
+          final supplierResponse = await supabase
+              .from('supplier')
+              .select('supplier_id, name')
+              .inFilter('supplier_id', endorsedIds.toList());
 
-            
-              for (final supplier in supplierResponse) {
-                final id = supplier['supplier_id'];
-                if (id is int) {
-                  supplierNames[id] = supplier['name']?.toString() ?? '';
-                }
-              }
-            
-          } catch (e) {
-            print('Error fetching endorsed supplier names: $e');
+          for (final supplier in supplierResponse) {
+            final id = supplier['supplier_id'];
+            if (id is int) {
+              supplierNames[id] = supplier['name']?.toString() ?? '';
+            }
           }
+        } catch (e) {
+          print('Error fetching endorsed supplier names: $e');
         }
+      }
 
-        final List<Map<String, dynamic>> checks = [];
-        for (var check in response) {
-          final endorsedTo = check['endorsed_to'];
-          checks.add({
-            'owner': check['customer']?['name'] ?? 'Unknown',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']),
-            'status': check['status'] ?? 'Unknown',
+      final List<Map<String, dynamic>> checks = [];
+      for (var check in response) {
+        final endorsedTo = check['endorsed_to'];
+        checks.add({
+          'owner': check['customer']?['name'] ?? 'Unknown',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']),
+          'status': check['status'] ?? 'Unknown',
+          'check_id': check['check_id'],
+          'check_details': {
             'check_id': check['check_id'],
-            'check_details': {
-              'check_id': check['check_id'],
-              'exchange_rate': check['exchange_rate'],
-              'exchange_date': check['exchange_date'],
-              'status': check['status'],
-              'description': check['description'],
-              'endorsed_description': check['endorsed_description'],
-              'check_image': check['check_image'],
-              'banks': check['banks'],
-              'branches': check['branches'],
-              'customer_id': check['customer_id'],
-              'endorsed_to': endorsedTo,
-              'endorsed_supplier': endorsedTo is int
-                  ? {'name': supplierNames[endorsedTo]}
-                  : null,
-            },
-          });
-        }
-        setState(() {
-          incomingChecks = checks;
-          filteredIncomingChecks = checks;
+            'exchange_rate': check['exchange_rate'],
+            'exchange_date': check['exchange_date'],
+            'status': check['status'],
+            'description': check['description'],
+            'endorsed_description': check['endorsed_description'],
+            'check_image': check['check_image'],
+            'banks': check['banks'],
+            'branches': check['branches'],
+            'customer_id': check['customer_id'],
+            'endorsed_to': endorsedTo,
+            'endorsed_supplier': endorsedTo is int
+                ? {'name': supplierNames[endorsedTo]}
+                : null,
+          },
         });
-      
+      }
+      setState(() {
+        incomingChecks = checks;
+        filteredIncomingChecks = checks;
+      });
     } catch (e) {
       print('Error fetching incoming checks: $e');
     }
@@ -234,32 +240,31 @@ class _CheckPageState extends State<CheckPage> {
           .inFilter('status', ['Pending'])
           .order('exchange_date', ascending: true);
 
-        final List<Map<String, dynamic>> checks = [];
-        for (var check in response) {
-          checks.add({
-            'owner': check['supplier']?['name'] ?? 'Unknown',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']),
-            'status': check['status'] ?? 'Pending',
+      final List<Map<String, dynamic>> checks = [];
+      for (var check in response) {
+        checks.add({
+          'owner': check['supplier']?['name'] ?? 'Unknown',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']),
+          'status': check['status'] ?? 'Pending',
+          'check_id': check['check_id'],
+          'check_details': {
             'check_id': check['check_id'],
-            'check_details': {
-              'check_id': check['check_id'],
-              'exchange_rate': check['exchange_rate'],
-              'exchange_date': check['exchange_date'],
-              'status': check['status'],
-              'description': check['description'],
-              'check_image': check['check_image'],
-              'banks': check['banks'],
-              'branches': check['branches'],
-              'supplier_id': check['supplier_id'],
-            },
-          });
-        }
-        setState(() {
-          outgoingChecks = checks;
-          filteredOutgoingChecks = checks;
+            'exchange_rate': check['exchange_rate'],
+            'exchange_date': check['exchange_date'],
+            'status': check['status'],
+            'description': check['description'],
+            'check_image': check['check_image'],
+            'banks': check['banks'],
+            'branches': check['branches'],
+            'supplier_id': check['supplier_id'],
+          },
         });
-      
+      }
+      setState(() {
+        outgoingChecks = checks;
+        filteredOutgoingChecks = checks;
+      });
     } catch (e) {
       print('Error fetching outgoing checks: $e');
     }
@@ -274,8 +279,6 @@ class _CheckPageState extends State<CheckPage> {
       return dateStr;
     }
   }
-
-
 
   Future<void> _updateCheckStatus(
     int checkId,
