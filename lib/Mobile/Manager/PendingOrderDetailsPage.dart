@@ -1,41 +1,179 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'manager_theme.dart';
 import 'SelectStaffSheet.dart';
-import 'order_item.dart';
+import 'SelectBatchSheet.dart';
+import 'order_service.dart';
+import 'OrderSplitPage.dart';
 
 class OrderDetailsPage extends StatefulWidget {
-  final String customerName;
-  final List<OrderItem> items;
+  final int orderId;
 
-  const OrderDetailsPage({
-    super.key,
-    required this.customerName,
-    required this.items,
-  });
+  const OrderDetailsPage({super.key, required this.orderId});
 
   @override
   State<OrderDetailsPage> createState() => _OrderDetailsPageState();
 }
 
 class _OrderDetailsPageState extends State<OrderDetailsPage> {
-  void _openStaffSelector() {
+  // Order data state
+  late Future<OrderData?> _orderDataFuture;
+  OrderData? _orderData;
+
+  // Staff selection for non-split order
+  int? _selectedStaffId;
+  int? _selectedInventoryId;
+  String? _selectedStaffName;
+
+  // Batch selections per item (index -> batch)
+  final Map<int, int?> _selectedBatchIds = {};
+  final Map<int, String> _selectedBatchDisplays = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _orderDataFuture = OrderService.fetchOrderDetails(widget.orderId);
+  }
+
+  void _openOrderConfirmationModal() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => SelectStaffSheet(
-        onSelected: (staffName) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Sent to $staffName")));
+      builder: (_) => _OrderConfirmationModal(
+        orderId: widget.orderId,
+        orderData: _orderData!,
+        onConfirm: (staffId, inventoryId, selectedBatchIds) {
+          setState(() {
+            _selectedStaffId = staffId;
+            _selectedInventoryId = inventoryId;
+            _selectedBatchIds.clear();
+            _selectedBatchIds.addAll(selectedBatchIds);
+          });
+          _sendNonSplitOrder();
         },
       ),
     );
   }
 
+  Future<void> _sendNonSplitOrder() async {
+    if (_orderData == null ||
+        _selectedStaffId == null ||
+        _selectedInventoryId == null) {
+      return;
+    }
+
+    final itemsMap = <int, int>{};
+    final batchMap = <int, int?>{};
+
+    for (int i = 0; i < _orderData!.items.length; i++) {
+      final item = _orderData!.items[i];
+      itemsMap[item.productId] = item.qty;
+      batchMap[item.productId] = _selectedBatchIds[i];
+    }
+
+    final splitsData = [
+      {
+        'staffId': _selectedStaffId!,
+        'inventoryId': _selectedInventoryId!,
+        'items': itemsMap,
+        'batches': batchMap,
+      },
+    ];
+
+    final success = await OrderService.saveSplitOrder(
+      orderId: widget.orderId,
+      splits: splitsData,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order sent to $_selectedStaffName successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true); // Return true to indicate success
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send order. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _openSplitPage() async {
+    if (_orderData == null) return;
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OrderSplitPage(
+          orderId: widget.orderId,
+          customerName: _orderData!.customerName,
+          items: _orderData!.items,
+        ),
+      ),
+    );
+
+    // If split was successful, close this page and return success
+    if (result == true && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<OrderData?>(
+      future: _orderDataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: AppColors.bgDark,
+            body: const Center(
+              child: CircularProgressIndicator(color: AppColors.gold),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return Scaffold(
+            backgroundColor: AppColors.bgDark,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error, color: Colors.red, size: 64),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Failed to load order',
+                    style: TextStyle(color: Colors.white, fontSize: 18),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Go Back'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        _orderData = snapshot.data;
+        return _buildOrderDetailsUI();
+      },
+    );
+  }
+
+  Widget _buildOrderDetailsUI() {
+    final customerName = _orderData?.customerName ?? 'Unknown';
+    final items = _orderData?.items ?? [];
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
@@ -56,7 +194,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    widget.customerName,
+                    customerName,
                     style: const TextStyle(
                       color: AppColors.white,
                       fontSize: 20,
@@ -72,7 +210,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   Expanded(
                     flex: 5,
                     child: Text(
-                      "Product Name",
+                      'Product Name',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -83,7 +221,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   Expanded(
                     flex: 3,
                     child: Text(
-                      "Brand",
+                      'Brand',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -94,7 +232,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      "Quantity",
+                      'Quantity',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -112,10 +250,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
               Expanded(
                 child: ListView.builder(
-                  itemCount: widget.items.length,
+                  itemCount: items.length,
                   itemBuilder: (_, i) {
-                    final item = widget.items[i];
-
+                    final item = items[i];
                     final controller = TextEditingController(
                       text: item.qty.toString(),
                     );
@@ -130,89 +267,93 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            flex: 5,
-                            child: Text(
-                              item.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              item.brand,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-
-                          // ===== QUANTITY BOX =====
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.card,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // الصندوق الذهبي
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFB7A447),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: TextField(
-                                    controller: controller,
-                                    onChanged: (v) {
-                                      if (v.isNotEmpty) {
-                                        setState(
-                                          () => item.qty =
-                                              int.tryParse(v) ?? item.qty,
-                                        );
-                                      }
-                                    },
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      border: InputBorder.none,
-                                      isCollapsed: true,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-
-                                const SizedBox(width: 8),
-
-                                Text(
-                                  item.unit,
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  item.brand,
                                   style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.card,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFB7A447),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: TextField(
+                                        controller: controller,
+                                        onChanged: (v) {
+                                          if (v.isNotEmpty) {
+                                            setState(
+                                              () => item.qty =
+                                                  int.tryParse(v) ?? item.qty,
+                                            );
+                                          }
+                                        },
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        decoration: const InputDecoration(
+                                          border: InputBorder.none,
+                                          isCollapsed: true,
+                                          contentPadding: EdgeInsets.zero,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      item.unit,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -223,11 +364,412 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
               const SizedBox(height: 10),
 
+              // SPLIT BUTTON
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _openSplitPage,
+                  icon: const Icon(
+                    Icons.call_split,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
+                  label: const Text(
+                    'Split the Order',
+                    style: TextStyle(
+                      color: AppColors.gold,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold, width: 2),
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
               // SEND BUTTON
-              CustomSendButton(text: "s  e  n  d", onTap: _openStaffSelector),
+              CustomSendButton(
+                text: 's  e  n  d',
+                onTap: _openOrderConfirmationModal,
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _OrderConfirmationModal extends StatefulWidget {
+  final int orderId;
+  final OrderData orderData;
+  final Function(int, int, Map<int, int?>) onConfirm;
+
+  const _OrderConfirmationModal({
+    required this.orderId,
+    required this.orderData,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_OrderConfirmationModal> createState() =>
+      _OrderConfirmationModalState();
+}
+
+class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
+  late int? _selectedStaffId;
+  late int? _selectedInventoryId;
+  late String? _selectedStaffName;
+  late Map<int, int> _selectedBatchIds;
+  late Map<int, String> _selectedBatchDisplays;
+  bool _showOrderDetails = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedStaffId = null;
+    _selectedInventoryId = null;
+    _selectedStaffName = null;
+    _selectedBatchIds = {};
+    _selectedBatchDisplays = {};
+  }
+
+  void _pickBatchForItem(int itemIndex) {
+    if (_selectedInventoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select staff first to lock an inventory'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final item = widget.orderData.items[itemIndex];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => SelectBatchSheet(
+        productId: item.productId,
+        inventoryId: _selectedInventoryId,
+        onSelected: (batchId, displayText) {
+          Navigator.pop(context);
+          setState(() {
+            _selectedBatchIds[itemIndex] = batchId;
+            _selectedBatchDisplays[itemIndex] = displayText;
+          });
+        },
+      ),
+    );
+  }
+
+  void _confirmAndSend() {
+    if (_selectedStaffId == null || _selectedInventoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select staff'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    Navigator.pop(context);
+    widget.onConfirm(
+      _selectedStaffId!,
+      _selectedInventoryId!,
+      _selectedBatchIds,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showOrderDetails) {
+      return _buildStaffSelector();
+    }
+    return _buildOrderDetails();
+  }
+
+  Widget _buildStaffSelector() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.bgDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Select Staff',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Choose a staff member to assign this order',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: SelectStaffSheet(
+              onSelected: (staffId, inventoryId, displayName) {
+                setState(() {
+                  _selectedStaffId = staffId;
+                  _selectedInventoryId = inventoryId;
+                  _selectedStaffName = displayName;
+                });
+              },
+              isModal: false,
+              preSelectedStaffName: _selectedStaffName,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selectedStaffId != null
+                  ? () {
+                      setState(() => _showOrderDetails = true);
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                disabledBackgroundColor: Colors.grey[600],
+                minimumSize: const Size.fromHeight(54),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                'Next',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderDetails() {
+    final items = widget.orderData.items;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.bgDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _showOrderDetails = false),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Order Details',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Staff: $_selectedStaffName',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: items.length,
+              itemBuilder: (_, i) {
+                final item = items[i];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item.brand,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFB7A447),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${item.qty} ${item.unit}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _pickBatchForItem(i),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _selectedBatchDisplays[i] != null
+                                ? AppColors.gold.withOpacity(0.2)
+                                : Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _selectedBatchDisplays[i] != null
+                                  ? AppColors.gold
+                                  : Colors.orange,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.inventory_2,
+                                color: _selectedBatchDisplays[i] != null
+                                    ? AppColors.gold
+                                    : Colors.orange,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _selectedBatchDisplays[i] ?? 'Select Batch',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: _selectedBatchDisplays[i] != null
+                                        ? AppColors.gold
+                                        : Colors.orange,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _confirmAndSend,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Confirm & Send',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -253,7 +795,6 @@ class CustomSendButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // ===== النص على اليسار =====
             Text(
               text,
               style: const TextStyle(
@@ -263,8 +804,6 @@ class CustomSendButton extends StatelessWidget {
                 letterSpacing: 8,
               ),
             ),
-
-            // ===== الأيقونة على اليمين =====
             Transform.rotate(
               angle: -0.8,
               child: const Icon(

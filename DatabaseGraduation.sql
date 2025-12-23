@@ -136,13 +136,15 @@ CREATE TABLE public.customer_order_inventory (
   inventory_id integer NOT NULL,
   batch_id integer,
   quantity integer,
+  prepared_by integer,
   CONSTRAINT customer_order_inventory_pkey PRIMARY KEY (customer_order_id, product_id, inventory_id),
   CONSTRAINT customer_order_inventory_customer_order_id_fkey FOREIGN KEY (customer_order_id) REFERENCES public.customer_order(customer_order_id),
   CONSTRAINT customer_order_inventory_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id),
   CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(batch_id),
   CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(batch_id),
   CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(product_id),
-  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id)
+  CONSTRAINT customer_order_inventory_product_id_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id),
+  CONSTRAINT customer_order_inventory_prepared_by_fkey FOREIGN KEY (prepared_by) REFERENCES public.storage_staff(storage_staff_id)
 );
 CREATE TABLE public.customer_quarters (
   quarter_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -214,6 +216,7 @@ CREATE TABLE public.product (
   last_action_time timestamp without time zone,
   total_quantity integer,
   product_image text,
+  minimum_stock integer,
   CONSTRAINT product_pkey PRIMARY KEY (product_id),
   CONSTRAINT product_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.product_category(product_category_id),
   CONSTRAINT product_brand_id_fkey FOREIGN KEY (brand_id) REFERENCES public.brand(brand_id),
@@ -263,7 +266,9 @@ CREATE TABLE public.storage_staff (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
-  CONSTRAINT storage_staff_pkey PRIMARY KEY (storage_staff_id)
+  inventory_id integer NOT NULL,
+  CONSTRAINT storage_staff_pkey PRIMARY KEY (storage_staff_id),
+  CONSTRAINT storage_staff_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
 );
 CREATE TABLE public.supplier (
   supplier_id integer NOT NULL,

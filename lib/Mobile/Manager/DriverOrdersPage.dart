@@ -54,10 +54,8 @@ class DriverOrdersPage extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => DeliveryOrderDetailsPage(
-                              customerName: order["customer"],
-                              items: order["items"],
-                            ),
+                            builder: (_) =>
+                                DeliveryOrderDetailsPage(orderId: order["id"]),
                           ),
                         );
                       },

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'manager_theme.dart';
 import 'PendingOrderDetailsPage.dart';
 import 'PreparingOrderDetailsPage.dart';
@@ -23,11 +24,13 @@ class OrderInfo {
 }
 
 class DeliveryDriver {
+  final int driverId;
   final String name;
   final int assignedOrders;
   final String image;
 
   DeliveryDriver({
+    required this.driverId,
     required this.name,
     required this.assignedOrders,
     required this.image,
@@ -37,74 +40,324 @@ class DeliveryDriver {
 // ====================== PAGE ======================
 
 class StockOutPage extends StatefulWidget {
-  const StockOutPage({super.key});
+  final int initialIndex;
+  const StockOutPage({super.key, this.initialIndex = 0});
 
   @override
   State<StockOutPage> createState() => _StockOutPageState();
 }
 
 class _StockOutPageState extends State<StockOutPage> {
-  final PageController _pageController = PageController();
-  int _currentTab = 0;
+  late final PageController _pageController;
+  late int _currentTab;
+  List<OrderInfo> _pendingOrders = [];
+  List<OrderInfo> _preparingOrders = [];
+  List<OrderInfo> _preparedOrders = [];
+  bool _loading = true;
 
-  final List<OrderInfo> _orders = [
-    OrderInfo(
-      id: 26,
-      customerName: 'Ahmad Nizar',
-      inventoryNo: 1,
-      supplierName: 'Ahmad Nizar',
-    ),
-    OrderInfo(
-      id: 27,
-      customerName: 'Saed Rimawi',
-      inventoryNo: 1,
-      supplierName: 'Saed Rimawi',
-    ),
-    OrderInfo(
-      id: 30,
-      customerName: 'Akef Al Asmar',
-      inventoryNo: 2,
-      supplierName: 'Akef Al Asmar',
-    ),
-    OrderInfo(
-      id: 28,
-      customerName: 'Nizar Fares',
-      inventoryNo: 2,
-      supplierName: 'Nizar Fares',
-    ),
-    OrderInfo(
-      id: 20,
-      customerName: 'Eyas Barghouthi',
-      inventoryNo: 1,
-      supplierName: 'Eyas Barghouthi',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _currentTab = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _fetchPendingOrders();
+    _fetchPreparingOrders();
+    _fetchPreparedOrders();
+    _fetchDeliveryDrivers();
+  }
 
-  final List<DeliveryDriver> _drivers = [
-    DeliveryDriver(
-      name: 'Rami Rimawi',
-      assignedOrders: 8,
-      image: "assets/images/rami.jpg",
-    ),
-    DeliveryDriver(
-      name: 'Mohammad Assi',
-      assignedOrders: 0,
-      image: "assets/images/assi.jpg",
-    ),
-    DeliveryDriver(
-      name: 'Ameer Yasin',
-      assignedOrders: 2,
-      image: "assets/images/ameer.jpg",
-    ),
-  ];
+  Future<void> _fetchPendingOrders() async {
+    try {
+      setState(() => _loading = true);
+      final response = await Supabase.instance.client
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('order_status', 'Pinned')
+          .order('customer_order_id');
+
+      final orders = response.map<OrderInfo>((row) {
+        final customer = row['customer'] as Map<String, dynamic>?;
+        return OrderInfo(
+          id: row['customer_order_id'] as int,
+          customerName: customer?['name'] as String? ?? 'Unknown',
+          inventoryNo: 1,
+          supplierName: customer?['name'] as String? ?? 'Unknown',
+        );
+      }).toList();
+
+      setState(() {
+        _pendingOrders = orders;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching pending orders: $e');
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _fetchPreparingOrders() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('order_status', 'Preparing')
+          .order('customer_order_id');
+
+      final orders = response.map<OrderInfo>((row) {
+        final customer = row['customer'] as Map<String, dynamic>?;
+        return OrderInfo(
+          id: row['customer_order_id'] as int,
+          customerName: customer?['name'] as String? ?? 'Unknown',
+          inventoryNo: 1,
+          supplierName: customer?['name'] as String? ?? 'Unknown',
+        );
+      }).toList();
+
+      setState(() {
+        _preparingOrders = orders;
+      });
+    } catch (e) {
+      debugPrint('Error fetching preparing orders: $e');
+    }
+  }
+
+  Future<void> _fetchPreparedOrders() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('order_status', 'Prepared')
+          .order('customer_order_id');
+
+      final orders = response.map<OrderInfo>((row) {
+        final customer = row['customer'] as Map<String, dynamic>?;
+        return OrderInfo(
+          id: row['customer_order_id'] as int,
+          customerName: customer?['name'] as String? ?? 'Unknown',
+          inventoryNo: 1,
+          supplierName: customer?['name'] as String? ?? 'Unknown',
+        );
+      }).toList();
+
+      setState(() {
+        _preparedOrders = orders;
+      });
+    } catch (e) {
+      debugPrint('Error fetching prepared orders: $e');
+    }
+  }
+
+  // Refresh data for a specific tab index before rendering
+  void _refreshTab(int index) {
+    switch (index) {
+      case 0:
+        _fetchPendingOrders();
+        break;
+      case 1:
+        _fetchPreparingOrders();
+        break;
+      case 2:
+        _fetchPreparedOrders();
+        break;
+      case 3:
+        _fetchDeliveryDrivers();
+        break;
+    }
+  }
+
+  List<DeliveryDriver> _drivers = [];
 
   void _onTabSelected(int index) {
+    // Refresh data for the selected tab before navigating
+    _refreshTab(index);
     setState(() => _currentTab = index);
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchDriverOrders(int driverId) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Fetch all orders for this driver with Delivery status
+      final ordersResponse = await supabase
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('delivered_by_id', driverId)
+          .eq('order_status', 'Delivery')
+          .order('customer_order_id');
+
+      if (ordersResponse.isEmpty) return [];
+
+      // Get all order IDs
+      final orderIds = ordersResponse
+          .map((o) => o['customer_order_id'] as int)
+          .toList();
+
+      // Fetch all inventory items for these orders
+      final inventoryResponse = await supabase
+          .from('customer_order_inventory')
+          .select('*')
+          .inFilter('customer_order_id', orderIds);
+
+      // Fetch product details
+      final productIds = inventoryResponse
+          .map((i) => i['product_id'] as int)
+          .toSet()
+          .toList();
+
+      final productsResponse = await supabase
+          .from('product')
+          .select('*')
+          .inFilter('product_id', productIds);
+
+      final brandIds = productsResponse
+          .map((p) => p['brand_id'] as int?)
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      final unitIds = productsResponse
+          .map((p) => p['unit_id'] as int?)
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      final brandsResponse = brandIds.isNotEmpty
+          ? await supabase
+                .from('brand')
+                .select('*')
+                .inFilter('brand_id', brandIds)
+          : [];
+
+      final unitsResponse = unitIds.isNotEmpty
+          ? await supabase.from('unit').select('*').inFilter('unit_id', unitIds)
+          : [];
+
+      // Build maps
+      final productMap = {for (var p in productsResponse) p['product_id']: p};
+      final brandMap = {for (var b in brandsResponse) b['brand_id']: b};
+      final unitMap = {for (var u in unitsResponse) u['unit_id']: u};
+
+      // Build order list with consolidated items
+      final List<Map<String, dynamic>> orders = [];
+
+      for (final orderRow in ordersResponse) {
+        final orderId = orderRow['customer_order_id'] as int;
+        final customer = orderRow['customer'] as Map<String, dynamic>?;
+        final customerName = customer?['name'] as String? ?? 'Unknown';
+
+        // Get all items for this order and consolidate by product
+        final orderItems = inventoryResponse
+            .where((i) => i['customer_order_id'] == orderId)
+            .toList();
+
+        // Group by product_id and sum quantities
+        final Map<int, double> productQtyMap = {};
+        for (final item in orderItems) {
+          final productId = item['product_id'] as int;
+          final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
+          productQtyMap[productId] = (productQtyMap[productId] ?? 0.0) + qty;
+        }
+
+        // Build OrderItem list
+        final List<OrderItem> items = [];
+        for (final entry in productQtyMap.entries) {
+          final product = productMap[entry.key];
+          if (product == null) continue;
+
+          final brandId = product['brand_id'] as int?;
+          final unitId = product['unit_id'] as int?;
+
+          final brandName = brandId != null
+              ? (brandMap[brandId]?['brand_name'] as String? ?? '')
+              : '';
+          final unitName = unitId != null
+              ? (unitMap[unitId]?['unit_name'] as String? ?? '')
+              : '';
+
+          items.add(
+            OrderItem(
+              entry.key,
+              product['product_name'] as String? ?? 'Unknown',
+              brandName,
+              unitName,
+              entry.value.toInt(),
+            ),
+          );
+        }
+
+        orders.add({'id': orderId, 'customer': customerName, 'items': items});
+      }
+
+      return orders;
+    } catch (e) {
+      debugPrint('Error fetching driver orders: $e');
+      return [];
+    }
+  }
+
+  Future<void> _fetchDeliveryDrivers() async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Fetch all drivers with profile images
+      final driversResponse = await supabase
+          .from('delivery_driver')
+          .select(
+            'delivery_driver_id, name, user_account_delivery_driver(profile_image)',
+          );
+
+      // Fetch all orders currently in Delivery status to count per driver
+      final ordersResponse = await supabase
+          .from('customer_order')
+          .select('delivered_by_id')
+          .eq('order_status', 'Delivery');
+
+      // Build counts map
+      final Map<int, int> countMap = {};
+      for (final row in ordersResponse) {
+        final id = row['delivered_by_id'] as int?;
+        if (id != null) {
+          countMap[id] = (countMap[id] ?? 0) + 1;
+        }
+      }
+
+      // Build drivers list
+      final List<DeliveryDriver> drivers = [];
+      for (final d in driversResponse) {
+        final id = d['delivery_driver_id'] as int?;
+        if (id == null) continue;
+
+        final name = d['name'] as String? ?? 'Unknown';
+
+        String? profileImage;
+        final account = d['user_account_delivery_driver'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+
+        drivers.add(
+          DeliveryDriver(
+            driverId: id,
+            name: name,
+            assignedOrders: countMap[id] ?? 0,
+            image: profileImage ?? '',
+          ),
+        );
+      }
+
+      setState(() {
+        _drivers = drivers;
+      });
+    } catch (e) {
+      debugPrint('Error fetching delivery drivers: $e');
+    }
   }
 
   @override
@@ -117,11 +370,15 @@ class _StockOutPageState extends State<StockOutPage> {
             Expanded(
               child: PageView(
                 controller: _pageController,
-                onPageChanged: (i) => setState(() => _currentTab = i),
+                onPageChanged: (i) {
+                  // Refresh data when swiping between tabs before rendering
+                  _refreshTab(i);
+                  setState(() => _currentTab = i);
+                },
                 children: [
-                  _PendingSection(orders: _orders),
-                  _PreparingSection(orders: _orders),
-                  _PreparedSection(orders: _orders),
+                  _PendingSection(orders: _pendingOrders, isLoading: _loading),
+                  _PreparingSection(orders: _preparingOrders),
+                  _PreparedSection(orders: _preparedOrders),
                   _DeliverySection(drivers: _drivers),
                 ],
               ),
@@ -147,7 +404,8 @@ class _StockOutPageState extends State<StockOutPage> {
 
 class _PendingSection extends StatelessWidget {
   final List<OrderInfo> orders;
-  const _PendingSection({required this.orders});
+  final bool isLoading;
+  const _PendingSection({required this.orders, this.isLoading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -175,36 +433,46 @@ class _PendingSection extends StatelessWidget {
           const SizedBox(height: 10),
 
           Expanded(
-            child: ListView.separated(
-              itemCount: orders.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final o = orders[i];
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OrderDetailsPage(
-                          customerName: o.customerName,
-                          items: [
-                            OrderItem('Hand Shower', 'GROHE', 'cm', 1),
-                            OrderItem(
-                              'Freestanding Bathtub',
-                              'Royal',
-                              'pcs',
-                              1,
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.yellow),
+                  )
+                : orders.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No pending orders',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: orders.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final o = orders[i];
+                      return GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => OrderDetailsPage(orderId: o.id),
                             ),
-                            OrderItem('Wall-Hung Toilet', 'GROHE', 'cm', 1),
-                          ],
+                          );
+
+                          // Refresh if order was successfully sent
+                          if (result == true && context.mounted) {
+                            final stockOutState = context
+                                .findAncestorStateOfType<_StockOutPageState>();
+                            stockOutState?._fetchPendingOrders();
+                            stockOutState?._fetchPreparingOrders();
+                          }
+                        },
+                        child: _OrderCard(
+                          left: '${o.id}',
+                          middle: o.customerName,
                         ),
-                      ),
-                    );
-                  },
-                  child: _OrderCard(left: '${o.id}', middle: o.customerName),
-                );
-              },
-            ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -254,21 +522,8 @@ class _PreparingSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PreparingOrderDetailsPage(
-                          customerName: o.customerName,
-                          items: [
-                            OrderItem("Hand Shower", "GROHE", "cm", 1),
-                            OrderItem(
-                              "Freestanding Bathtub",
-                              "Royal",
-                              "pcs",
-                              1,
-                            ),
-                            OrderItem("Kitchen Sink", "Royal", "cm", 1),
-                          ],
-                          preparedByName: "Ayman Al Asmar",
-                          preparedByImage: "assets/images/ayman.jpg",
-                        ),
+                        builder: (_) =>
+                            PreparingOrderDetailsPage(orderId: o.id),
                       ),
                     );
                   },
@@ -311,49 +566,50 @@ class _PreparedSection extends StatelessWidget {
           const SizedBox(height: 16),
           const _HeaderRow(
             left: 'Order ID #',
-            middle: 'Supplier Name',
+            middle: 'Customer Name',
             right: 'Inventory #',
           ),
           const SizedBox(height: 10),
 
           Expanded(
-            child: ListView.separated(
-              itemCount: orders.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final o = orders[i];
+            child: orders.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No prepared orders',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: orders.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final o = orders[i];
 
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PreparedOrderDetailsPage(
-                          customerName: o.customerName,
-                          preparedByName: "Ayman Al Asmar",
-                          preparedByImage: "assets/images/ayman.jpg",
-                          items: [
-                            OrderItem("Hand Shower", "GROHE", "cm", 1),
-                            OrderItem(
-                              "Freestanding Bathtub",
-                              "Royal",
-                              "pcs",
-                              1,
+                      return GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PreparedOrderDetailsPage(orderId: o.id),
                             ),
-                            OrderItem("Wall-Hung Toilet", "GROHE", "cm", 1),
-                          ],
+                          );
+
+                          // Refresh if order was sent to delivery
+                          if (result == true && context.mounted) {
+                            final stockOutState = context
+                                .findAncestorStateOfType<_StockOutPageState>();
+                            stockOutState?._fetchPreparedOrders();
+                          }
+                        },
+                        child: _OrderCard(
+                          left: '${o.id}',
+                          middle: o.customerName,
+                          right: '${o.inventoryNo}',
                         ),
-                      ),
-                    );
-                  },
-                  child: _OrderCard(
-                    left: '${o.id}',
-                    middle: o.supplierName,
-                    right: '${o.inventoryNo}',
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -367,13 +623,6 @@ class _DeliverySection extends StatelessWidget {
   final List<DeliveryDriver> drivers;
 
   const _DeliverySection({required this.drivers});
-
-  String _getDriverImage(String name) {
-    if (name == 'Rami Rimawi') return "assets/images/rami.jpg";
-    if (name == 'Mohammad Assi') return "assets/images/assi.jpg";
-    if (name == 'Ameer Yasin') return "assets/images/ameer.jpg";
-    return "";
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -399,43 +648,40 @@ class _DeliverySection extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (_, i) {
                 final d = drivers[i];
-                final img = _getDriverImage(d.name);
 
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DriverOrdersPage(
-                          driverName: d.name,
-                          assignedOrders: [
-                            {
-                              "id": 8,
-                              "customer": "Rami Rimawi",
-                              "items": [
-                                OrderItem("Hand Shower", "GROHE", "cm", 1),
-                                OrderItem("Kitchen Sink", "Royal", "pcs", 2),
-                              ],
-                            },
-                            {
-                              "id": 22,
-                              "customer": "Nizar Ahamd",
-                              "items": [
-                                OrderItem("Wall-Hung Toilet", "GROHE", "cm", 1),
-                                OrderItem(
-                                  "Freestanding Bathtub",
-                                  "Royal",
-                                  "pcs",
-                                  1,
-                                ),
-                              ],
-                            },
-                          ],
+                  onTap: () async {
+                    // Show loading indicator
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.yellow,
                         ),
                       ),
                     );
+
+                    // Fetch orders for this driver
+                    final orders = await context
+                        .findAncestorStateOfType<_StockOutPageState>()
+                        ?._fetchDriverOrders(d.driverId);
+
+                    if (context.mounted) {
+                      Navigator.pop(context); // Close loading
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DriverOrdersPage(
+                            driverName: d.name,
+                            assignedOrders: orders ?? [],
+                          ),
+                        ),
+                      );
+                    }
                   },
-                  child: _DeliveryCard(driver: d, imgPath: img),
+                  child: _DeliveryCard(driver: d),
                 );
               },
             ),
@@ -577,9 +823,8 @@ class _OrderCard extends StatelessWidget {
 
 class _DeliveryCard extends StatelessWidget {
   final DeliveryDriver driver;
-  final String imgPath;
 
-  const _DeliveryCard({required this.driver, required this.imgPath});
+  const _DeliveryCard({required this.driver});
 
   @override
   Widget build(BuildContext context) {
@@ -594,7 +839,15 @@ class _DeliveryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(radius: 26, backgroundImage: AssetImage(driver.image)),
+          CircleAvatar(
+            radius: 26,
+            backgroundImage:
+                driver.image.isNotEmpty && driver.image.startsWith('http')
+                ? NetworkImage(driver.image)
+                : (driver.image.isNotEmpty
+                      ? AssetImage(driver.image)
+                      : const AssetImage('assets/images/placeholder.png')),
+          ),
 
           const SizedBox(width: 12),
 

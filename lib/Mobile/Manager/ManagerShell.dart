@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../bottom_navbar.dart';
+import '../account_page.dart';
 import 'manager_theme.dart';
 import 'HomeManager.dart';
 import 'StockOutPage.dart';
@@ -16,17 +17,28 @@ class ManagerShell extends StatefulWidget {
 class _ManagerShellState extends State<ManagerShell> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
+  late UniqueKey _stockOutKey;
 
   // الصفحات (ممكن لاحقاً تستبدل الـ Placeholder بصفحات حقيقية)
-  final List<Widget> _pages = [
-    const HomeManagerPage(),
-    const StockOutPage(),
-    StockInPage(), // مش const
-    NotificationPage(),
-    const _PlaceholderPage(title: 'Account'),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _stockOutKey = UniqueKey();
+    _pages = [
+      HomeManagerPage(onSwitchTab: _onNavTap),
+      StockOutPage(key: _stockOutKey),
+      StockInPage(), // مش const
+      NotificationPage(),
+      const AccountPage(showNavBar: false),
+    ];
+  }
 
   void _onNavTap(int index) {
+    if (index == 1) {
+      _stockOutKey = UniqueKey();
+    }
     setState(() => _currentIndex = index);
     _pageController.animateToPage(
       index,
@@ -48,29 +60,6 @@ class _ManagerShellState extends State<ManagerShell> {
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onNavTap,
-      ),
-    );
-  }
-}
-
-class _PlaceholderPage extends StatelessWidget {
-  final String title;
-  const _PlaceholderPage({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bgDark,
-      body: Center(
-        child: Text(
-          '$title Page\n(Coming Soon)',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
       ),
     );
   }

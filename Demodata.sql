@@ -910,3 +910,175 @@ FROM (
  ) AS v(order_num, product_id, inventory_id, quantity)
 JOIN ordered_ids oi ON oi.rn = v.order_num;
 
+
+
+
+
+
+
+
+
+
+-- ****************************************************************************
+
+
+
+
+
+BEGIN;
+
+-- Order #1 — Customer: Ahmad Nizar, Item: Hand Shower (qty 5), Prepared by: Ayman Al Asmar
+WITH o AS (
+  INSERT INTO customer_order (customer_id, order_status, order_date, total_cost, tax_percent, total_balance, last_action_time)
+  VALUES (
+    (SELECT customer_id FROM customer WHERE name='Ahmad Nizar'),
+    'Prepared',
+    NOW(), 0, 0, 0, NOW()
+  )
+  RETURNING customer_order_id
+)
+-- Description line(s)
+INSERT INTO customer_order_description (customer_order_id, product_id, delivered_quantity, quantity, total_price, delivered_date, last_action_time)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  0,
+  5,
+  COALESCE(p.selling_price, 0) * 5,
+  NULL,
+  NOW()
+FROM o
+JOIN product p ON p.name = 'Hand Shower';
+
+-- Inventory line(s)
+INSERT INTO customer_order_inventory (customer_order_id, product_id, inventory_id, batch_id, quantity, prepared_by)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  b.inventory_id,
+  b.batch_id,
+  5,
+  ss.storage_staff_id
+FROM o
+JOIN product p ON p.name = 'Hand Shower'
+JOIN batch   b ON b.product_id = p.product_id
+JOIN storage_staff ss ON ss.name = 'Ayman Al Asmar'
+ORDER BY b.batch_id
+LIMIT 1;
+
+-- Update order totals from description lines (optional but useful)
+UPDATE customer_order co
+SET total_cost = sub.sum_total,
+    total_balance = sub.sum_total,
+    last_action_time = NOW()
+FROM (
+  SELECT customer_order_id, SUM(total_price) AS sum_total
+  FROM customer_order_description
+  WHERE customer_order_id = (SELECT customer_order_id FROM customer_order WHERE customer_id = (SELECT customer_id FROM customer WHERE name='Ahmad Nizar') ORDER BY customer_order_id DESC LIMIT 1)
+  GROUP BY customer_order_id
+) sub
+WHERE co.customer_order_id = sub.customer_order_id;
+
+---------------------------------------------------------------------
+
+-- Order #2 — Customer: Saed Rimawi, Item: Freestanding Bathtub (qty 1), Prepared by: Rami Rimawi
+WITH o AS (
+  INSERT INTO customer_order (customer_id, order_status, order_date, total_cost, tax_percent, total_balance, last_action_time)
+  VALUES (
+    (SELECT customer_id FROM customer WHERE name='Saed Rimawi'),
+    'Prepared',
+    NOW(), 0, 0, 0, NOW()
+  )
+  RETURNING customer_order_id
+)
+INSERT INTO customer_order_description (customer_order_id, product_id, delivered_quantity, quantity, total_price, delivered_date, last_action_time)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  0,
+  1,
+  COALESCE(p.selling_price, 0) * 1,
+  NULL,
+  NOW()
+FROM o
+JOIN product p ON p.name = 'Freestanding Bathtub';
+
+INSERT INTO customer_order_inventory (customer_order_id, product_id, inventory_id, batch_id, quantity, prepared_by)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  b.inventory_id,
+  b.batch_id,
+  1,
+  ss.storage_staff_id
+FROM o
+JOIN product p ON p.name = 'Freestanding Bathtub'
+JOIN batch   b ON b.product_id = p.product_id
+JOIN storage_staff ss ON ss.name = 'Rami Rimawi'
+ORDER BY b.batch_id
+LIMIT 1;
+
+UPDATE customer_order co
+SET total_cost = sub.sum_total,
+    total_balance = sub.sum_total,
+    last_action_time = NOW()
+FROM (
+  SELECT customer_order_id, SUM(total_price) AS sum_total
+  FROM customer_order_description
+  WHERE customer_order_id = (SELECT customer_order_id FROM customer_order WHERE customer_id = (SELECT customer_id FROM customer WHERE name='Saed Rimawi') ORDER BY customer_order_id DESC LIMIT 1)
+  GROUP BY customer_order_id
+) sub
+WHERE co.customer_order_id = sub.customer_order_id;
+
+---------------------------------------------------------------------
+
+-- Order #3 — Customer: Akef Al Asmar, Item: Wall-Hung Toilet (qty 10), Prepared by: Ayman Al Asmar
+WITH o AS (
+  INSERT INTO customer_order (customer_id, order_status, order_date, total_cost, tax_percent, total_balance, last_action_time)
+  VALUES (
+    (SELECT customer_id FROM customer WHERE name='Akef Al Asmar'),
+    'Prepared',
+    NOW(), 0, 0, 0, NOW()
+  )
+  RETURNING customer_order_id
+)
+INSERT INTO customer_order_description (customer_order_id, product_id, delivered_quantity, quantity, total_price, delivered_date, last_action_time)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  0,
+  10,
+  COALESCE(p.selling_price, 0) * 10,
+  NULL,
+  NOW()
+FROM o
+JOIN product p ON p.name = 'Wall-Hung Toilet';
+
+INSERT INTO customer_order_inventory (customer_order_id, product_id, inventory_id, batch_id, quantity, prepared_by)
+SELECT
+  o.customer_order_id,
+  p.product_id,
+  b.inventory_id,
+  b.batch_id,
+  10,
+  ss.storage_staff_id
+FROM o
+JOIN product p ON p.name = 'Wall-Hung Toilet'
+JOIN batch   b ON b.product_id = p.product_id
+JOIN storage_staff ss ON ss.name = 'Ayman Al Asmar'
+ORDER BY b.batch_id
+LIMIT 1;
+
+UPDATE customer_order co
+SET total_cost = sub.sum_total,
+    total_balance = sub.sum_total,
+    last_action_time = NOW()
+FROM (
+  SELECT customer_order_id, SUM(total_price) AS sum_total
+  FROM customer_order_description
+  WHERE customer_order_id = (SELECT customer_order_id FROM customer_order WHERE customer_id = (SELECT customer_id FROM customer WHERE name='Akef Al Asmar') ORDER BY customer_order_id DESC LIMIT 1)
+  GROUP BY customer_order_id
+) sub
+WHERE co.customer_order_id = sub.customer_order_id;
+
+COMMIT;

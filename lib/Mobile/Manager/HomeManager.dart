@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../supabase_config.dart';
 import 'manager_theme.dart';
 
 const double kGap = 16;
@@ -14,24 +16,26 @@ class StorageStaff {
 class LowStockItem {
   final String productName;
   final String brand;
-  final int inventoryNo;
+  final String inventoryName;
   final int qty;
-  LowStockItem(this.productName, this.brand, this.inventoryNo, this.qty);
+  LowStockItem(this.productName, this.brand, this.inventoryName, this.qty);
 }
 
 class HomeManagerPage extends StatefulWidget {
-  const HomeManagerPage({super.key});
+  final void Function(int)? onSwitchTab;
+  const HomeManagerPage({super.key, this.onSwitchTab});
 
   @override
   State<HomeManagerPage> createState() => _HomeManagerPageState();
 }
 
 class _HomeManagerPageState extends State<HomeManagerPage> {
-  int ordersReceived = 3;
+  int pinnedOrdersCount = 0;
   int ordersUpdated = 5;
 
   List<StorageStaff> staff = [];
   List<LowStockItem> lowStock = [];
+  bool _loadingLowStock = true;
 
   @override
   void initState() {
@@ -47,17 +51,90 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
       StorageStaff('Ibraheem', 1),
       StorageStaff('Ammar', 1),
     ];
-
-    lowStock = [
-      LowStockItem('Hand Shower', 'GROHE', 1, 5),
-      LowStockItem('Wall-Hung Toilet', 'Royal', 1, 10),
-      LowStockItem('Kitchen Sink', 'GROHE', 2, 6),
-      LowStockItem('Towel Ring', 'Royal', 2, 8),
-      LowStockItem('Freestanding Bathtub', 'Royal', 1, 20),
-      LowStockItem('Bidet Mixer', 'GROHE', 2, 4),
-      LowStockItem('Shower Tray', 'Royal', 3, 3),
-    ];
     setState(() {});
+    _fetchPinnedOrdersCount();
+    _fetchLowStockProducts();
+  }
+
+  Future<void> _fetchPinnedOrdersCount() async {
+    try {
+      final response = await supabase
+          .from('customer_order')
+          .select('customer_order_id')
+          .eq('order_status', 'Pinned');
+
+      setState(() {
+        pinnedOrdersCount = response.length;
+      });
+    } catch (e) {
+      debugPrint('Error fetching pinned orders count: $e');
+    }
+  }
+
+  Future<void> _fetchLowStockProducts() async {
+    try {
+      // Fetch all products with their brand, total_quantity and minimum_stock
+      final productsResponse = await supabase
+          .from('product')
+          .select(
+            'product_id, name, brand:brand_id(name), total_quantity, minimum_stock',
+          )
+          .not('minimum_stock', 'is', null);
+
+      List<LowStockItem> items = [];
+
+      for (var product in productsResponse) {
+        final totalQty = product['total_quantity'] as int? ?? 0;
+        final minStock = product['minimum_stock'] as int?;
+
+        // Filter where total_quantity <= minimum_stock
+        if (minStock != null && totalQty <= minStock) {
+          final productId = product['product_id'] as int;
+          final productName = product['name'] as String? ?? 'Unknown';
+          final brandName = product['brand']?['name'] as String? ?? 'N/A';
+
+          // Fetch batch inventory details for this product
+          final batchesResponse = await supabase
+              .from('batch')
+              .select('inventory:inventory_id(inventory_name), quantity')
+              .eq('product_id', productId);
+
+          // Group by inventory and sum quantities
+          Map<String, int> inventoryQtyMap = {};
+          for (var batch in batchesResponse) {
+            final inventoryName =
+                batch['inventory']?['inventory_name'] as String? ?? 'Unknown';
+            final qty = batch['quantity'] as int? ?? 0;
+            inventoryQtyMap[inventoryName] =
+                (inventoryQtyMap[inventoryName] ?? 0) + qty;
+          }
+
+          // Add each inventory location as a separate row
+          if (inventoryQtyMap.isEmpty) {
+            // If no batches, show the product with total quantity
+            items.add(LowStockItem(productName, brandName, 'N/A', totalQty));
+          } else {
+            for (var entry in inventoryQtyMap.entries) {
+              items.add(
+                LowStockItem(productName, brandName, entry.key, entry.value),
+              );
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          lowStock = items;
+          _loadingLowStock = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching low stock products: $e');
+      if (mounted) {
+        setState(() => _loadingLowStock = false);
+      }
+    }
   }
 
   @override
@@ -80,8 +157,13 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
                       children: [
                         StatCardFancy(
                           icon: Icons.forward_to_inbox_rounded,
-                          count: '$ordersReceived',
+                          count: '$pinnedOrdersCount',
                           bottomWord: 'Receives',
+                          onTap: () {
+                            widget.onSwitchTab?.call(
+                              1,
+                            ); // Switch to StockOutPage tab
+                          },
                         ),
                         const SizedBox(height: kGap),
                         StatCardFancy(
@@ -102,7 +184,10 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 24),
-                  child: LowStockCard(data: lowStock),
+                  child: LowStockCard(
+                    data: lowStock,
+                    isLoading: _loadingLowStock,
+                  ),
                 ),
               ),
             ],
@@ -117,16 +202,18 @@ class StatCardFancy extends StatelessWidget {
   final IconData icon;
   final String count;
   final String bottomWord;
+  final VoidCallback? onTap;
   const StatCardFancy({
     super.key,
     required this.icon,
     required this.count,
     required this.bottomWord,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       height: kStatHeight,
       decoration: _cardDecoration(),
       child: Padding(
@@ -178,6 +265,11 @@ class StatCardFancy extends StatelessWidget {
         ),
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(onTap: onTap, child: card);
+    }
+    return card;
   }
 }
 
@@ -209,7 +301,7 @@ class StaffCard extends StatelessWidget {
                   ),
                   Spacer(),
                   Text(
-                    'Inventory #',
+                    'Inventory',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
@@ -315,7 +407,8 @@ class _StaffRow extends StatelessWidget {
 
 class LowStockCard extends StatelessWidget {
   final List<LowStockItem> data;
-  const LowStockCard({super.key, required this.data});
+  final bool isLoading;
+  const LowStockCard({super.key, required this.data, this.isLoading = false});
 
   @override
   Widget build(BuildContext context) {
@@ -355,19 +448,22 @@ class LowStockCard extends StatelessWidget {
                     ),
                     Expanded(
                       flex: 3,
-                      child: Text(
-                        'Brand',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Text(
+                          'Brand',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),
                     Expanded(
-                      flex: 2,
+                      flex: 3,
                       child: Text(
-                        'Inventory #',
+                        'Inventory',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.white,
@@ -396,13 +492,28 @@ class LowStockCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: ListView.separated(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.zero,
-                itemCount: data.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => _LowStockRow(item: data[i]),
-              ),
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.yellow),
+                    )
+                  : data.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No low stock products',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: data.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => _LowStockRow(item: data[i]),
+                    ),
             ),
           ],
         ),
@@ -436,25 +547,30 @@ class _LowStockRow extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 8),
           Expanded(
             flex: 3,
-            child: Text(
-              item.brand,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                item.brand,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
+          const SizedBox(width: 6),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Text(
-              '${item.inventoryNo}',
+              item.inventoryName,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.white,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
             ),

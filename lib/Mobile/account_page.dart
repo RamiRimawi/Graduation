@@ -11,10 +11,13 @@ import 'StroageStaff/staff_home.dart';
 import 'Customer/customer_home_page.dart';
 import 'Customer/customer_cart_page.dart';
 import 'Customer/customer_archive_page.dart';
+import 'Manager/ManagerShell.dart';
 import 'LoginMobile.dart';
 
 class AccountPage extends StatefulWidget {
-  const AccountPage({super.key});
+  final bool showNavBar;
+
+  const AccountPage({super.key, this.showNavBar = true});
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -44,7 +47,7 @@ class _AccountPageState extends State<AccountPage> {
         _photo = image;
         _loading = true;
       });
-      
+
       // Upload image to Supabase and update database
       await _uploadProfileImage(image);
     }
@@ -65,29 +68,31 @@ class _AccountPageState extends State<AccountPage> {
       // Generate unique filename
       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       final String fileName = '${userRole}_${userId}_$timestamp.png';
-    
+
       // Read file bytes
       final bytes = await imageFile.readAsBytes();
 
       // Upload to Supabase Storage
-      await supabase.storage.from('images').uploadBinary(
-        fileName,
-        bytes,
-        fileOptions: const FileOptions(
-          contentType: 'image/png',
-          upsert: true,
-        ),
-      );
+      await supabase.storage
+          .from('images')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/png',
+              upsert: true,
+            ),
+          );
 
       // Get public URL
-      final String imageUrl = supabase.storage.from('images').getPublicUrl(fileName);
-      
-      
+      final String imageUrl = supabase.storage
+          .from('images')
+          .getPublicUrl(fileName);
 
       // Update database based on user role
       String? tableName;
       String? idColumn;
-      
+
       if (userRole == 'delivery' || userRole == 'delivery_driver') {
         tableName = 'user_account_delivery_driver';
         idColumn = 'delivery_driver_id';
@@ -109,12 +114,11 @@ class _AccountPageState extends State<AccountPage> {
       }
 
       if (tableName != null && idColumn != null) {
-        await supabase.from(tableName).update({
-          'profile_image': imageUrl,
-        }).eq(idColumn, userId);
-        
-        
-        
+        await supabase
+            .from(tableName)
+            .update({'profile_image': imageUrl})
+            .eq(idColumn, userId);
+
         // Cache locally so we don't refetch next time
         await prefs.setString('profile_image_url', imageUrl);
         setState(() {
@@ -151,7 +155,7 @@ class _AccountPageState extends State<AccountPage> {
       final String? userIdStr = prefs.getString('current_user_id');
       final String? userRole = prefs.getString('current_user_role');
       final String? cachedImage = prefs.getString('profile_image_url');
-      
+
       // Parse userId to int
       final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
@@ -163,10 +167,6 @@ class _AccountPageState extends State<AccountPage> {
           _profileCached = true;
         }
       });
-      
-      
-
-      
 
       // Attempt based on stored role; fallback to delivery_driver
       if (userId != null) {
@@ -178,7 +178,7 @@ class _AccountPageState extends State<AccountPage> {
           await _loadStorageStaff(userId);
         } else if (userRole == 'sales_rep') {
           await _loadSalesRep(userId);
-        } else if (userRole == 'storage_manager') {
+        } else if (userRole == 'storage_manager' || userRole == 'manager') {
           await _loadStorageManager(userId);
         } else if (userRole == 'customer') {
           await _loadCustomer(userId);
@@ -197,7 +197,9 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadDeliveryDriver(int id) async {
     final profile = await supabase
         .from('delivery_driver')
-        .select('delivery_driver_id,name,mobile_number,telephone_number,address')
+        .select(
+          'delivery_driver_id,name,mobile_number,telephone_number,address',
+        )
         .eq('delivery_driver_id', id)
         .maybeSingle();
 
@@ -215,7 +217,9 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['delivery_driver_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : account?['profile_image'] as String?;
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : account?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();
@@ -228,14 +232,14 @@ class _AccountPageState extends State<AccountPage> {
         .select('supplier_id,name,mobile_number,telephone_number,address')
         .eq('supplier_id', id)
         .maybeSingle();
-    
+
     // Get profile_image from user_account_supplier
     final userAccount = await supabase
         .from('user_account_supplier')
         .select('profile_image')
         .eq('supplier_id', id)
         .maybeSingle();
-    
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -244,8 +248,10 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['supplier_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
-            // debugPrint('Failed loading profile: $e');
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : userAccount?['profile_image'] as String?;
+        // debugPrint('Failed loading profile: $e');
       });
       await _precacheProfileImage();
     }
@@ -257,14 +263,14 @@ class _AccountPageState extends State<AccountPage> {
         .select('storage_staff_id,name,mobile_number,telephone_number,address')
         .eq('storage_staff_id', id)
         .maybeSingle();
-    
+
     // Get profile_image from user_account_storage_staff
     final userAccount = await supabase
         .from('user_account_storage_staff')
         .select('profile_image')
         .eq('storage_staff_id', id)
         .maybeSingle();
-    
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -273,7 +279,9 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['storage_staff_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : userAccount?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();
@@ -286,14 +294,14 @@ class _AccountPageState extends State<AccountPage> {
         .select('sales_rep_id,name,mobile_number,telephone_number,email')
         .eq('sales_rep_id', id)
         .maybeSingle();
-    
+
     // Get profile_image from user_account_sales_rep
     final userAccount = await supabase
         .from('user_account_sales_rep')
         .select('profile_image')
         .eq('sales_rep_id', id)
         .maybeSingle();
-    
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -302,28 +310,31 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['sales_rep_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : userAccount?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();
     }
   }
 
-
   Future<void> _loadStorageManager(int id) async {
     final profile = await supabase
         .from('storage_manager')
-        .select('storage_manager_id,name,mobile_number,telephone_number,address')
+        .select(
+          'storage_manager_id,name,mobile_number,telephone_number,address',
+        )
         .eq('storage_manager_id', id)
         .maybeSingle();
-    
+
     // Get profile_image from user_account_storage_manager
     final userAccount = await supabase
         .from('user_account_storage_manager')
         .select('profile_image')
         .eq('storage_manager_id', id)
         .maybeSingle();
-    
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -332,7 +343,9 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['storage_manager_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : userAccount?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();
@@ -345,14 +358,14 @@ class _AccountPageState extends State<AccountPage> {
         .select('customer_id,name,mobile_number,telephone_number,address')
         .eq('customer_id', id)
         .maybeSingle();
-    
+
     // Get profile_image from user_account_customer
     final userAccount = await supabase
         .from('user_account_customer')
         .select('profile_image')
         .eq('customer_id', id)
         .maybeSingle();
-    
+
     if (profile != null) {
       setState(() {
         _name = profile['name'] as String?;
@@ -361,7 +374,9 @@ class _AccountPageState extends State<AccountPage> {
         _mobile = profile['mobile_number']?.toString();
         _telephone = profile['telephone_number']?.toString();
         _idLabel = profile['customer_id']?.toString();
-        _profileImageUrl = _profileCached ? _profileImageUrl : userAccount?['profile_image'] as String?;
+        _profileImageUrl = _profileCached
+            ? _profileImageUrl
+            : userAccount?['profile_image'] as String?;
         _imageReady = false;
       });
       await _precacheProfileImage();
@@ -411,10 +426,7 @@ class _AccountPageState extends State<AccountPage> {
                             shape: BoxShape.circle,
                             gradient: LinearGradient(
                               colors: _isPressed
-                                  ? const [
-                                      Color(0xFF50B2E7),
-                                      Color(0xFF3A8FC9),
-                                    ]
+                                  ? const [Color(0xFF50B2E7), Color(0xFF3A8FC9)]
                                   : const [
                                       Color(0xFFFFE14D),
                                       Color(0xFFB7A447),
@@ -426,7 +438,9 @@ class _AccountPageState extends State<AccountPage> {
                           child: Builder(
                             builder: (context) {
                               final hasLocalPhoto = _photo != null;
-                              final hasRemotePhoto = _profileImageUrl != null && _profileImageUrl!.isNotEmpty;
+                              final hasRemotePhoto =
+                                  _profileImageUrl != null &&
+                                  _profileImageUrl!.isNotEmpty;
                               if (hasLocalPhoto) {
                                 final ImageProvider provider = hasLocalPhoto
                                     ? FileImage(File(_photo!.path))
@@ -439,7 +453,9 @@ class _AccountPageState extends State<AccountPage> {
                               if (hasRemotePhoto && _imageReady) {
                                 return CircleAvatar(
                                   radius: 95,
-                                  backgroundImage: NetworkImage(_profileImageUrl!),
+                                  backgroundImage: NetworkImage(
+                                    _profileImageUrl!,
+                                  ),
                                 );
                               }
                               if (hasRemotePhoto && !_imageReady) {
@@ -483,8 +499,10 @@ class _AccountPageState extends State<AccountPage> {
                             color: const Color(0xFFB7A447),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Icon(Icons.edit,
-                              color: Color(0xFF202020)),
+                          child: const Icon(
+                            Icons.edit,
+                            color: Color(0xFF202020),
+                          ),
                         ),
                       ),
                     ),
@@ -495,7 +513,9 @@ class _AccountPageState extends State<AccountPage> {
                 _loading
                     ? const SizedBox(
                         height: 28,
-                        child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFFE14D),
+                        ),
                       )
                     : Text(
                         _name ?? 'Account',
@@ -572,8 +592,7 @@ class _AccountPageState extends State<AccountPage> {
                   color: const Color(0xFFE74C3C),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Icon(Icons.logout,
-                    color: Colors.white, size: 28),
+                child: const Icon(Icons.logout, color: Colors.white, size: 28),
               ),
             ),
           ),
@@ -581,69 +600,97 @@ class _AccountPageState extends State<AccountPage> {
       ),
 
       bottomNavigationBar:
-          // Customer layout: 4 tabs (Home, Cart, Archive, Account)
-          (_userRole == 'customer')
-              ? BottomNavBar(
-                  currentIndex: 3,
+          // Only show nav bar if showNavBar is true (not inside ManagerShell)
+          !widget.showNavBar
+          ? null
+          :
+            // Customer layout: 4 tabs (Home, Cart, Archive, Account)
+            (_userRole == 'customer')
+          ? BottomNavBar(
+              currentIndex: 3,
+              onTap: (i) {
+                if (i == 0) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+                  );
+                } else if (i == 1) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CustomerCartPage()),
+                  );
+                } else if (i == 2) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CustomerArchivePage(),
+                    ),
+                  );
+                } else if (i == 3) {
+                  // already on AccountPage
+                }
+              },
+            )
+          :
+            // Manager layout: 5 tabs (Home, Stock-out, Stock-in, Notification, Account)
+            (_userRole == 'manager' || _userRole == 'storage_manager')
+          ? Builder(
+              builder: (context) {
+                return BottomNavBar(
+                  currentIndex: 4,
                   onTap: (i) {
                     if (i == 0) {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+                        MaterialPageRoute(builder: (_) => const ManagerShell()),
                       );
-                    } else if (i == 1) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
-                      );
-                    } else if (i == 2) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
-                      );
-                    } else if (i == 3) {
-                      // already on AccountPage
                     }
                   },
-                )
-              :
-              // Supplier / staff / delivery layout (2 tabs: Home, Account)
-              (_userRole == 'supplier' ||
-                      _userRole == 'storage_staff' ||
-                      _userRole == 'delivery_driver' ||
-                      _userRole == 'delivery')
-                  ? Builder(
-                      builder: (context) {
-                        return BottomNavBar(
-                          currentIndex: 1,
-                          onTap: (i) async {
-                            if (i == 0) {
-                              final prefs = await SharedPreferences.getInstance();
-                              final String? userIdStr = prefs.getString('current_user_id');
-                              final int? userId =
-                                  userIdStr != null ? int.tryParse(userIdStr) : null;
+                );
+              },
+            )
+          :
+            // Supplier / staff / delivery layout (2 tabs: Home, Account)
+            (_userRole == 'supplier' ||
+                _userRole == 'storage_staff' ||
+                _userRole == 'delivery_driver' ||
+                _userRole == 'delivery')
+          ? Builder(
+              builder: (context) {
+                return BottomNavBar(
+                  currentIndex: 1,
+                  onTap: (i) async {
+                    if (i == 0) {
+                      final prefs = await SharedPreferences.getInstance();
+                      final String? userIdStr = prefs.getString(
+                        'current_user_id',
+                      );
+                      final int? userId = userIdStr != null
+                          ? int.tryParse(userIdStr)
+                          : null;
 
-                              Widget homePage;
-                              if ((_userRole == 'delivery_driver' || _userRole == 'delivery') &&
-                                  userId != null) {
-                                homePage = HomeDeleviry(deliveryDriverId: userId);
-                              } else if (_userRole == 'storage_staff') {
-                                homePage = const HomeStaff();
-                              } else {
-                                homePage = const SupplierHomePage();
-                              }
-                              if (mounted) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => homePage),
-                                );
-                              }
-                            }
-                          },
+                      Widget homePage;
+                      if ((_userRole == 'delivery_driver' ||
+                              _userRole == 'delivery') &&
+                          userId != null) {
+                        homePage = HomeDeleviry(deliveryDriverId: userId);
+                      } else if (_userRole == 'storage_staff') {
+                        homePage = const HomeStaff();
+                      } else {
+                        homePage = const SupplierHomePage();
+                      }
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => homePage),
                         );
-                      },
-                    )
-                  : null,
+                      }
+                    }
+                  },
+                );
+              },
+            )
+          : null,
     );
   }
 
@@ -653,17 +700,18 @@ class _AccountPageState extends State<AccountPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              )),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 22,
+            ),
+          ),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(12),
