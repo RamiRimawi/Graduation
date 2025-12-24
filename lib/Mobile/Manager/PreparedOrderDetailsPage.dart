@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'manager_theme.dart';
 import 'order_item.dart';
 import 'SelectDeliveryDriverSheet.dart';
+import 'order_service.dart';
 
 class PreparedOrderDetailsPage extends StatefulWidget {
   final int orderId;
@@ -222,13 +223,28 @@ class _PreparedOrderDetailsPageState extends State<PreparedOrderDetailsPage> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => SelectDeliveryDriverSheet(
-        onSelected: (driverName) {
-          Navigator.pop(context);
-          // TODO: Save to database - assign driver to order
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Sent to $driverName")));
-          Navigator.pop(context, true); // Return true to refresh list
+        onSelected: (driverId, driverName) async {
+          // Close the sheet first
+          Navigator.of(context).pop();
+
+          // Assign driver to order
+          final ok = await OrderService.assignDeliveryDriver(
+            orderId: widget.orderId,
+            driverId: driverId,
+          );
+
+          // Show feedback if still mounted
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  ok ? "Sent to $driverName" : "Failed to assign $driverName",
+                ),
+              ),
+            );
+            // Return to previous page with result
+            Navigator.of(context).pop(ok);
+          }
         },
       ),
     );

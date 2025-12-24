@@ -131,19 +131,19 @@ class OrderService {
       // Insert all rows into customer_order_inventory
       await supabase.from('customer_order_inventory').insert(inventoryRows);
 
-      // Get manager name from SharedPreferences
+      // Get manager name and ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
+      final managerId = prefs.getInt('manager_id');
       String? managerName = prefs.getString('manager_name');
 
       // If name is not stored, try to get it using manager_id
       if (managerName == null || managerName.isEmpty) {
-        final managerId = prefs.getInt('manager_id');
         if (managerId != null) {
           try {
             final managerResponse = await supabase
-                .from('manager')
+                .from('storage_manager')
                 .select('name')
-                .eq('manager_id', managerId)
+                .eq('storage_manager_id', managerId)
                 .single();
             managerName = managerResponse['name'] as String?;
           } catch (e) {
@@ -153,11 +153,114 @@ class OrderService {
         }
       }
 
-      // Update order status, last action by, and timestamp
+      // Update order status, last action by, timestamp, and manager_by_id
+      final Map<String, dynamic> updateData = {
+        'order_status': 'Preparing',
+        'last_action_by': managerName ?? 'Manager',
+        'last_action_time': DateTime.now().toIso8601String(),
+      };
+
+      // Add manager_by_id if manager ID is available
+      if (managerId != null) {
+        updateData['managed_by_id'] = managerId;
+      }
+
+      await supabase
+          .from('customer_order')
+          .update(updateData)
+          .eq('customer_order_id', orderId);
+
+      return true;
+    } catch (e) {
+      print('Error saving split order: $e');
+      return false;
+    }
+  }
+
+  /// Assign a delivery driver to an order and update status to Delivery
+  static Future<bool> assignDeliveryDriver({
+    required int orderId,
+    required int driverId,
+  }) async {
+    try {
+      // Get manager name and ID from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final managerId = prefs.getInt('manager_id');
+      String? managerName = prefs.getString('manager_name');
+
+      if (managerName == null || managerName.isEmpty) {
+        if (managerId != null) {
+          try {
+            final managerResponse = await supabase
+                .from('storage_manager')
+                .select('name')
+                .eq('storage_manager_id', managerId)
+                .single();
+            managerName = managerResponse['name'] as String?;
+          } catch (e) {
+            print('Error fetching manager name: $e');
+            managerName = 'Manager';
+          }
+        }
+      }
+
+      // Fetch all inventory items for this order to update quantities
+      final inventoryItems = await supabase
+          .from('customer_order_inventory')
+          .select('product_id, batch_id, prepared_quantity')
+          .eq('customer_order_id', orderId);
+
+      // Update batch and product quantities
+      for (final item in inventoryItems) {
+        final productId = item['product_id'] as int?;
+        final batchId = item['batch_id'] as int?;
+        final preparedQty = item['prepared_quantity'] as int? ?? 0;
+
+        if (preparedQty <= 0 || productId == null) continue;
+
+        // Update batch quantity if batch_id exists
+        if (batchId != null) {
+          // Fetch current batch quantity
+          final batchResponse = await supabase
+              .from('batch')
+              .select('quantity')
+              .eq('batch_id', batchId)
+              .eq('product_id', productId)
+              .single();
+
+          final currentBatchQty = batchResponse['quantity'] as int? ?? 0;
+          final newBatchQty = currentBatchQty - preparedQty;
+
+          // Update batch quantity
+          await supabase
+              .from('batch')
+              .update({'quantity': newBatchQty})
+              .eq('batch_id', batchId)
+              .eq('product_id', productId);
+        }
+
+        // Update product total_quantity
+        final productResponse = await supabase
+            .from('product')
+            .select('total_quantity')
+            .eq('product_id', productId)
+            .single();
+
+        final currentTotalQty = productResponse['total_quantity'] as int? ?? 0;
+        final newTotalQty = currentTotalQty - preparedQty;
+
+        await supabase
+            .from('product')
+            .update({'total_quantity': newTotalQty})
+            .eq('product_id', productId);
+      }
+
+      // Update order status
       await supabase
           .from('customer_order')
           .update({
-            'order_status': 'Preparing',
+            'delivered_by_id': driverId,
+            'order_status': 'Delivery',
             'last_action_by': managerName ?? 'Manager',
             'last_action_time': DateTime.now().toIso8601String(),
           })
@@ -165,7 +268,7 @@ class OrderService {
 
       return true;
     } catch (e) {
-      print('Error saving split order: $e');
+      print('Error assigning delivery driver: $e');
       return false;
     }
   }

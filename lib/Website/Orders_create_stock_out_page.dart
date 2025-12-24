@@ -167,12 +167,20 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
   Future<void> _sendOrder() async {
     try {
-      // Prepare extra fields for customer_order
+      // Get current user info
+      final prefs = await SharedPreferences.getInstance();
+      final String? currentUserIdStr = prefs.getString('current_user_id');
+      final String? currentUserRole = prefs.getString('current_user_role');
+      final int? currentUserId = currentUserIdStr != null
+          ? int.tryParse(currentUserIdStr)
+          : null;
+
+      // Only set sales_rep_id if current user is a sales rep
       int? salesRepId;
-      if (selectedCustomer != null &&
-          selectedCustomer!['sales_rep_id'] != null) {
-        salesRepId = selectedCustomer!['sales_rep_id'];
+      if (currentUserRole == 'sales_rep' && currentUserId != null) {
+        salesRepId = currentUserId;
       }
+
       final accountantId = await getAccountantId();
       String? accountantName;
       if (accountantId != null) {
@@ -292,6 +300,20 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
   Future<void> _holdOrder() async {
     try {
+      // Get current user info
+      final prefs = await SharedPreferences.getInstance();
+      final String? currentUserIdStr = prefs.getString('current_user_id');
+      final String? currentUserRole = prefs.getString('current_user_role');
+      final int? currentUserId = currentUserIdStr != null
+          ? int.tryParse(currentUserIdStr)
+          : null;
+
+      // Only set sales_rep_id if current user is a sales rep
+      int? salesRepId;
+      if (currentUserRole == 'sales_rep' && currentUserId != null) {
+        salesRepId = currentUserId;
+      }
+
       // Check available quantity for each product
       final insufficientProducts = <String>[];
       for (final product in allProducts) {
@@ -345,12 +367,7 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
       final totalCost = subtotal;
       final totalBalance = totalPrice;
 
-      // Prepare extra fields for customer_order
-      int? salesRepId;
-      if (selectedCustomer != null &&
-          selectedCustomer!['sales_rep_id'] != null) {
-        salesRepId = selectedCustomer!['sales_rep_id'];
-      }
+      // Get accountant info
       final accountantId = await getAccountantId();
       String? accountantName;
       if (accountantId != null) {

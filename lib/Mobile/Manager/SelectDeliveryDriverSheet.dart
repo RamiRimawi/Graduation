@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'manager_theme.dart';
 import 'package:dolphin/Mobile/CustomSendButton.dart';
+import '../../supabase_config.dart';
 
 class SelectDeliveryDriverSheet extends StatefulWidget {
-  final void Function(String driverName) onSelected;
+  final void Function(int driverId, String driverName) onSelected;
 
   const SelectDeliveryDriverSheet({super.key, required this.onSelected});
 
@@ -13,15 +14,52 @@ class SelectDeliveryDriverSheet extends StatefulWidget {
 }
 
 class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
-  String? selectedDriver; // السائق المختار
+  List<Map<String, dynamic>> _drivers = [];
+  bool _loading = true;
+  Map<String, dynamic>?
+  _selectedDriver; // {delivery_driver_id, name, profile_image}
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDrivers();
+  }
+
+  Future<void> _loadDrivers() async {
+    try {
+      // Fetch active driver accounts and join driver names
+      final rows = await supabase
+          .from('user_account_delivery_driver')
+          .select(
+            'delivery_driver_id, profile_image, delivery_driver:delivery_driver_id(name)',
+          )
+          .eq('is_active', 'yes')
+          .order('delivery_driver_id');
+      setState(() {
+        // Normalize result to {delivery_driver_id, name, profile_image}
+        _drivers = List<Map<String, dynamic>>.from(
+          rows.map((r) {
+            final dd = (r['delivery_driver'] ?? {}) as Map<String, dynamic>;
+            return {
+              'delivery_driver_id': r['delivery_driver_id'],
+              'name': dd['name'],
+              'profile_image': r['profile_image'],
+            };
+          }),
+        );
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _drivers = [];
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final drivers = [
-      {"name": "Rami Rimawi", "img": "assets/images/rami.jpg"},
-      {"name": "Mohammad Assi", "img": "assets/images/assi.jpg"},
-      {"name": "Ameer Yasin", "img": "assets/images/ameer.jpg"},
-    ];
+    final drivers = _drivers;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -42,59 +80,87 @@ class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
           ),
           const SizedBox(height: 18),
 
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 20,
-            runSpacing: 20,
-            children: drivers.map((d) {
-              final isSelected = selectedDriver == d["name"];
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() => selectedDriver = d["name"]);
-                },
-                child: Column(
-                  children: [
-                    Container(
-                      padding: isSelected
-                          ? const EdgeInsets.all(3)
-                          : EdgeInsets.zero,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: isSelected
-                            ? Border.all(color: AppColors.gold, width: 3)
-                            : null,
-                      ),
-                      child: CircleAvatar(
-                        radius: 32,
-                        backgroundImage: AssetImage(d["img"]!),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      d["name"]!,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: isSelected
-                            ? FontWeight.w900
-                            : FontWeight.w700,
-                      ),
-                    ),
-                  ],
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(color: AppColors.gold),
+            )
+          else if (drivers.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No drivers found',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w600,
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+            )
+          else
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              runSpacing: 20,
+              children: drivers.map((d) {
+                final name = d['name'] as String? ?? 'Unknown';
+                final id = d['delivery_driver_id'] as int? ?? 0;
+                final imageUrl = d['profile_image'] as String?;
+                final isSelected =
+                    _selectedDriver != null &&
+                    _selectedDriver!['delivery_driver_id'] == id;
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedDriver = d);
+                  },
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: isSelected
+                            ? const EdgeInsets.all(3)
+                            : EdgeInsets.zero,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(color: AppColors.gold, width: 3)
+                              : null,
+                        ),
+                        child: CircleAvatar(
+                          radius: 32,
+                          backgroundColor: Colors.grey.shade700,
+                          backgroundImage:
+                              imageUrl != null && imageUrl.isNotEmpty
+                              ? NetworkImage(imageUrl)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.w900
+                              : FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
 
           const SizedBox(height: 26),
 
           CustomSendButton(
-            text: "D   o   n   e",
+            text: "D  o  n  e",
             onTap: () {
-              if (selectedDriver == null) return;
+              if (_selectedDriver == null) return;
+              final id = _selectedDriver!['delivery_driver_id'] as int? ?? 0;
+              final name = _selectedDriver!['name'] as String? ?? 'Unknown';
               Navigator.pop(context);
-              widget.onSelected(selectedDriver!);
+              widget.onSelected(id, name);
             },
           ),
 

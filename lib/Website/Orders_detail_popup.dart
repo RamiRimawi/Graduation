@@ -2,7 +2,31 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../supabase_config.dart';
+
+// Helper functions to get accountant information
+Future<int?> getAccountantId() async {
+  final prefs = await SharedPreferences.getInstance();
+  final id = prefs.getInt('accountant_id');
+  if (id != null) return id;
+  // If not found in prefs, get from DB where is_active = 'yes'
+  final response = await supabase
+      .from('user_account_accountant')
+      .select('accountant_id')
+      .eq('is_active', 'yes')
+      .maybeSingle();
+  return response != null ? response['accountant_id'] as int? : null;
+}
+
+Future<String?> getAccountantName(int accountantId) async {
+  final response = await supabase
+      .from('accountant')
+      .select('name')
+      .eq('accountant_id', accountantId)
+      .maybeSingle();
+  return response != null ? response['name'] as String? : null;
+}
 
 // Custom input formatter to allow only one decimal point
 class _DecimalInputFormatter extends TextInputFormatter {
@@ -237,6 +261,14 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
 
   Future<void> _handleSendOrder(BuildContext context) async {
     try {
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System'; // Fallback if name not found
+
       // Skip inventory validation for stock-in orders
       if (widget.orderType != 'in') {
         // First, validate that all products have sufficient quantity in stock
@@ -324,7 +356,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
               'total_cost': priceData['subtotal'],
               'total_balance': priceData['total_balance'],
               'discount_value': discountValue,
-              'last_action_by': 'System', // You should pass the actual user
+              'last_action_by': accountantName,
               'last_action_time': DateTime.now().toIso8601String(),
             })
             .eq('customer_order_id', widget.orderId!);
@@ -340,7 +372,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                 .update({
                   'quantity': newQty,
                   'total_price': productTotals[productId],
-                  'last_action_by': 'System', // You should pass the actual user
+                  'last_action_by': accountantName,
                   'last_action_time': DateTime.now().toIso8601String(),
                 })
                 .eq('customer_order_id', widget.orderId!)
@@ -369,7 +401,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
             .from('customer_order')
             .update({
               'order_status': 'Pinned',
-              'last_action_by': 'System', // You should pass the actual user
+              'last_action_by': accountantName,
               'last_action_time': DateTime.now().toIso8601String(),
             })
             .eq('customer_order_id', widget.orderId!);
