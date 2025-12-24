@@ -43,10 +43,12 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _photo = image;
-        _loading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _photo = image;
+          _loading = true;
+        });
+      }
 
       // Upload image to Supabase and update database
       await _uploadProfileImage(image);
@@ -61,7 +63,9 @@ class _AccountPageState extends State<AccountPage> {
       final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
       if (userId == null || userRole == null) {
-        setState(() => _loading = false);
+        if (mounted) {
+          setState(() => _loading = false);
+        }
         return;
       }
 
@@ -121,17 +125,21 @@ class _AccountPageState extends State<AccountPage> {
 
         // Cache locally so we don't refetch next time
         await prefs.setString('profile_image_url', imageUrl);
-        setState(() {
-          _profileImageUrl = imageUrl;
-          _loading = false;
-          _profileCached = true;
-        });
+        if (mounted) {
+          setState(() {
+            _profileImageUrl = imageUrl;
+            _loading = false;
+            _profileCached = true;
+          });
+        }
       } else {
-        setState(() => _loading = false);
+        if (mounted) {
+          setState(() => _loading = false);
+        }
       }
     } catch (e) {
-      setState(() => _loading = false);
       if (mounted) {
+        setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to upload image: $e'),
@@ -145,7 +153,37 @@ class _AccountPageState extends State<AccountPage> {
   @override
   void initState() {
     super.initState();
+    _loadCachedProfileData();
     _loadProfile();
+  }
+
+  Future<void> _loadCachedProfileData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? cachedName = prefs.getString('cached_user_name');
+      final String? cachedRole = prefs.getString('cached_user_role');
+      final String? cachedAddress = prefs.getString('cached_user_address');
+      final String? cachedMobile = prefs.getString('cached_user_mobile');
+      final String? cachedTelephone = prefs.getString('cached_user_telephone');
+      final String? cachedImage = prefs.getString('cached_user_image');
+
+      if (cachedName != null) {
+        if (mounted) {
+          setState(() {
+            _name = cachedName;
+            _role = cachedRole;
+            _address = cachedAddress;
+            _mobile = cachedMobile;
+            _telephone = cachedTelephone;
+            _profileImageUrl = cachedImage;
+            _profileCached = true;
+            _loading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading cached profile: $e');
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -160,13 +198,15 @@ class _AccountPageState extends State<AccountPage> {
       final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
       // Store role for conditional nav bar rendering
-      setState(() {
-        _userRole = userRole;
-        if (cachedImage != null && cachedImage.isNotEmpty) {
-          _profileImageUrl = cachedImage;
-          _profileCached = true;
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _userRole = userRole;
+          if (cachedImage != null && cachedImage.isNotEmpty) {
+            _profileImageUrl = cachedImage;
+            _profileCached = true;
+          }
+        });
+      }
 
       // Attempt based on stored role; fallback to delivery_driver
       if (userId != null) {
@@ -210,18 +250,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Delivery Driver';
-        _address = profile['address'] as String?;
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['delivery_driver_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : account?['profile_image'] as String?;
-        _imageReady = false;
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Delivery Driver';
+          _address = profile['address'] as String?;
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['delivery_driver_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : account?['profile_image'] as String?;
+          _imageReady = false;
+        });
+      }
       await _precacheProfileImage();
     }
   }
@@ -241,18 +283,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Supplier';
-        _address = profile['address'] as String?;
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['supplier_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : userAccount?['profile_image'] as String?;
-        // debugPrint('Failed loading profile: $e');
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Supplier';
+          _address = profile['address'] as String?;
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['supplier_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : userAccount?['profile_image'] as String?;
+          // debugPrint('Failed loading profile: $e');
+        });
+      }
       await _precacheProfileImage();
     }
   }
@@ -272,18 +316,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Storage Staff';
-        _address = profile['address'] as String?;
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['storage_staff_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : userAccount?['profile_image'] as String?;
-        _imageReady = false;
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Storage Staff';
+          _address = profile['address'] as String?;
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['storage_staff_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : userAccount?['profile_image'] as String?;
+          _imageReady = false;
+        });
+      }
       await _precacheProfileImage();
     }
   }
@@ -303,18 +349,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Sales Representative';
-        _address = profile['email'] as String?; // show email in address field
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['sales_rep_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : userAccount?['profile_image'] as String?;
-        _imageReady = false;
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Sales Representative';
+          _address = profile['email'] as String?; // show email in address field
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['sales_rep_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : userAccount?['profile_image'] as String?;
+          _imageReady = false;
+        });
+      }
       await _precacheProfileImage();
     }
   }
@@ -336,18 +384,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Storage Manager';
-        _address = profile['address'] as String?;
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['storage_manager_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : userAccount?['profile_image'] as String?;
-        _imageReady = false;
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Storage Manager';
+          _address = profile['address'] as String?;
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['storage_manager_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : userAccount?['profile_image'] as String?;
+          _imageReady = false;
+        });
+      }
       await _precacheProfileImage();
     }
   }
@@ -367,18 +417,20 @@ class _AccountPageState extends State<AccountPage> {
         .maybeSingle();
 
     if (profile != null) {
-      setState(() {
-        _name = profile['name'] as String?;
-        _role = 'Customer';
-        _address = profile['address'] as String?;
-        _mobile = profile['mobile_number']?.toString();
-        _telephone = profile['telephone_number']?.toString();
-        _idLabel = profile['customer_id']?.toString();
-        _profileImageUrl = _profileCached
-            ? _profileImageUrl
-            : userAccount?['profile_image'] as String?;
-        _imageReady = false;
-      });
+      if (mounted) {
+        setState(() {
+          _name = profile['name'] as String?;
+          _role = 'Customer';
+          _address = profile['address'] as String?;
+          _mobile = profile['mobile_number']?.toString();
+          _telephone = profile['telephone_number']?.toString();
+          _idLabel = profile['customer_id']?.toString();
+          _profileImageUrl = _profileCached
+              ? _profileImageUrl
+              : userAccount?['profile_image'] as String?;
+          _imageReady = false;
+        });
+      }
       await _precacheProfileImage();
     }
   }

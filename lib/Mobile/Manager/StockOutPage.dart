@@ -66,8 +66,15 @@ class _StockOutPageState extends State<StockOutPage> {
     _fetchDeliveryDrivers();
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchPendingOrders() async {
     try {
+      if (!mounted) return;
       setState(() => _loading = true);
       final response = await Supabase.instance.client
           .from('customer_order')
@@ -85,13 +92,16 @@ class _StockOutPageState extends State<StockOutPage> {
         );
       }).toList();
 
+      if (!mounted) return;
       setState(() {
         _pendingOrders = orders;
         _loading = false;
       });
     } catch (e) {
       debugPrint('Error fetching pending orders: $e');
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -113,9 +123,11 @@ class _StockOutPageState extends State<StockOutPage> {
         );
       }).toList();
 
-      setState(() {
-        _preparingOrders = orders;
-      });
+      if (mounted) {
+        setState(() {
+          _preparingOrders = orders;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching preparing orders: $e');
     }
@@ -139,9 +151,11 @@ class _StockOutPageState extends State<StockOutPage> {
         );
       }).toList();
 
-      setState(() {
-        _preparedOrders = orders;
-      });
+      if (mounted) {
+        setState(() {
+          _preparedOrders = orders;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching prepared orders: $e');
     }
@@ -352,9 +366,11 @@ class _StockOutPageState extends State<StockOutPage> {
         );
       }
 
-      setState(() {
-        _drivers = drivers;
-      });
+      if (mounted) {
+        setState(() {
+          _drivers = drivers;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching delivery drivers: $e');
     }

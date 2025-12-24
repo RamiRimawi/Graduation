@@ -34,47 +34,65 @@ class _HomeStaffState extends State<HomeStaff> {
         return;
       }
 
-      // Fetch orders prepared by this storage staff
-        final List<dynamic> orders = await Supabase.instance.client
-          .from('customer_order')
-          .select('customer_order_id, customer:customer_id(name)')
-          .eq('prepared_by_id', staffId)
-          .eq('order_status', 'Preparing')
+      // Fetch customer_order_inventory items assigned to this staff
+      final List<dynamic> inventoryItems = await Supabase.instance.client
+          .from('customer_order_inventory')
+          .select('customer_order_id, product_id')
+          .eq('prepared_by', staffId)
           .order('customer_order_id');
 
-      // Collect order ids for counting products
-      final orderIds = orders
-          .map<int?>((o) => o['customer_order_id'] as int?)
-          .whereType<int>()
-          .toList();
+      if (inventoryItems.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
 
-      Map<int, int> productCounts = {};
-      if (orderIds.isNotEmpty) {
-        final List<dynamic> desc = await Supabase.instance.client
-            .from('customer_order_description')
-            .select('customer_order_id, quantity')
-            // Use generic filter to avoid in_ version issues
-            .filter('customer_order_id', 'in', orderIds);
-
-        for (final row in desc) {
-          final id = row['customer_order_id'] as int?;
-          if (id == null) continue;
-          productCounts[id] = (productCounts[id] ?? 0) + 1;
+      // Get unique order IDs
+      final Set<int> orderIds = {};
+      for (final item in inventoryItems) {
+        final orderId = item['customer_order_id'] as int?;
+        if (orderId != null) {
+          orderIds.add(orderId);
         }
       }
 
-      final List<Map<String, dynamic>> mapped = orders.map<Map<String, dynamic>>((o) {
-        final id = o['customer_order_id'] as int? ?? 0;
-        final customer = (o['customer'] as Map?)?['name']?.toString() ?? 'Unknown';
-        final products = productCounts[id] ?? 0;
-        return {'id': id, 'name': customer, 'products': products};
-      }).toList();
+      if (orderIds.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
 
-      setState(() {
-        customers = mapped;
-        _loading = false;
-      });
-    } catch (_) {
+      // Fetch customer names for these orders
+      final List<dynamic> orders = await Supabase.instance.client
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .filter('customer_order_id', 'in', orderIds.toList())
+          .order('customer_order_id');
+
+      // Count products assigned to this staff per order
+      Map<int, int> productCounts = {};
+      for (final item in inventoryItems) {
+        final id = item['customer_order_id'] as int?;
+        if (id == null) continue;
+        productCounts[id] = (productCounts[id] ?? 0) + 1;
+      }
+
+      final List<Map<String, dynamic>> mapped = orders
+          .map<Map<String, dynamic>>((o) {
+            final id = o['customer_order_id'] as int? ?? 0;
+            final customer =
+                (o['customer'] as Map?)?['name']?.toString() ?? 'Unknown';
+            final products = productCounts[id] ?? 0;
+            return {'id': id, 'name': customer, 'products': products};
+          })
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          customers = mapped;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching customers: $e');
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -99,152 +117,153 @@ class _HomeStaffState extends State<HomeStaff> {
             ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFFFFE14D)),
               )
-              : customers.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No orders Preparing',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  )
+            : customers.isEmpty
+            ? const Center(
+                child: Text(
+                  'No orders Preparing',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
             : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
                 itemCount: customers.length,
                 itemBuilder: (context, index) {
                   final customer = customers[index];
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CustomerDetail(
-                        customerName: customer['name'],
-                        customerId: customer['id'],
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2D2D2D),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.25),
-                        blurRadius: 1,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // TITLE ROW
-                        Row(
-                          children: [
-                            Text(
-                              'ID #',
-                              style: TextStyle(
-                                color: const Color(0xFFB7A447),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CustomerDetail(
+                              customerName: customer['name'],
+                              customerId: customer['id'],
                             ),
-                            const SizedBox(width: 34),
-                            Text(
-                              'Customer Name',
-                              style: TextStyle(
-                                color: const Color(0xFFB7A447),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2D2D2D),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 1,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 2),
-
-                        // MAIN CONTENT
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              '${customer['id']}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 23,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 28),
-
-                            // NAME
-                            Expanded(
-                              child: Text(
-                                customer['name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 16),
-
-                            // PRODUCT BOX — bigger
-                            Container(
-                              width: 85,
-                              height: 89,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF262626),
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // TITLE ROW
+                              Row(
                                 children: [
                                   Text(
-                                    '${customer['products']}',
-                                    style: const TextStyle(
-                                      color: Color(0xFFFFEFFF),
-                                      fontSize: 25,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    'Product',
+                                    'ID #',
                                     style: TextStyle(
                                       color: const Color(0xFFB7A447),
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 34),
+                                  Text(
+                                    'Customer Name',
+                                    style: TextStyle(
+                                      color: const Color(0xFFB7A447),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+
+                              const SizedBox(height: 2),
+
+                              // MAIN CONTENT
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '${customer['id']}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 23,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 28),
+
+                                  // NAME
+                                  Expanded(
+                                    child: Text(
+                                      customer['name'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 16),
+
+                                  // PRODUCT BOX — bigger
+                                  Container(
+                                    width: 85,
+                                    height: 89,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF262626),
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '${customer['products']}',
+                                          style: const TextStyle(
+                                            color: Color(0xFFFFEFFF),
+                                            fontSize: 25,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          'Product',
+                                          style: TextStyle(
+                                            color: const Color(0xFFB7A447),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-            );
-          },
-        ),
       ),
 
       bottomNavigationBar: BottomNavBar(

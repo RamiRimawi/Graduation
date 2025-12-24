@@ -63,11 +63,16 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
           .select('customer_order_id')
           .eq('order_status', 'Pinned');
 
-      setState(() {
-        pinnedOrdersCount = response.length;
-      });
+      if (mounted) {
+        setState(() {
+          pinnedOrdersCount = response.length;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching pinned orders count: $e');
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 

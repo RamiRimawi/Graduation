@@ -68,6 +68,143 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  Future<void> _cacheUserAccountData(String userType, String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final int? id = int.tryParse(userId);
+
+      if (id == null) return;
+
+      // Fetch data based on user type
+      Map<String, dynamic>? profile;
+      Map<String, dynamic>? userAccount;
+      String? role;
+
+      switch (userType) {
+        case 'supplier':
+          profile = await supabase
+              .from('supplier')
+              .select('supplier_id,name,mobile_number,telephone_number,address')
+              .eq('supplier_id', id)
+              .maybeSingle();
+
+          userAccount = await supabase
+              .from('user_account_supplier')
+              .select('profile_image')
+              .eq('supplier_id', id)
+              .maybeSingle();
+
+          role = 'Supplier';
+          break;
+
+        case 'delivery':
+          profile = await supabase
+              .from('delivery_driver')
+              .select(
+                'delivery_driver_id,name,mobile_number,telephone_number,address',
+              )
+              .eq('delivery_driver_id', id)
+              .maybeSingle();
+
+          userAccount = await supabase
+              .from('user_account_delivery_driver')
+              .select('profile_image')
+              .eq('delivery_driver_id', id)
+              .maybeSingle();
+
+          role = 'Delivery Driver';
+          break;
+
+        case 'storage_staff':
+          profile = await supabase
+              .from('storage_staff')
+              .select(
+                'storage_staff_id,name,mobile_number,telephone_number,address',
+              )
+              .eq('storage_staff_id', id)
+              .maybeSingle();
+
+          userAccount = await supabase
+              .from('user_account_storage_staff')
+              .select('profile_image')
+              .eq('storage_staff_id', id)
+              .maybeSingle();
+
+          role = 'Storage Staff';
+          break;
+
+        case 'manager':
+          profile = await supabase
+              .from('storage_manager')
+              .select(
+                'storage_manager_id,name,mobile_number,telephone_number,address',
+              )
+              .eq('storage_manager_id', id)
+              .maybeSingle();
+
+          userAccount = await supabase
+              .from('user_account_storage_manager')
+              .select('profile_image')
+              .eq('storage_manager_id', id)
+              .maybeSingle();
+
+          role = 'Storage Manager';
+          break;
+
+        case 'customer':
+          profile = await supabase
+              .from('customer')
+              .select('customer_id,name,mobile_number,telephone_number,address')
+              .eq('customer_id', id)
+              .maybeSingle();
+
+          userAccount = await supabase
+              .from('user_account_customer')
+              .select('profile_image')
+              .eq('customer_id', id)
+              .maybeSingle();
+
+          role = 'Customer';
+          break;
+      }
+
+      // Cache the data in SharedPreferences
+      if (profile != null) {
+        await prefs.setString(
+          'cached_user_name',
+          profile['name']?.toString() ?? 'Unknown',
+        );
+        await prefs.setString('cached_user_role', role ?? userType);
+        await prefs.setString(
+          'cached_user_address',
+          profile['address']?.toString() ?? '',
+        );
+        await prefs.setString(
+          'cached_user_mobile',
+          profile['mobile_number']?.toString() ?? '',
+        );
+        await prefs.setString(
+          'cached_user_telephone',
+          profile['telephone_number']?.toString() ?? '',
+        );
+        await prefs.setString(
+          'current_user_name',
+          profile['name']?.toString() ?? 'Unknown',
+        );
+
+        if (userAccount != null && userAccount['profile_image'] != null) {
+          await prefs.setString(
+            'cached_user_image',
+            userAccount['profile_image'].toString(),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error caching user data: $e');
+      // Continue with login even if caching fails
+    }
+  }
+
   Future<void> _checkRememberedUser() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUserId = prefs.getString('userId');
@@ -187,6 +324,9 @@ class _LoginPageState extends State<LoginPage> {
         await prefs.setString('password', password);
         await prefs.setBool('rememberMe', true);
       }
+
+      // Cache all user account data for immediate display in account page
+      await _cacheUserAccountData(userType, userId);
 
       // Navigate to appropriate home page
       if (mounted) {
