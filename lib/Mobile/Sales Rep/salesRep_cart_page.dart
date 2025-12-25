@@ -3,18 +3,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
-import 'customer_home_page.dart';
-import 'customer_archive_page.dart';
+import 'salesRep_home_page.dart';
+import 'salesRep_archive_page.dart';
+import 'salesRep_customers_page.dart';
 import '../account_page.dart';
 
-class CustomerCartPage extends StatefulWidget {
-  const CustomerCartPage({Key? key}) : super(key: key);
+class SalesRepCartPage extends StatefulWidget {
+  const SalesRepCartPage({Key? key}) : super(key: key);
 
   @override
-  State<CustomerCartPage> createState() => _CustomerCartPageState();
+  State<SalesRepCartPage> createState() => _SalesRepCartPageState();
 }
 
-class _CustomerCartPageState extends State<CustomerCartPage> {
+class _SalesRepCartPageState extends State<SalesRepCartPage> {
   List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
   int? _orderId; // current cart order id
@@ -29,26 +30,31 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     return _items.fold(0.0, (s, i) => s + (i['price'] as double) * (i['qty'] as int));
   }
 
-  // ===== navigation handler for bottom bar (Customer layout indices) =====
+  // ===== navigation handler for bottom bar (SalesRep layout indices) =====
   void _onNavTap(int i) {
     setState(() => _currentIndex = i);
 
     if (i == 0) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+        MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
       );
     } else if (i == 1) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
+        MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
       );
     } else if (i == 2) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
+        MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
       );
     } else if (i == 3) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SalesRepCustomersPage()),
+      );
+    } else if (i == 4) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const AccountPage()),
@@ -72,9 +78,9 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userIdStr = prefs.getString('current_user_id');
-      final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
-      if (customerId == null) {
+      if (salesRepId == null) {
         setState(() => _isLoading = false);
         return;
       }
@@ -177,10 +183,6 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
   }
 
   void _sendOrder() {
-    _submitOrder();
-  }
-
-  Future<void> _submitOrder() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No items to send')),
@@ -188,26 +190,31 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       return;
     }
 
+    _openCustomerPicker();
+  }
+
+  Future<void> _submitOrder(int customerId) async {
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final userIdStr = prefs.getString('current_user_id');
-      final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
-      if (customerId == null) {
+      final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      if (salesRepId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No customer id found')),
+          const SnackBar(content: Text('No sales rep id found')),
         );
         return;
       }
 
-      // Fetch customer name for auditing fields
-      final customerRow = await supabase
-          .from('customer')
+      // Fetch sales rep name for auditing fields
+      final salesRepRow = await supabase
+          .from('sales_representative')
           .select('name')
-          .eq('customer_id', customerId)
+          .eq('sales_rep_id', salesRepId)
           .maybeSingle();
 
-      final actorName = (customerRow?['name'] as String?)?.trim();
-      final actionBy = (actorName != null && actorName.isNotEmpty) ? actorName : 'customer_$customerId';
+      final actorName = (salesRepRow?['name'] as String?)?.trim();
+      final actionBy = (actorName != null && actorName.isNotEmpty) ? actorName : 'salesrep_$salesRepId';
       final actionTime = DateTime.now().toIso8601String();
 
       // Create order and insert items
@@ -216,6 +223,7 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
           .from('customer_order')
           .insert({
             'customer_id': customerId,
+            'sales_rep_id': salesRepId,
             'order_status': 'Received',
             'order_date': actionTime,
             'total_cost': totalCost,
@@ -250,7 +258,7 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order sent and saved to database')),
+          const SnackBar(content: Text('Order ent and Saved successfully') ),
         );
         await _loadCart();
       }
@@ -258,6 +266,116 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to send order: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openCustomerPicker() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userIdStr = prefs.getString('current_user_id');
+      final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      if (salesRepId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No sales rep id found')),
+        );
+        return;
+      }
+
+      final rows = await supabase
+          .from('customer')
+          .select('customer_id, name')
+          .eq('sales_rep_id', salesRepId)
+          .order('name');
+
+      final customers = (rows as List)
+          .map<Map<String, dynamic>>((e) => {
+                'id': e['customer_id'] as int?,
+                'name': (e['name'] as String?) ?? '—',
+              })
+          .where((e) => e['id'] != null)
+          .toList();
+
+      int? selectedId = customers.isNotEmpty ? customers.first['id'] as int? : null;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: _card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text(
+              'Select Customer',
+              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: DropdownButtonFormField<int>(
+                value: selectedId,
+                dropdownColor: _card,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF262626),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: _accent, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: _accent, width: 2),
+                  ),
+                ),
+                items: customers
+                    .map((c) => DropdownMenuItem<int>(
+                          value: c['id'] as int,
+                          child: Text(c['name'] as String),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  selectedId = v;
+                },
+              ),
+            ),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accent,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    if (selectedId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a customer')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context);
+                    _submitOrder(selectedId!);
+                  },
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 2),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error opening customer picker: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load customers: $e')),
         );
       }
     }

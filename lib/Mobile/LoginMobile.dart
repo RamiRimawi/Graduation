@@ -6,6 +6,7 @@ import 'DeliveryDriver/deleviry_home.dart';
 import 'StroageStaff/staff_home.dart';
 import 'Manager/ManagerShell.dart';
 import 'Customer/customer_home_page.dart';
+import 'Sales Rep/salesRep_home_page.dart';
 
 class DolphinApp extends StatelessWidget {
   const DolphinApp({super.key});
@@ -292,6 +293,20 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
 
+      // Check Sales Rep
+      if (userType == null) {
+        final salesRepResult = await supabase
+            .from('user_account_sales_rep')
+            .select('sales_rep_id, password')
+            .eq('sales_rep_id', int.tryParse(userId) ?? 0)
+            .maybeSingle();
+
+        if (salesRepResult != null && salesRepResult['password'] == password) {
+          userType = 'sales_rep';
+          userData = salesRepResult;
+        }
+      }
+
       // Check Customer (NEW)
       if (userType == null) {
         final customerResult = await supabase
@@ -343,6 +358,9 @@ class _LoginPageState extends State<LoginPage> {
             break;
           case 'manager':
             homePage = const ManagerShell();
+            break;
+          case 'sales_rep':
+            homePage = const SalesRepHomePage();
             break;
           case 'customer':
             homePage = const CustomerHomePage();

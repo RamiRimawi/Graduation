@@ -1,0 +1,393 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../supabase_config.dart';
+import '../bottom_navbar.dart';
+import 'salesRep_home_page.dart';
+import 'salesRep_cart_page.dart';
+import 'salesRep_archive_page.dart';
+import '../account_page.dart';
+
+class SalesRepCustomersPage extends StatefulWidget {
+  const SalesRepCustomersPage({Key? key}) : super(key: key);
+
+  @override
+  State<SalesRepCustomersPage> createState() => _SalesRepCustomersPageState();
+}
+
+class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _customers = [];
+  List<Map<String, dynamic>> _filteredCustomers = [];
+  bool _isLoading = true;
+  int _currentIndex = 3; // Customers tab index
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_handleSearch);
+    _loadCustomers();
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_handleSearch);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCustomers() async {
+    setState(() {
+      _isLoading = true;
+      _customers = [];
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userIdStr = prefs.getString('current_user_id');
+      final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+      if (salesRepId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await supabase
+          .from('customer')
+          .select('customer_id, name, latitude_location, longitude_location, address, mobile_number, telephone_number')
+          .eq('sales_rep_id', salesRepId)
+          .order('name');
+
+      final customers = (response as List<dynamic>)
+          .map<Map<String, dynamic>>((e) => {
+                'id': e['customer_id'] as int?,
+                'name': (e['name'] as String?) ?? 'Unknown',
+                'latitude': e['latitude_location'],
+                'longitude': e['longitude_location'],
+            'address': e['address'],
+            'mobile': e['mobile_number'],
+            'telephone': e['telephone_number'],
+              })
+          .toList();
+
+      // Fetch profile images from user_account_customer
+      final accountIds = customers.where((c) => c['id'] != null).map((c) => c['id']).toList();
+      Map<int, String?> imageMap = {};
+
+      if (accountIds.isNotEmpty) {
+        final accounts = await supabase
+            .from('user_account_customer')
+            .select('customer_id, profile_image')
+            .filter('customer_id', 'in', accountIds);
+
+        for (final acc in accounts) {
+          final custId = acc['customer_id'] as int?;
+          final img = acc['profile_image'] as String?;
+          if (custId != null) {
+            imageMap[custId] = img;
+          }
+        }
+      }
+
+      // Merge images into customer data
+      for (var customer in customers) {
+        if (customer['id'] != null) {
+          customer['image'] = imageMap[customer['id'] as int];
+        }
+      }
+
+      setState(() {
+        _customers = customers;
+        _filteredCustomers = _applySearch(_searchController.text, customers);
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading customers: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _handleSearch() {
+    setState(() {
+      _filteredCustomers = _applySearch(_searchController.text, _customers);
+    });
+  }
+
+  List<Map<String, dynamic>> _applySearch(String query, List<Map<String, dynamic>> source) {
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty) return List<Map<String, dynamic>>.from(source);
+
+    return source.where((c) {
+      final name = (c['name'] ?? '').toString().toLowerCase();
+      return name.contains(trimmed);
+    }).toList();
+  }
+
+  void _onNavTap(int i) {
+    setState(() => _currentIndex = i);
+
+    if (i == 0) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
+      );
+    } else if (i == 1) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
+      );
+    } else if (i == 2) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
+      );
+    } else if (i == 3) {
+      // stay on Customers page
+    } else if (i == 4) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AccountPage()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF202020),
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFB7A447),
+                ),
+              )
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: _buildSearchField(),
+                  ),
+                  Expanded(
+                    child: _filteredCustomers.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No customers found',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                              childAspectRatio: 0.85,
+                            ),
+                            itemCount: _filteredCustomers.length,
+                            itemBuilder: (context, index) {
+                              final customer = _filteredCustomers[index];
+                              return _buildCustomerCard(customer);
+                            },
+                          ),
+                  ),
+                ],
+              ),
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: _onNavTap,
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: Color(0xFFB7A447), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: const InputDecoration(
+                hintText: 'Search by customer name',
+                hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomerCard(Map<String, dynamic> customer) {
+    final imageUrl = (customer['image'] as String?)?.trim();
+    final name = customer['name'] as String? ?? 'Unknown';
+
+    return GestureDetector(
+      onTap: () => _showCustomerSheet(customer),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 1,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF262626),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                ),
+                child: _buildProfileImage(imageUrl),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCustomerSheet(Map<String, dynamic> customer) {
+    final imageUrl = (customer['image'] as String?)?.trim();
+    final name = (customer['name'] as String?) ?? 'Unknown';
+    final address = (customer['address'] as String?) ?? '—';
+    final mobile = (customer['mobile'] as String?) ?? '—';
+    final telephone = (customer['telephone'] as String?) ?? '—';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2D2D2D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: _buildProfileImage(imageUrl)),
+              const SizedBox(height: 16),
+              _infoRow('Name', name),
+              const SizedBox(height: 8),
+              _infoRow('Address', address),
+              const SizedBox(height: 8),
+              _infoRow('Mobile Number', mobile),
+              const SizedBox(height: 8),
+              _infoRow('Telephone Number', telephone),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileImage(String? imageUrl) {
+    final placeholder = Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF262626),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(16),
+        ),
+      ),
+      child: const Icon(
+        Icons.person,
+        color: Color(0xFFB7A447),
+        size: 64,
+      ),
+    );
+
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return placeholder;
+    }
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(16),
+      ),
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            color: const Color(0xFF262626),
+            child: const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFB7A447),
+                strokeWidth: 2,
+              ),
+            )
+          );
+        },
+      ),
+    );
+  }
+}
