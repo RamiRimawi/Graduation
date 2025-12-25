@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'manager_theme.dart';
 import 'CreateStockInOrderPage.dart';
+import 'StockInOrderDetailsPage.dart';
 
 class StockInPage extends StatefulWidget {
   const StockInPage({super.key});
@@ -12,33 +14,99 @@ class StockInPage extends StatefulWidget {
 class _StockInPageState extends State<StockInPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  final List<Map<String, dynamic>> recommendedOrders = [
-    {"id": 26, "supplier": "Ahmad Nizar", "inventory": 1},
-    {"id": 27, "supplier": "Saed Rimawi", "inventory": 1},
-    {"id": 30, "supplier": "Akef Al Asmar", "inventory": 2},
-    {"id": 28, "supplier": "Nizar Fares", "inventory": 2},
-    {"id": 20, "supplier": "Eyas Barghouthi", "inventory": 1},
-  ];
-
+  List<Map<String, dynamic>> allOrders = [];
   List<Map<String, dynamic>> filteredOrders = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    filteredOrders = List.from(recommendedOrders);
+    _fetchOrders();
 
     _searchController.addListener(() {
       final query = _searchController.text.toLowerCase();
 
       setState(() {
-        filteredOrders = recommendedOrders.where((order) {
-          final supplier = order["supplier"].toLowerCase();
-
-          // 🔍 يبدأ بالحرف المكتوب (بحث أدق)
+        filteredOrders = allOrders.where((order) {
+          final supplier = order["supplier"].toString().toLowerCase();
+          // Search by supplier name starting with query
           return supplier.startsWith(query);
         }).toList();
       });
     });
+  }
+
+  Future<void> _fetchOrders() async {
+    try {
+      setState(() => _loading = true);
+
+      // Fetch supplier orders with status 'Accepted' and join with supplier and inventory
+      final response = await Supabase.instance.client
+          .from('supplier_order')
+          .select('''
+            order_id,
+            supplier:supplier_id(name),
+            supplier_order_inventory(inventory:inventory_id(inventory_name))
+          ''')
+          .eq('order_status', 'Accepted')
+          .order('order_id', ascending: false);
+
+      final List<Map<String, dynamic>> orders = [];
+
+      for (final order in response) {
+        final orderId = order['order_id'] as int?;
+        final supplierData = order['supplier'] as Map?;
+        final supplierName = supplierData?['name'] as String? ?? 'Unknown';
+
+        // Get unique inventory names for this order
+        final inventoryList = order['supplier_order_inventory'] as List?;
+        final inventoryNames = <String>{};
+
+        if (inventoryList != null) {
+          for (final inv in inventoryList) {
+            final inventoryData = inv['inventory'] as Map?;
+            final invName = inventoryData?['inventory_name'] as String?;
+            if (invName != null && invName.isNotEmpty) {
+              inventoryNames.add(invName);
+            }
+          }
+        }
+
+        // Show inventory names or count if multiple
+        final inventoryDisplay = inventoryNames.isEmpty
+            ? '-'
+            : inventoryNames.length == 1
+            ? inventoryNames.first
+            : '${inventoryNames.length} Inventories';
+
+        if (orderId != null) {
+          orders.add({
+            'id': orderId,
+            'supplier': supplierName,
+            'inventory': inventoryDisplay,
+          });
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          allOrders = orders;
+          filteredOrders = orders;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching supplier orders: $e');
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -127,7 +195,7 @@ class _StockInPageState extends State<StockInPage> {
                   Expanded(
                     flex: 3,
                     child: Text(
-                      "Inventory #",
+                      "Inventory",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -144,67 +212,90 @@ class _StockInPageState extends State<StockInPage> {
 
               // ===================== ORDERS LIST =====================
               Expanded(
-                child: ListView.builder(
-                  itemCount: filteredOrders.length,
-                  itemBuilder: (_, i) {
-                    final o = filteredOrders[i];
+                child: _loading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: AppColors.gold),
+                      )
+                    : filteredOrders.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No accepted orders found',
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: filteredOrders.length,
+                        itemBuilder: (_, i) {
+                          final o = filteredOrders[i];
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Row(
-                        children: [
-                          // Order ID
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "${o["id"]}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StockInOrderDetailsPage(
+                                    orderId: o["id"] as int,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.card,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Row(
+                                children: [
+                                  // Order ID
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      "${o["id"]}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Supplier Name
+                                  Expanded(
+                                    flex: 5,
+                                    child: Text(
+                                      o["supplier"],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Inventory #
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      "${o["inventory"]}",
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-
-                          // Supplier Name
-                          Expanded(
-                            flex: 5,
-                            child: Text(
-                              o["supplier"],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-
-                          // Inventory #
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "${o["inventory"]}",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
 
               const SizedBox(height: 10),

@@ -102,6 +102,33 @@ class OrderService {
     required List<Map<String, dynamic>> splits,
   }) async {
     try {
+      // Get manager name and ID from SharedPreferences first (to use in inventory rows)
+      final prefs = await SharedPreferences.getInstance();
+      final managerIdStr = prefs.getString('current_user_id');
+      final int? managerId = managerIdStr != null
+          ? int.tryParse(managerIdStr)
+          : null;
+      String? managerName = prefs.getString('current_user_name');
+
+      // If name is not stored, try to get it using manager_id
+      if (managerName == null || managerName.isEmpty) {
+        if (managerId != null) {
+          try {
+            final managerResponse = await supabase
+                .from('storage_manager')
+                .select('name')
+                .eq('storage_manager_id', managerId)
+                .single();
+            managerName = managerResponse['name'] as String?;
+          } catch (e) {
+            print('Error fetching manager name: $e');
+            managerName = 'Manager';
+          }
+        }
+      }
+
+      final now = DateTime.now().toIso8601String();
+
       // Build rows for customer_order_inventory
       final inventoryRows = <Map<String, dynamic>>[];
 
@@ -124,6 +151,8 @@ class OrderService {
             'quantity': quantity,
             'prepared_by': staffId,
             'batch_id': batchId,
+            'last_action_by': managerName ?? 'Manager',
+            'last_action_time': now,
           });
         }
       }
@@ -131,33 +160,29 @@ class OrderService {
       // Insert all rows into customer_order_inventory
       await supabase.from('customer_order_inventory').insert(inventoryRows);
 
-      // Get manager name and ID from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final managerId = prefs.getInt('manager_id');
-      String? managerName = prefs.getString('manager_name');
+      // Update customer_order_description for all products in this order
+      final allProductIds = <int>{};
+      for (final split in splits) {
+        final items = split['items'] as Map<int, int>;
+        allProductIds.addAll(items.keys);
+      }
 
-      // If name is not stored, try to get it using manager_id
-      if (managerName == null || managerName.isEmpty) {
-        if (managerId != null) {
-          try {
-            final managerResponse = await supabase
-                .from('storage_manager')
-                .select('name')
-                .eq('storage_manager_id', managerId)
-                .single();
-            managerName = managerResponse['name'] as String?;
-          } catch (e) {
-            print('Error fetching manager name: $e');
-            managerName = 'Manager';
-          }
-        }
+      for (final productId in allProductIds) {
+        await supabase
+            .from('customer_order_description')
+            .update({
+              'last_action_by': managerName ?? 'Manager',
+              'last_action_time': now,
+            })
+            .eq('customer_order_id', orderId)
+            .eq('product_id', productId);
       }
 
       // Update order status, last action by, timestamp, and manager_by_id
       final Map<String, dynamic> updateData = {
         'order_status': 'Preparing',
         'last_action_by': managerName ?? 'Manager',
-        'last_action_time': DateTime.now().toIso8601String(),
+        'last_action_time': now,
       };
 
       // Add manager_by_id if manager ID is available
@@ -185,8 +210,11 @@ class OrderService {
     try {
       // Get manager name and ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final managerId = prefs.getInt('manager_id');
-      String? managerName = prefs.getString('manager_name');
+      final managerIdStr = prefs.getString('current_user_id');
+      final int? managerId = managerIdStr != null
+          ? int.tryParse(managerIdStr)
+          : null;
+      String? managerName = prefs.getString('current_user_name');
 
       if (managerName == null || managerName.isEmpty) {
         if (managerId != null) {
@@ -204,11 +232,15 @@ class OrderService {
         }
       }
 
+      final now = DateTime.now().toIso8601String();
+
       // Fetch all inventory items for this order to update quantities
       final inventoryItems = await supabase
           .from('customer_order_inventory')
           .select('product_id, batch_id, prepared_quantity')
           .eq('customer_order_id', orderId);
+
+      final productIds = <int>{};
 
       // Update batch and product quantities
       for (final item in inventoryItems) {
@@ -217,6 +249,8 @@ class OrderService {
         final preparedQty = item['prepared_quantity'] as int? ?? 0;
 
         if (preparedQty <= 0 || productId == null) continue;
+
+        productIds.add(productId);
 
         // Update batch quantity if batch_id exists
         if (batchId != null) {
@@ -255,6 +289,18 @@ class OrderService {
             .eq('product_id', productId);
       }
 
+      // Update customer_order_description for all products in this order
+      for (final productId in productIds) {
+        await supabase
+            .from('customer_order_description')
+            .update({
+              'last_action_by': managerName ?? 'Manager',
+              'last_action_time': now,
+            })
+            .eq('customer_order_id', orderId)
+            .eq('product_id', productId);
+      }
+
       // Update order status
       await supabase
           .from('customer_order')
@@ -262,7 +308,7 @@ class OrderService {
             'delivered_by_id': driverId,
             'order_status': 'Delivery',
             'last_action_by': managerName ?? 'Manager',
-            'last_action_time': DateTime.now().toIso8601String(),
+            'last_action_time': now,
           })
           .eq('customer_order_id', orderId);
 

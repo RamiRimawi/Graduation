@@ -138,6 +138,8 @@ CREATE TABLE public.customer_order_inventory (
   quantity integer,
   prepared_by integer,
   prepared_quantity integer,
+  last_action_by text,
+  last_action_time timestamp without time zone,
   CONSTRAINT customer_order_inventory_pkey PRIMARY KEY (customer_order_id, product_id, inventory_id),
   CONSTRAINT customer_order_inventory_customer_order_id_fkey FOREIGN KEY (customer_order_id) REFERENCES public.customer_order(customer_order_id),
   CONSTRAINT customer_order_inventory_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id),

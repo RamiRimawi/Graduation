@@ -200,6 +200,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
               'prepared_by': staffId,
               'batch_id': batchId,
               'prepared_quantity': qty,
+              'last_action_by': staffName ?? 'Unknown',
+              'last_action_time': now.toIso8601String(),
             })
             .eq('customer_order_id', widget.customerId)
             .eq('product_id', pid);
@@ -240,10 +242,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
       }
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeStaff()),
-        );
+        // Return true to signal successful completion
+        Navigator.pop(context, true);
       }
     } catch (e) {
       debugPrint('Error saving updates: $e');

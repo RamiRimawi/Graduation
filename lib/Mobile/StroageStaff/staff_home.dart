@@ -60,11 +60,12 @@ class _HomeStaffState extends State<HomeStaff> {
         return;
       }
 
-      // Fetch customer names for these orders
+      // Fetch customer names for these orders (only Preparing status)
       final List<dynamic> orders = await Supabase.instance.client
           .from('customer_order')
-          .select('customer_order_id, customer:customer_id(name)')
+          .select('customer_order_id, order_status, customer:customer_id(name)')
           .filter('customer_order_id', 'in', orderIds.toList())
+          .eq('order_status', 'Preparing')
           .order('customer_order_id');
 
       // Count products assigned to this staff per order
@@ -137,8 +138,8 @@ class _HomeStaffState extends State<HomeStaff> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => CustomerDetail(
@@ -147,6 +148,10 @@ class _HomeStaffState extends State<HomeStaff> {
                             ),
                           ),
                         );
+                        // Refresh the list when returning from detail page
+                        if (result == true && mounted) {
+                          _fetchCustomers();
+                        }
                       },
                       child: Container(
                         decoration: BoxDecoration(

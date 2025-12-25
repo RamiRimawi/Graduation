@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'manager_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../supabase_config.dart';
 
 // ======================= MODEL =======================
 class Product {
@@ -21,62 +23,162 @@ class CreateStockInOrderPage extends StatefulWidget {
 
 class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
   String? selectedSupplier;
+  int? selectedSupplierId;
   String dialogSearch = "";
+  String supplierSearch = "";
+  List<Map<String, dynamic>> suppliers = [];
+  bool isLoadingSuppliers = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSuppliers();
+  }
+
+  Future<void> _fetchSuppliers() async {
+    setState(() => isLoadingSuppliers = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('supplier')
+          .select('supplier_id, name')
+          .order('name');
+      setState(() {
+        suppliers = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading suppliers: $e')));
+      }
+    } finally {
+      setState(() => isLoadingSuppliers = false);
+    }
+  }
 
   // المنتجات المختارة في الصفحة الرئيسية
-  List<Map<String, dynamic>> selectedProducts = [
-    {"name": "Hand Shower", "brand": "GROHE", "qty": 1, "unit": "cm"},
-    {"name": "Freestanding Bathtub", "brand": "Royal", "qty": 1, "unit": "cm"},
-    {"name": "Wall-Hung Toilet", "brand": "GROHE", "qty": 1, "unit": "cm"},
-    {"name": "Kitchen Sink", "brand": "Royal", "qty": 1, "unit": "cm"},
-  ];
+  List<Map<String, dynamic>> selectedProducts = [];
 
   // جميع المنتجات الخاصة بالمورد
-  final List<Product> supplierProducts = [
-    Product("Hand Shower", "GROHE", 33, "cm"),
-    Product("Freestanding Bathtub", "Royal", 12, "pcs"),
-    Product("Wall-Hung Toilet", "GROHE", 8, "cm"),
-    Product("Kitchen Sink", "Royal", 55, "cm"),
-    Product("Towel Ring", "Royal", 27, "cm"),
-  ];
+  List<Product> supplierProducts = [];
+  bool isLoadingProducts = false;
 
   List<Product> selectedInDialog = [];
+
+  Future<void> _loadProductsForSupplier(int supplierId) async {
+    setState(() => isLoadingProducts = true);
+    try {
+      // تحميل المنتجات الخاصة بالـ supplier عبر جدول batch
+      final response = await supabase
+          .from('batch')
+          .select('''
+            product:product_id (
+              product_id,
+              name,
+              brand:brand_id(name),
+              unit:unit_id(unit_name),
+              wholesale_price,
+              total_quantity,
+              is_active
+            )
+          ''')
+          .eq('supplier_id', supplierId);
+
+      // استخراج المنتجات الفريدة (قد يكون نفس المنتج في أكثر من batch)
+      final Map<int, Product> uniqueProducts = {};
+
+      for (var item in (response as List)) {
+        if (item['product'] != null) {
+          final product = item['product'] as Map<String, dynamic>;
+          if (product['is_active'] == true) {
+            final productId = product['product_id'] as int;
+            if (!uniqueProducts.containsKey(productId)) {
+              uniqueProducts[productId] = Product(
+                product['name'] ?? 'Unknown',
+                product['brand']?['name'] ?? '-',
+                product['total_quantity'] ?? 0,
+                product['unit']?['unit_name'] ?? 'pcs',
+              );
+            }
+          }
+        }
+      }
+
+      setState(() {
+        supplierProducts = uniqueProducts.values.toList();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading products: $e')));
+      }
+      print('Error loading products for supplier: $e');
+    } finally {
+      setState(() => isLoadingProducts = false);
+    }
+  }
 
   // فتح البوب أب الخاص بإضافة المنتجات
   void _openAddProductsDialog() {
     selectedInDialog = [];
     dialogSearch = "";
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) {
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
         return StatefulBuilder(
-          builder: (context, setStateDialog) {
+          builder: (context, setStateSheet) {
             final filtered = supplierProducts.where((p) {
               return p.name.toLowerCase().contains(dialogSearch.toLowerCase());
             }).toList();
 
-            return AlertDialog(
-              backgroundColor: AppColors.card,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Text(
-                "Select Products",
-                style: TextStyle(
-                  color: AppColors.gold,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: BoxDecoration(
+                color: AppColors.bgDark,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
                 ),
               ),
+              child: Column(
+                children: [
+                  // ===== HEADER =====
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Select Products",
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
 
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 420,
-                child: Column(
-                  children: [
-                    // ===== SEARCH FIELD =====
-                    Container(
+                  // ===== SEARCH FIELD =====
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
@@ -88,132 +190,215 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                       child: TextField(
                         style: const TextStyle(color: Colors.white),
                         onChanged: (v) {
-                          setStateDialog(() => dialogSearch = v);
+                          setStateSheet(() => dialogSearch = v);
                         },
                         decoration: const InputDecoration(
                           hintText: "Search product...",
                           hintStyle: TextStyle(color: Colors.white54),
                           border: InputBorder.none,
+                          prefixIcon: Icon(Icons.search, color: AppColors.gold),
                         ),
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 12),
-
-                    // ===== PRODUCT LIST =====
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) {
-                          final p = filtered[i];
-                          final isSelected = selectedInDialog.contains(p);
-
-                          return GestureDetector(
-                            onTap: () {
-                              setStateDialog(() {
-                                isSelected
-                                    ? selectedInDialog.remove(p)
-                                    : selectedInDialog.add(p);
-                              });
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardAlt,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.gold
-                                      : Colors.transparent,
-                                  width: 2,
+                  // ===== COLUMN HEADERS =====
+                  if (!isLoadingProducts && supplierProducts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Text(
+                                "Product",
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          p.name,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          p.brand,
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  Text(
-                                    "${p.availableQty}",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    p.unit,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ],
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 24),
+                              child: Text(
+                                "Current Qty",
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+
+                  // ===== PRODUCT LIST =====
+                  Expanded(
+                    child: isLoadingProducts
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.gold,
+                            ),
+                          )
+                        : supplierProducts.isEmpty
+                        ? const Center(
+                            child: Text(
+                              "No products available for this supplier",
+                              style: TextStyle(color: Colors.white54),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: filtered.length,
+                            itemBuilder: (_, i) {
+                              final p = filtered[i];
+                              final isSelected = selectedInDialog.contains(p);
+
+                              return GestureDetector(
+                                onTap: () {
+                                  setStateSheet(() {
+                                    isSelected
+                                        ? selectedInDialog.remove(p)
+                                        : selectedInDialog.add(p);
+                                  });
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardAlt,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.gold
+                                          : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              p.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              p.brand,
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        "${p.availableQty}",
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        p.unit,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: AppColors.gold,
+                                          size: 24,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+
+                  // ===== ADD BUTTON =====
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gold,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: selectedInDialog.isEmpty
+                              ? null
+                              : () {
+                                  setState(() {
+                                    for (var p in selectedInDialog) {
+                                      selectedProducts.insert(0, {
+                                        "name": p.name,
+                                        "brand": p.brand,
+                                        "qty": 1,
+                                        "unit": p.unit,
+                                      });
+                                    }
+                                  });
+                                  Navigator.pop(context);
+                                },
+                          child: Text(
+                            selectedInDialog.isEmpty
+                                ? "SELECT PRODUCTS"
+                                : "ADD ${selectedInDialog.length} PRODUCT${selectedInDialog.length > 1 ? 'S' : ''}",
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-
-              // ========== ADD BUTTON ==========
-              actions: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gold,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      for (var p in selectedInDialog) {
-                        selectedProducts.insert(0, {
-                          "name": p.name,
-                          "brand": p.brand,
-                          "qty": 1,
-                          "unit": p.unit,
-                        });
-                      }
-                    });
-
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    "ADD",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
             );
           },
         );
@@ -223,6 +408,161 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
 
   void _removeProduct(int index) {
     setState(() => selectedProducts.removeAt(index));
+  }
+
+  void _openSupplierSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateSheet) {
+            final filtered = suppliers.where((s) {
+              final name = s['name']?.toString().toLowerCase() ?? '';
+              return name.contains(supplierSearch.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: AppColors.bgDark,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  // ===== HEADER =====
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Select Supplier",
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ===== SEARCH FIELD =====
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardAlt,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: TextField(
+                        style: const TextStyle(color: Colors.white),
+                        onChanged: (v) {
+                          setStateSheet(() => supplierSearch = v);
+                        },
+                        decoration: const InputDecoration(
+                          hintText: "Search supplier...",
+                          hintStyle: TextStyle(color: Colors.white54),
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.search, color: AppColors.gold),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ===== SUPPLIER LIST =====
+                  Expanded(
+                    child: suppliers.isEmpty
+                        ? const Center(
+                            child: Text(
+                              "No suppliers available",
+                              style: TextStyle(color: Colors.white54),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: filtered.length,
+                            itemBuilder: (_, i) {
+                              final supplier = filtered[i];
+                              final supplierId = supplier['supplier_id'];
+                              final supplierName = supplier['name'] ?? '';
+                              final isSelected =
+                                  selectedSupplierId == supplierId;
+
+                              return GestureDetector(
+                                onTap: () async {
+                                  setState(() {
+                                    selectedSupplierId = supplierId;
+                                    selectedSupplier = supplierName;
+                                  });
+                                  Navigator.pop(context);
+                                  // تحميل منتجات الـ supplier المحدد
+                                  await _loadProductsForSupplier(supplierId);
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardAlt,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.gold
+                                          : Colors.transparent,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          supplierName,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: AppColors.gold,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   // ======================= UI =======================
@@ -236,51 +576,53 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ===== TITLE =====
-              const Text(
-                "Create Stock-in Order",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
+              // ===== BACK BUTTON + TITLE =====
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    "Create Stock-in Order",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
               // ===== SUPPLIER SELECT =====
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.gold, width: 1.4),
-                  borderRadius: BorderRadius.circular(14),
-                  color: AppColors.card,
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    dropdownColor: AppColors.card,
-                    value: selectedSupplier,
-                    hint: const Text(
-                      "Select Supplier",
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                    icon: const Icon(
-                      Icons.arrow_drop_down,
-                      color: AppColors.gold,
-                    ),
-                    items: ["Ahmad Nizar", "Saed Rimawi", "Akef Al Asmar"].map((
-                      s,
-                    ) {
-                      return DropdownMenuItem(
-                        value: s,
-                        child: Text(
-                          s,
-                          style: const TextStyle(color: Colors.white),
+              GestureDetector(
+                onTap: isLoadingSuppliers ? null : _openSupplierSelector,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.gold, width: 1.4),
+                    borderRadius: BorderRadius.circular(14),
+                    color: AppColors.card,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        selectedSupplier ?? "Select Supplier",
+                        style: TextStyle(
+                          color: selectedSupplier == null
+                              ? Colors.white54
+                              : Colors.white,
+                          fontSize: 16,
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      setState(() => selectedSupplier = v);
-                    },
+                      ),
+                      Icon(Icons.arrow_drop_down, color: AppColors.gold),
+                    ],
                   ),
                 ),
               ),
@@ -306,10 +648,13 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   ),
                   Expanded(
                     flex: 3,
-                    child: Text(
-                      "Quantity",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 30),
+                      child: Text(
+                        "Quantity",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
                     ),
                   ),
                 ],
@@ -321,116 +666,151 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
 
               // ===== PRODUCT LIST =====
               Expanded(
-                child: ListView.builder(
-                  itemCount: selectedProducts.length,
-                  itemBuilder: (_, i) {
-                    final p = selectedProducts[i];
-                    final controller = TextEditingController(
-                      text: p["qty"].toString(),
-                    );
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          // NAME
-                          Expanded(
-                            flex: 4,
-                            child: Text(
-                              p["name"],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
+                child: selectedProducts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 80,
+                              color: Colors.white24,
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              "No Products Added",
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
-
-                          // BRAND
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              p["brand"],
-                              style: const TextStyle(color: Colors.white70),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Tap the + button to add products",
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: selectedProducts.length,
+                        itemBuilder: (_, i) {
+                          final p = selectedProducts[i];
+                          final controller = TextEditingController(
+                            text: p["qty"].toString(),
+                          );
 
-                          // === FIXED & RESPONSIVE QUANTITY FIELD ===
-                          Expanded(
-                            flex: 3,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                children: [
-                                  // GOLD BOX
-                                  Container(
-                                    width: 50,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.gold,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: TextField(
-                                      controller: controller,
-                                      onChanged: (v) {
-                                        if (v.isNotEmpty) {
-                                          setState(
-                                            () => p["qty"] =
-                                                int.tryParse(v) ?? p["qty"],
-                                          );
-                                        }
-                                      },
-                                      textAlign: TextAlign.center,
-                                      keyboardType: TextInputType.number,
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        border: InputBorder.none,
-                                        isCollapsed: true,
-                                        contentPadding: EdgeInsets.zero,
-                                      ),
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.card,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                // NAME
+                                Expanded(
+                                  flex: 4,
+                                  child: Text(
+                                    p["name"],
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                                ),
 
-                                  const SizedBox(width: 6),
-
-                                  Text(
-                                    p["unit"],
+                                // BRAND
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    p["brand"],
                                     style: const TextStyle(
                                       color: Colors.white70,
-                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                ),
 
-                                  const SizedBox(width: 8),
+                                // === FIXED & RESPONSIVE QUANTITY FIELD ===
+                                Expanded(
+                                  flex: 3,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Row(
+                                      children: [
+                                        // GOLD BOX
+                                        Container(
+                                          width: 50,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.gold,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: TextField(
+                                            controller: controller,
+                                            onChanged: (v) {
+                                              if (v.isNotEmpty) {
+                                                setState(
+                                                  () => p["qty"] =
+                                                      int.tryParse(v) ??
+                                                      p["qty"],
+                                                );
+                                              }
+                                            },
+                                            textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
+                                            style: const TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                            decoration: const InputDecoration(
+                                              border: InputBorder.none,
+                                              isCollapsed: true,
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                          ),
+                                        ),
 
-                                  // DELETE BUTTON
-                                  GestureDetector(
-                                    onTap: () => _removeProduct(i),
-                                    child: const Icon(
-                                      Icons.cancel_rounded,
-                                      color: Colors.redAccent,
-                                      size: 28,
+                                        const SizedBox(width: 6),
+
+                                        Text(
+                                          p["unit"],
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+
+                                        const SizedBox(width: 8),
+
+                                        // DELETE BUTTON
+                                        GestureDetector(
+                                          onTap: () => _removeProduct(i),
+                                          child: const Icon(
+                                            Icons.cancel_rounded,
+                                            color: Colors.redAccent,
+                                            size: 28,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
 
               const SizedBox(height: 14),
@@ -443,19 +823,33 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                     child: GestureDetector(
                       onTap: () {},
                       child: Container(
-                        height: 55,
+                        height: 54,
                         decoration: BoxDecoration(
                           color: AppColors.gold,
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(18),
                         ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          "Send Order   >",
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "s  e  n  d",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 8,
+                              ),
+                            ),
+                            Transform.rotate(
+                              angle: -0.8,
+                              child: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -478,7 +872,7 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                       ),
                       child: const Icon(
                         Icons.add,
-                        color: Colors.black,
+                        color: Colors.white,
                         size: 28,
                       ),
                     ),
