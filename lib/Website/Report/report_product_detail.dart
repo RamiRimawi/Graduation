@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../Report_page.dart';
+import 'report_page.dart';
 import 'report_archive_table.dart';
 import '../../supabase_config.dart';
 
