@@ -1,0 +1,1252 @@
+import 'package:flutter/material.dart';
+import '../../supabase_config.dart';
+import '../sidebar.dart';
+import 'Orders_stock_in_page.dart';
+import 'Orders_stock_out_page.dart'; // عشان نرجع لصفحة Today
+import 'Orders_stock_out_receives.dart'; // عشان نروح لصفحة Receives
+import 'Orders_create_stock_out_page.dart';
+import 'Orders_stock_out_previous_popup.dart'; // Popup for order details
+
+// 🎨 الألوان نفس الباليت
+class AppColors {
+  static const white = Color(0xFFFFFFFF);
+  static const gold = Color(0xFFB7A447);
+  static const bgDark = Color(0xFF202020);
+  static const card = Color(0xFF2D2D2D);
+  static const cardAlt = Color(0xFF262626);
+  static const divider = Color(0xFF6F6F6F);
+  static const blue = Color(0xFF50B2E7);
+}
+
+class OrderPreviousRow {
+  final String id;
+  final String customerName;
+  final String deliveryDriver;
+  final String date;
+  OrderPreviousRow({
+    required this.id,
+    required this.customerName,
+    required this.deliveryDriver,
+    required this.date,
+  });
+}
+
+class StockOutPrevious extends StatefulWidget {
+  const StockOutPrevious({super.key});
+
+  @override
+  State<StockOutPrevious> createState() => _StockOutPreviousState();
+}
+
+class _StockOutPreviousState extends State<StockOutPrevious> {
+  int stockTab = 0; // Stock-out selected
+  int currentTab = 2; // Previous tab selected
+  int? hoveredRow;
+  bool _loading = true;
+  String? _error;
+  List<OrderPreviousRow> _previousOrders = [];
+  List<String> _drivers = [];
+  String _searchQuery = '';
+  String _selectedDriver = '';
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  final GlobalKey _filterButtonKey = GlobalKey();
+  OverlayEntry? _filterOverlay;
+  final TextEditingController _fromDateController = TextEditingController();
+  final TextEditingController _toDateController = TextEditingController();
+  bool _isDriverDropdownExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPreviousOrders();
+    _fetchDrivers();
+  }
+
+  @override
+  void dispose() {
+    _filterOverlay?.remove();
+    _filterOverlay = null;
+    _fromDateController.dispose();
+    _toDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchPreviousOrders() async {
+    try {
+      // Fetch orders with status 'Delivered'
+      final data = await supabase
+          .from('customer_order')
+          .select('''
+            customer_order_id,
+            order_date,
+            customer:customer_id(name),
+            delivery_driver:delivered_by_id(name)
+          ''')
+          .eq('order_status', 'Delivered')
+          .order('order_date', ascending: false)
+          .limit(100);
+
+      final ordersList = <OrderPreviousRow>[];
+
+      for (final row in data) {
+        final orderId = (row['customer_order_id'] ?? '').toString();
+        final customerName = (row['customer'] is Map)
+            ? (row['customer']['name'] ?? 'Unknown')
+            : 'Unknown';
+
+        final deliveryDriverName = (row['delivery_driver'] is Map)
+            ? (row['delivery_driver']['name'] ?? 'N/A')
+            : 'N/A';
+
+        final orderDate = row['order_date'] != null
+            ? DateTime.parse(row['order_date'])
+            : DateTime.now();
+        final date = '${orderDate.day}/${orderDate.month}/${orderDate.year}';
+
+        ordersList.add(
+          OrderPreviousRow(
+            id: orderId,
+            customerName: customerName,
+            deliveryDriver: deliveryDriverName,
+            date: date,
+          ),
+        );
+      }
+
+      setState(() {
+        _previousOrders = ordersList;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchDrivers() async {
+    try {
+      final data = await supabase
+          .from('delivery_driver')
+          .select('name')
+          .order('name');
+
+      final names = <String>[];
+      for (final row in data) {
+        final name = (row['name'] ?? '').toString().trim();
+        if (name.isNotEmpty) {
+          names.add(name);
+        }
+      }
+
+      final unique = names.toSet().toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+      setState(() {
+        _drivers = unique;
+      });
+    } catch (e) {
+      // If drivers fail to load, keep the list empty and allow Any driver option
+      debugPrint('Error loading drivers: $e');
+    }
+  }
+
+  List<OrderPreviousRow> get _filteredOrders {
+    Iterable<OrderPreviousRow> filtered = _previousOrders;
+
+    // Driver filter
+    if (_selectedDriver.isNotEmpty) {
+      filtered = filtered.where(
+        (o) => o.deliveryDriver.toLowerCase() == _selectedDriver.toLowerCase(),
+      );
+    }
+
+    // Date range filter
+    if (_fromDate != null || _toDate != null) {
+      filtered = filtered.where((o) {
+        final parsed = _parseDate(o.date);
+        if (parsed == null) return false;
+        if (_fromDate != null && parsed.isBefore(_fromDate!)) return false;
+        if (_toDate != null && parsed.isAfter(_toDate!)) return false;
+        return true;
+      });
+    }
+
+    // Search by customer name
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where(
+        (o) => o.customerName.toLowerCase().startsWith(q),
+      );
+    }
+
+    return filtered.toList(growable: false);
+  }
+
+  List<String> get _driverNames {
+    return _drivers;
+  }
+
+  DateTime? _parseDate(String dateStr) {
+    try {
+      final parts = dateStr.split('/');
+      if (parts.length != 3) return null;
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      return DateTime(year, month, day);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _toggleFilterPopup() {
+    if (_filterOverlay != null) {
+      _closeFilterPopup();
+    } else {
+      _showFilterPopup();
+    }
+  }
+
+  void _showFilterPopup() {
+    final renderBox =
+        _filterButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    _filterOverlay = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _closeFilterPopup,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          Positioned(
+            left: offset.dx - 280 + size.width,
+            top: offset.dy + size.height + 8,
+            child: Material(
+              color: Colors.transparent,
+              child: StatefulBuilder(
+                builder: (context, setOverlayState) => GestureDetector(
+                  onTap: () {},
+                  child: Container(
+                    width: 300,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D2D2D),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.gold, width: 1.5),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black54,
+                          offset: Offset(0, 4),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Filter Orders',
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(color: Color(0xFF3D3D3D), height: 1),
+                        const SizedBox(height: 16),
+
+                        // Driver dropdown
+                        Text(
+                          'Delivery Driver',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                setOverlayState(() {
+                                  _isDriverDropdownExpanded =
+                                      !_isDriverDropdownExpanded;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF232427),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.gold,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _selectedDriver.isEmpty
+                                            ? 'Any driver'
+                                            : _selectedDriver,
+                                        style: TextStyle(
+                                          color: _selectedDriver.isEmpty
+                                              ? Colors.white54
+                                              : Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Icon(
+                                      _isDriverDropdownExpanded
+                                          ? Icons.expand_less
+                                          : Icons.expand_more,
+                                      color: AppColors.gold,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (_isDriverDropdownExpanded) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 200,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF232427),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.gold,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: ListView(
+                                  shrinkWrap: true,
+                                  padding: EdgeInsets.zero,
+                                  children: [
+                                    _buildDriverItem(
+                                      '',
+                                      'Any driver',
+                                      setOverlayState,
+                                      isDefault: true,
+                                    ),
+                                    ..._driverNames.map(
+                                      (name) => _buildDriverItem(
+                                        name,
+                                        name,
+                                        setOverlayState,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // From Date
+                        _DateInputField(
+                          label: 'From Date',
+                          controller: _fromDateController,
+                          onDateChanged: (date) {
+                            setState(() {
+                              _fromDate = date;
+                            });
+                            setOverlayState(() {});
+                          },
+                          onClear: () {
+                            _fromDateController.clear();
+                            setState(() {
+                              _fromDate = null;
+                            });
+                            setOverlayState(() {});
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // To Date
+                        _DateInputField(
+                          label: 'To Date',
+                          controller: _toDateController,
+                          onDateChanged: (date) {
+                            setState(() {
+                              _toDate = date;
+                            });
+                            setOverlayState(() {});
+                          },
+                          onClear: () {
+                            _toDateController.clear();
+                            setState(() {
+                              _toDate = null;
+                            });
+                            setOverlayState(() {});
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+                        const Divider(color: Color(0xFF3D3D3D), height: 1),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                _fromDateController.clear();
+                                _toDateController.clear();
+                                setState(() {
+                                  _fromDate = null;
+                                  _toDate = null;
+                                  _selectedDriver = '';
+                                });
+                                setOverlayState(() {});
+                              },
+                              child: const Text(
+                                'Clear Filter',
+                                style: TextStyle(
+                                  color: AppColors.gold,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Overlay.of(context).insert(_filterOverlay!);
+  }
+
+  void _closeFilterPopup() {
+    _filterOverlay?.remove();
+    _filterOverlay = null;
+    _isDriverDropdownExpanded = false;
+  }
+
+  Widget _buildDriverItem(
+    String value,
+    String label,
+    StateSetter setOverlayState, {
+    bool isDefault = false,
+  }) {
+    final isSelected = _selectedDriver == value;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedDriver = value;
+          _isDriverDropdownExpanded = false;
+        });
+        setOverlayState(() {
+          _isDriverDropdownExpanded = false;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.gold.withValues(alpha: 0.1)
+              : Colors.transparent,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? AppColors.gold
+                : (isDefault ? Colors.white54 : Colors.white),
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height;
+    final width = MediaQuery.of(context).size.width;
+    final topPadding = height * 0.06;
+
+    return Scaffold(
+      body: Row(
+        children: [
+          const Sidebar(activeIndex: 1),
+          Expanded(
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(top: topPadding),
+                child: Column(
+                  children: [
+                    // 🔹 العنوان + التوغّل + Create order + Notifications
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: width > 800 ? 60 : 24,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Orders',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              _StockToggle(
+                                selected: stockTab,
+                                onChanged: (i) {
+                                  if (i == 1) {
+                                    // الانتقال إلى Stock-in
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const StockInPage(),
+                                      ),
+                                    );
+                                  } else {
+                                    setState(() => stockTab = i);
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 16),
+                              _CreateOrderButton(
+                                onPressed: () {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const CreateStockOutPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              // 🔔 زر الإشعارات
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Material(
+                                    color: Colors.transparent,
+                                    shape: const CircleBorder(),
+                                    child: InkWell(
+                                      onTap: () {
+                                        // هنا ممكن تفتح صفحة الإشعارات لو حاب
+                                      },
+                                      customBorder: const CircleBorder(),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(8),
+                                        child: Icon(
+                                          Icons.notifications_none_rounded,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: Container(
+                                      width: 7,
+                                      height: 7,
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.blue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 🔹 Tabs + Table
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: width > 800 ? 60 : 24,
+                        ),
+                        child: Column(
+                          children: [
+                            // Tabs: Today / Receives / Previous
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: _TopTabs(
+                                current: currentTab,
+                                onTap: (index) {
+                                  setState(() => currentTab = index);
+                                  if (index == 0) {
+                                    // Today
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const OrdersPage(),
+                                      ),
+                                    );
+                                  } else if (index == 1) {
+                                    // Receives
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const OrdersReceivesPage(),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 🔹 البحث + فلتر
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                SizedBox(
+                                  width: 250,
+                                  child: _SearchField(
+                                    hint: 'Customer Name',
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _searchQuery = v.trim();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Container(
+                                  key: _filterButtonKey,
+                                  child: _RoundIconButton(
+                                    icon: Icons.filter_alt_rounded,
+                                    onTap: _toggleFilterPopup,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+
+                            _TableHeader(isWide: width > 800),
+                            const SizedBox(height: 6),
+
+                            // 🔹 الجدول
+                            Expanded(
+                              child: _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : _error != null
+                                  ? Center(
+                                      child: Text(
+                                        _error!,
+                                        style: const TextStyle(
+                                          color: Colors.redAccent,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      itemCount: _filteredOrders.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 6),
+                                      itemBuilder: (context, i) {
+                                        final row = _filteredOrders[i];
+                                        final bg = i.isEven
+                                            ? AppColors.card
+                                            : AppColors.cardAlt;
+                                        final isHovered = hoveredRow == i;
+
+                                        return MouseRegion(
+                                          onEnter: (_) =>
+                                              setState(() => hoveredRow = i),
+                                          onExit: (_) =>
+                                              setState(() => hoveredRow = null),
+                                          child: InkWell(
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (context) =>
+                                                    OrderDetailsPopup(
+                                                      orderId: row.id,
+                                                    ),
+                                              );
+                                            },
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: bg,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: isHovered
+                                                    ? Border.all(
+                                                        color: AppColors.blue,
+                                                        width: 2,
+                                                      )
+                                                    : null,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 12,
+                                                  ),
+                                              child: Row(
+                                                children: [
+                                                  // Order ID
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: Text(
+                                                      row.id,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ),
+
+                                                  // Customer Name
+                                                  Expanded(
+                                                    flex: 4,
+                                                    child: Text(
+                                                      row.customerName,
+                                                      style: const TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+
+                                                  // Delivery Driver
+                                                  Expanded(
+                                                    flex: 8,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                      child: Text(
+                                                        row.deliveryDriver,
+                                                        style: const TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+
+                                                  // Date (ذهبي)
+                                                  Expanded(
+                                                    flex: 4,
+                                                    child: Align(
+                                                      alignment:
+                                                          Alignment.centerRight,
+                                                      child: Text(
+                                                        row.date,
+                                                        style: const TextStyle(
+                                                          color: AppColors.gold,
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// تبويبات Today / Receives / Previous بنفس ستايل الصورة
+class _TopTabs extends StatelessWidget {
+  final int current;
+  final ValueChanged<int> onTap;
+  const _TopTabs({required this.current, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const tabs = ['Today', 'Receives', 'Previous'];
+
+    return Row(
+      children: List.generate(tabs.length, (i) {
+        final active = current == i;
+        return Padding(
+          padding: const EdgeInsets.only(right: 22),
+          child: InkWell(
+            onTap: () => onTap(i),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tabs[i],
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.white.withValues(alpha: active ? 1 : .7),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  height: 3,
+                  width: active ? _textWidth(tabs[i], context) : 0,
+                  decoration: BoxDecoration(
+                    color: active ? AppColors.blue : Colors.transparent,
+                    borderRadius: const BorderRadius.all(Radius.circular(4)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  double _textWidth(String text, BuildContext context) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return textPainter.width;
+  }
+}
+
+// 🔹 حقل البحث
+class _SearchField extends StatelessWidget {
+  final String hint;
+  final ValueChanged<String>? onChanged;
+  const _SearchField({required this.hint, this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      onChanged: onChanged,
+      style: const TextStyle(fontSize: 13),
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.group_outlined, size: 18),
+        filled: true,
+        fillColor: AppColors.card,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 10,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: const BorderSide(color: Color(0xFFB7A447), width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 زر الفلتر
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _RoundIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.card, width: 3),
+      ),
+      child: Material(
+        color: AppColors.card,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, size: 20, color: AppColors.gold),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Date input with auto-format (DD/MM/YYYY)
+class _DateInputField extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final ValueChanged<DateTime?> onDateChanged;
+  final VoidCallback onClear;
+
+  const _DateInputField({
+    required this.label,
+    required this.controller,
+    required this.onDateChanged,
+    required this.onClear,
+  });
+
+  @override
+  State<_DateInputField> createState() => _DateInputFieldState();
+}
+
+class _DateInputFieldState extends State<_DateInputField> {
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final text = widget.controller.text;
+
+    // Auto-insert slashes
+    if (text.length == 2 && !text.contains('/')) {
+      widget.controller.text = '$text/';
+      widget.controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: widget.controller.text.length),
+      );
+    } else if (text.length == 5 && text.lastIndexOf('/') == 2) {
+      widget.controller.text = '$text/';
+      widget.controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: widget.controller.text.length),
+      );
+    }
+
+    if (text.length == 10) {
+      final date = _parse(text);
+      if (date != null) {
+        setState(() => _errorText = null);
+        widget.onDateChanged(date);
+      } else {
+        setState(() => _errorText = 'Invalid date');
+        widget.onDateChanged(null);
+      }
+    } else if (text.isEmpty) {
+      setState(() => _errorText = null);
+      widget.onDateChanged(null);
+    } else if (text.length > 10) {
+      setState(() => _errorText = 'Too many characters');
+      widget.onDateChanged(null);
+    }
+  }
+
+  DateTime? _parse(String text) {
+    try {
+      final parts = text.split('/');
+      if (parts.length != 3) return null;
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      final date = DateTime(year, month, day);
+      if (date.day != day || date.month != month || date.year != year) {
+        return null;
+      }
+      return date;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF232427),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _errorText != null ? Colors.red : AppColors.gold,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.calendar_today, color: AppColors.gold, size: 16),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: widget.controller,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'DD/MM/YYYY',
+                    hintStyle: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    errorText: null,
+                  ),
+                  keyboardType: TextInputType.number,
+                  maxLength: 10,
+                  buildCounter:
+                      (
+                        context, {
+                        required currentLength,
+                        required isFocused,
+                        maxLength,
+                      }) => null,
+                ),
+              ),
+              if (widget.controller.text.isNotEmpty)
+                InkWell(
+                  onTap: widget.onClear,
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white54,
+                    size: 16,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 12),
+            child: Text(
+              _errorText!,
+              style: const TextStyle(color: Colors.red, fontSize: 11),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// 🔹 زر Create order (نفس الستايل)
+class _CreateOrderButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _CreateOrderButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const ShapeDecoration(
+        shape: StadiumBorder(),
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFE14D), Color(0xFFFFE14D)],
+        ),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const StadiumBorder(),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: Row(
+              children: [
+                Icon(Icons.add_box_rounded, color: Colors.black87),
+                SizedBox(width: 8),
+                Text(
+                  'Create order',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Stock-in / Stock-out toggle (نفس التصميم)
+class _StockToggle extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onChanged;
+  const _StockToggle({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: ShapeDecoration(
+        color: const Color(0xFF1B1B1B),
+        shape: StadiumBorder(
+          side: BorderSide(color: AppColors.gold.withValues(alpha: .5)),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _pill(
+            context,
+            'Stock-out',
+            Icons.logout_rounded,
+            selected == 0,
+            () => onChanged(0),
+          ),
+          _pill(
+            context,
+            'Stock-in',
+            Icons.login_rounded,
+            selected == 1,
+            () => onChanged(1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(
+    BuildContext ctx,
+    String label,
+    IconData icon,
+    bool selected,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(40),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: ShapeDecoration(
+          color: selected ? AppColors.card : Colors.transparent,
+          shape: const StadiumBorder(),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.white),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 هيدر الجدول (Order ID / Customer / Inventory / Date)
+class _TableHeader extends StatelessWidget {
+  final bool isWide;
+  const _TableHeader({required this.isWide});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            _hCell('Order ID #', flex: 2),
+            _hCell('Customer Name', flex: 4),
+            _hCell('Delivery Driver', flex: 8),
+            _hCell('Date', flex: 4, alignEnd: true),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(height: 1, color: AppColors.divider.withValues(alpha: .5)),
+      ],
+    );
+  }
+
+  Expanded _hCell(String text, {int flex = 1, bool alignEnd = false}) {
+    return Expanded(
+      flex: flex,
+      child: Align(
+        alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}

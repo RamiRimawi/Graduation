@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+// ignore: unused_import
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
 import 'manager_theme.dart';

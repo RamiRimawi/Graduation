@@ -17,6 +17,7 @@ class CustomerCartPage extends StatefulWidget {
 class _CustomerCartPageState extends State<CustomerCartPage> {
   List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
+  // ignore: unused_field
   int? _orderId; // current cart order id
   int _currentIndex = 1; // Cart tab index
 
@@ -107,6 +108,7 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     }
   }
 
+  // ignore: unused_element
   void _increaseQty(int index) {
     setState(() {
       _items[index]['qty'] = (_items[index]['qty'] as int) + 1;
@@ -114,6 +116,7 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
     _persistLocalQuantity(index);
   }
 
+  // ignore: unused_element
   void _decreaseQty(int index) {
     setState(() {
       final current = _items[index]['qty'] as int;

@@ -27,6 +27,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   // Batch selections per item (index -> batch)
   final Map<int, int?> _selectedBatchIds = {};
+  // ignore: unused_field
   final Map<int, String> _selectedBatchDisplays = {};
 
   @override
