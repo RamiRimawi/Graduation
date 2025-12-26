@@ -5,7 +5,7 @@ import 'Website/login_page.dart';
 import 'Website/Dashboard_page.dart';
 import 'Website/Delivery_page.dart';
 import 'Website/Mobile_accounts_page.dart';
-import 'Website/Management/management_page.dart';
+import 'Website/Management/Management_page.dart';
 import 'Website/Payment_page.dart';
 import 'Website/Report_page.dart';
 import 'Website/Inventory/inventory_page.dart';
