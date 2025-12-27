@@ -101,7 +101,11 @@ class _DeliveryOrderDetailsPageState extends State<DeliveryOrderDetailsPage> {
       final Map<int, double> productQtyMap = {};
       for (final item in inventoryResponse) {
         final productId = item['product_id'] as int;
-        final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
+        // Prefer prepared_quantity when available, fall back to quantity
+        final qty =
+            (item['prepared_quantity'] as num?)?.toDouble() ??
+            (item['quantity'] as num?)?.toDouble() ??
+            0.0;
         productQtyMap[productId] = (productQtyMap[productId] ?? 0.0) + qty;
       }
 

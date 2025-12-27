@@ -7,6 +7,7 @@ import 'Orders_stock_in_receives.dart';
 import '../../supabase_config.dart';
 import 'Orders_detail_popup.dart';
 import 'Orders_stock_in_previous_popup.dart';
+import 'orders_header.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -67,6 +68,7 @@ class _StockInPageState extends State<StockInPage> {
             )
           ''')
           .inFilter('order_status', [
+            'Pending',
             'Sent',
             'Accepted',
             'Rejected',
@@ -82,13 +84,16 @@ class _StockInPageState extends State<StockInPage> {
         final status = order['order_status'];
 
         String displayStatus = status;
-        if (status == 'Sent' && order['accountant_id'] == null) {
-          displayStatus = 'Created By Manager';
-        }
 
         bool shouldInclude = false;
 
-        if (status == 'Sent' || status == 'Accepted' || status == 'Updated') {
+        if (status == 'Pending' && order['accountant_id'] == null) {
+          // Manager-created pending orders only
+          displayStatus = 'Created By Manager';
+          shouldInclude = true;
+        } else if (status == 'Sent' ||
+            status == 'Accepted' ||
+            status == 'Updated') {
           shouldInclude = true;
         } else if (status == 'Rejected') {
           // Only include if orderDate is within the last 3 days (including today)
@@ -180,8 +185,8 @@ class _StockInPageState extends State<StockInPage> {
 
       if (!mounted) return;
 
-      // For Sent and Updated statuses, show editable popup
-      if (order.orderStatus == 'Sent' || order.orderStatus == 'Updated') {
+      // For Pending (Created by Manager) and Updated statuses, show editable popup
+      if (order.orderStatus == 'Pending' || order.orderStatus == 'Updated') {
         OrderDetailPopup.show(
           context,
           orderType: 'in',
@@ -346,7 +351,7 @@ class _StockInPageState extends State<StockInPage> {
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
-    final topPadding = height * 0.06;
+    final topPadding = height * 0.02;
 
     return Scaffold(
       body: Row(
@@ -358,53 +363,52 @@ class _StockInPageState extends State<StockInPage> {
                 padding: EdgeInsets.only(top: topPadding),
                 child: Column(
                   children: [
-                    // 🔹 العنوان والأزرار
+                    // 🔹 HEADER
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: width > 800 ? 60 : 24,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Orders',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                      child: OrdersHeader(
+                        stockTab: stockTab,
+                        currentTab: 0, // Today tab
+                        onStockTabChanged: (i) {
+                          if (i == 0) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OrdersPage(),
+                              ),
+                            );
+                          } else {
+                            setState(() => stockTab = i);
+                          }
+                        },
+                        onTabChanged: (index) {
+                          if (index == 1) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const OrdersStockInReceivesPage(),
+                              ),
+                            );
+                          } else if (index == 2) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StockInPreviousPage(),
+                              ),
+                            );
+                          }
+                        },
+                        onCreateOrder: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CreateStockInPage(),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              _StockToggle(
-                                selected: stockTab,
-                                onChanged: (i) {
-                                  if (i == 0) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const OrdersPage(),
-                                      ),
-                                    );
-                                  } else {
-                                    setState(() => stockTab = i);
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 16),
-                              _CreateOrderButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const CreateStockInPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -417,42 +421,6 @@ class _StockInPageState extends State<StockInPage> {
                         ),
                         child: Column(
                           children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _SimpleTabs(
-                                tabs: const ['Today', 'Receives', 'Previous'],
-                                onTap: (index) {
-                                  if (index == 0) {
-                                    // Today
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const StockInPage(),
-                                      ),
-                                    );
-                                  } else if (index == 1) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInReceivesPage(),
-                                      ),
-                                    );
-                                  } else if (index == 2) {
-                                    // Previous
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockInPreviousPage(),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
                             // 🔹 البحث والفلتر
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,

@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'manager_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
 
 // ======================= MODEL =======================
 class Product {
+  final int productId;
   final String name;
   final String brand;
   final int availableQty;
   final String unit;
+  final double wholesalePrice;
 
-  Product(this.name, this.brand, this.availableQty, this.unit);
+  Product(
+    this.productId,
+    this.name,
+    this.brand,
+    this.availableQty,
+    this.unit,
+    this.wholesalePrice,
+  );
 }
 
 // ======================= PAGE =======================
@@ -94,10 +104,12 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
             final productId = product['product_id'] as int;
             if (!uniqueProducts.containsKey(productId)) {
               uniqueProducts[productId] = Product(
+                productId,
                 product['name'] ?? 'Unknown',
                 product['brand']?['name'] ?? '-',
                 product['total_quantity'] ?? 0,
                 product['unit']?['unit_name'] ?? 'pcs',
+                (product['wholesale_price'] as num?)?.toDouble() ?? 0.0,
               );
             }
           }
@@ -374,10 +386,12 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                                   setState(() {
                                     for (var p in selectedInDialog) {
                                       selectedProducts.insert(0, {
+                                        "product_id": p.productId,
                                         "name": p.name,
                                         "brand": p.brand,
                                         "qty": 1,
                                         "unit": p.unit,
+                                        "wholesale_price": p.wholesalePrice,
                                       });
                                     }
                                   });
@@ -408,6 +422,126 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
 
   void _removeProduct(int index) {
     setState(() => selectedProducts.removeAt(index));
+  }
+
+  Future<void> _sendOrder() async {
+    // Validate that supplier and products are selected
+    if (selectedSupplierId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a supplier'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one product'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: AppColors.gold),
+        ),
+      );
+
+      // Get manager info from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final managerIdStr = prefs.getString('current_user_id');
+      final managerName = prefs.getString('current_user_name');
+
+      if (managerIdStr == null || managerName == null) {
+        if (mounted) Navigator.pop(context); // Close loading
+        throw Exception('Manager information not found');
+      }
+
+      final managerId = int.parse(managerIdStr);
+
+      // Calculate total cost (sum of qty * wholesale_price for all products)
+      double totalCost = 0;
+      for (var product in selectedProducts) {
+        final qty = product['qty'] as int;
+        final wholesalePrice = product['wholesale_price'] as double;
+        totalCost += qty * wholesalePrice;
+      }
+
+      const taxPercent = 16;
+      final totalBalance = totalCost * (1 + taxPercent / 100);
+
+      // Insert into supplier_order
+      final orderInsertResponse = await supabase
+          .from('supplier_order')
+          .insert({
+            'supplier_id': selectedSupplierId,
+            'total_cost': totalCost,
+            'tax_percent': taxPercent,
+            'total_balance': totalBalance,
+            'order_date': DateTime.now().toIso8601String(),
+            'order_status': 'Pending',
+            'created_by_id': managerId,
+            'last_tracing_by': managerName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
+          })
+          .select('order_id')
+          .single();
+
+      final orderId = orderInsertResponse['order_id'] as int;
+
+      // Insert into supplier_order_description for each product
+      final descriptionInserts = selectedProducts.map((product) {
+        return {
+          'order_id': orderId,
+          'product_id': product['product_id'] as int,
+          'quantity': product['qty'] as int,
+          'price_per_product': product['wholesale_price'] as double,
+          'last_tracing_by': managerName,
+          'last_tracing_time': DateTime.now().toIso8601String(),
+        };
+      }).toList();
+
+      await supabase
+          .from('supplier_order_description')
+          .insert(descriptionInserts);
+
+      // Close loading and show success
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order #$orderId sent successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Clear form
+        setState(() {
+          selectedProducts.clear();
+          selectedSupplier = null;
+          selectedSupplierId = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _openSupplierSelector() {
@@ -821,7 +955,7 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   // SEND ORDER
                   Expanded(
                     child: GestureDetector(
-                      onTap: () {},
+                      onTap: _sendOrder,
                       child: Container(
                         height: 54,
                         decoration: BoxDecoration(

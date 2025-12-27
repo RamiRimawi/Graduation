@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'manager_theme.dart';
+import 'SelectBatchSheet.dart';
+import 'StockInOrderSplitPage.dart';
 
 class StockInOrderDetailsPage extends StatefulWidget {
   final int orderId;
@@ -17,7 +21,13 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
   String _supplierName = '';
   String _orderStatus = '';
   DateTime? _orderDate;
-  List<_OrderItem> _items = [];
+  List<OrderItem> _items = [];
+
+  // Inventory and batch selections
+  int? _selectedInventoryId;
+  String? _selectedInventoryName;
+  final Map<int, int?> _selectedBatchIds = {};
+  final Map<int, String> _selectedBatchDisplays = {};
 
   @override
   void initState() {
@@ -42,18 +52,23 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
           ? DateTime.parse(orderResponse['order_date'] as String)
           : null;
 
-      // Fetch order inventory (products with quantities)
-      final inventoryResponse = await supabase
-          .from('supplier_order_inventory')
-          .select('product_id, quantity, batch_id')
+      // Fetch order items from supplier_order_description
+      final descriptionResponse = await supabase
+          .from('supplier_order_description')
+          .select('product_id, quantity')
           .eq('order_id', widget.orderId);
 
-      // Fetch product details separately
-      final productIds = inventoryResponse
+      if (descriptionResponse.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      // Get product IDs
+      final productIds = descriptionResponse
           .map((row) => row['product_id'] as int)
-          .toSet()
           .toList();
 
+      // Fetch product details
       final productsResponse = await supabase
           .from('product')
           .select('product_id, name, brand_id, unit_id')
@@ -70,12 +85,15 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
           .toSet()
           .toList();
 
-      final brandsResponse = await supabase
-          .from('brand')
-          .select('brand_id, name')
-          .inFilter('brand_id', brandIds);
+      Map<int, dynamic> brandMap = {};
+      if (brandIds.isNotEmpty) {
+        final brandsResponse = await supabase
+            .from('brand')
+            .select('brand_id, name')
+            .inFilter('brand_id', brandIds);
 
-      final brandMap = {for (var b in brandsResponse) b['brand_id'] as int: b};
+        brandMap = {for (var b in brandsResponse) b['brand_id'] as int: b};
+      }
 
       // Fetch unit details
       final unitIds = productsResponse
@@ -84,40 +102,25 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
           .toSet()
           .toList();
 
-      final unitsResponse = await supabase
-          .from('unit')
-          .select('unit_id, unit_name')
-          .inFilter('unit_id', unitIds);
+      Map<int, dynamic> unitMap = {};
+      if (unitIds.isNotEmpty) {
+        final unitsResponse = await supabase
+            .from('unit')
+            .select('unit_id, unit_name')
+            .inFilter('unit_id', unitIds);
 
-      final unitMap = {for (var u in unitsResponse) u['unit_id'] as int: u};
-
-      // Fetch batch details (includes storage location)
-      final batchIds = inventoryResponse
-          .map((row) => row['batch_id'] as int?)
-          .where((id) => id != null)
-          .toSet()
-          .toList();
-
-      Map<int, dynamic> batchMap = {};
-      if (batchIds.isNotEmpty) {
-        final batchResponse = await supabase
-            .from('batch')
-            .select('batch_id, storage_location_descrption')
-            .inFilter('batch_id', batchIds);
-
-        batchMap = {for (var b in batchResponse) b['batch_id'] as int: b};
+        unitMap = {for (var u in unitsResponse) u['unit_id'] as int: u};
       }
 
       // Build items list
-      final List<_OrderItem> items = [];
+      final List<OrderItem> items = [];
 
-      for (final row in inventoryResponse) {
+      for (final row in descriptionResponse) {
         final productId = row['product_id'] as int?;
         final quantityRaw = row['quantity'];
         final quantity = quantityRaw is int
             ? quantityRaw
             : (quantityRaw is String ? int.tryParse(quantityRaw) ?? 0 : 0);
-        final batchId = row['batch_id'] as int?;
 
         if (productId == null) continue;
 
@@ -128,18 +131,14 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
         final unitId = product['unit_id'] as int?;
         final brand = brandId != null ? brandMap[brandId] : null;
         final unit = unitId != null ? unitMap[unitId] : null;
-        final batch = batchId != null ? batchMap[batchId] : null;
-
-        final storageLocation =
-            batch?['storage_location_descrption'] as String?;
 
         items.add(
-          _OrderItem(
-            productName: product['name'] as String? ?? 'Unknown',
-            brandName: brand?['name'] as String? ?? 'Unknown',
-            unitName: unit?['unit_name'] as String? ?? 'Unit',
-            quantity: quantity,
-            batchLocation: storageLocation,
+          OrderItem(
+            productId: productId,
+            name: product['name'] as String? ?? 'Unknown',
+            brand: brand?['name'] as String? ?? 'Unknown',
+            unit: unit?['unit_name'] as String? ?? 'Unit',
+            qty: quantity,
           ),
         );
       }
@@ -154,6 +153,207 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
     }
   }
 
+  void _pickBatchForItem(int itemIndex) {
+    if (_selectedInventoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select inventory first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final item = _items[itemIndex];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => SelectBatchSheet(
+        productId: item.productId,
+        inventoryId: _selectedInventoryId!,
+        onSelected: (batchId, displayText) {
+          Navigator.pop(context);
+          setState(() {
+            _selectedBatchIds[itemIndex] = batchId;
+            _selectedBatchDisplays[itemIndex] = displayText;
+          });
+        },
+      ),
+    );
+  }
+
+  void _openInventorySelectionModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _InventorySelectionModal(
+        onSelected: (inventoryId, inventoryName) {
+          Navigator.pop(context);
+          setState(() {
+            _selectedInventoryId = inventoryId;
+            _selectedInventoryName = inventoryName;
+          });
+          _openBatchSelectionModal();
+        },
+      ),
+    );
+  }
+
+  void _openBatchSelectionModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _BatchSelectionModal(
+        items: _items,
+        inventoryId: _selectedInventoryId!,
+        inventoryName: _selectedInventoryName!,
+        selectedBatchDisplays: _selectedBatchDisplays,
+        onPickBatch: _pickBatchForItem,
+        onConfirm: _confirmReception,
+      ),
+    );
+  }
+
+  Future<void> _confirmReception() async {
+    // Validate that all batches are selected
+    for (int i = 0; i < _items.length; i++) {
+      if (!_selectedBatchIds.containsKey(i) || _selectedBatchIds[i] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select batch for all products'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: AppColors.gold),
+        ),
+      );
+
+      // Get manager info from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final managerIdStr = prefs.getString('current_user_id');
+      final managerName = prefs.getString('current_user_name');
+
+      if (managerIdStr == null || managerName == null) {
+        if (mounted) Navigator.pop(context); // Close loading
+        throw Exception('Manager information not found');
+      }
+
+      final managerId = int.parse(managerIdStr);
+
+      // Update supplier_order_description with receipt_quantity
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        await Supabase.instance.client
+            .from('supplier_order_description')
+            .update({
+              'receipt_quantity': item.qty,
+              'last_tracing_by': managerName,
+              'last_tracing_time': DateTime.now().toIso8601String(),
+            })
+            .eq('order_id', widget.orderId)
+            .eq('product_id', item.productId);
+      }
+
+      // Update supplier_order to Delivered
+      await Supabase.instance.client
+          .from('supplier_order')
+          .update({
+            'order_status': 'Delivered',
+            'receives_by_id': managerId,
+            'last_tracing_by': managerName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', widget.orderId);
+
+      // Insert into supplier_order_inventory for each product
+      final inventoryInserts = <Map<String, dynamic>>[];
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        final batchId = _selectedBatchIds[i];
+
+        inventoryInserts.add({
+          'supplier_order_id': widget.orderId,
+          'product_id': item.productId,
+          'inventory_id': _selectedInventoryId!,
+          'batch_id': batchId,
+          'quantity': item.qty,
+        });
+      }
+
+      await Supabase.instance.client
+          .from('supplier_order_inventory')
+          .insert(inventoryInserts);
+
+      // Close loading and batch modal, show success
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        Navigator.pop(context); // Close batch modal
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order received successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true); // Go back to list
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to receive order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openSplitOrderPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StockInOrderSplitPage(
+          orderId: widget.orderId,
+          supplierName: _supplierName,
+          items: _items,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchInventories() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('inventory')
+          .select('inventory_id, inventory_name')
+          .order('inventory_name');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetching inventories: $e');
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -165,6 +365,8 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
       );
     }
 
+    final items = _items;
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
@@ -173,224 +375,253 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back + Title
               Row(
                 children: [
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     _supplierName,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 20),
 
-              const SizedBox(height: 8),
-
-              // Order info
-              Row(
+              // Products header
+              const Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _orderStatus == 'Accepted'
-                          ? Colors.green.withOpacity(0.2)
-                          : AppColors.gold.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _orderStatus == 'Accepted'
-                            ? Colors.green
-                            : AppColors.gold,
-                        width: 1,
-                      ),
-                    ),
+                  Expanded(
+                    flex: 5,
                     child: Text(
-                      _orderStatus,
+                      'Product Name',
                       style: TextStyle(
-                        color: _orderStatus == 'Accepted'
-                            ? Colors.green
-                            : AppColors.gold,
+                        color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  if (_orderDate != null) ...[
-                    const SizedBox(width: 12),
-                    Text(
-                      '${_orderDate!.day}/${_orderDate!.month}/${_orderDate!.year}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Brand',
+                      style: TextStyle(
+                        color: Colors.white,
                         fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ],
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'Quantity',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ],
               ),
+              const SizedBox(height: 6),
+              Container(height: 1, color: Colors.white24),
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 20),
-
-              // Items
+              // Products list
               Expanded(
-                child: _items.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No items found',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: AppColors.gold.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Items header
-                            const Row(
-                              children: [
-                                Expanded(
-                                  flex: 5,
-                                  child: Text(
-                                    'Product',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 4,
-                                  child: Padding(
-                                    padding: EdgeInsets.only(left: 24),
-                                    child: Text(
-                                      'Batch',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Padding(
-                                    padding: EdgeInsets.only(left: 8),
-                                    child: Text(
-                                      'Qty',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
+                child: ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (_, i) {
+                    final item = items[i];
+                    final controller = TextEditingController(
+                      text: item.qty.toString(),
+                    );
 
-                            // Items list
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: _items.length,
-                                itemBuilder: (_, i) {
-                                  final item = _items[i];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.bgDark.withOpacity(0.5),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 5,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                item.productName,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                item.brandName,
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 4,
-                                          child: Text(
-                                            item.batchLocation ?? 'No Batch',
-                                            style: TextStyle(
-                                              color: item.batchLocation != null
-                                                  ? AppColors.gold
-                                                  : Colors.white54,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 2,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 8,
-                                            ),
-                                            child: Text(
-                                              '${item.quantity} ${item.unitName}',
-                                              textAlign: TextAlign.center,
-                                              style: const TextStyle(
-                                                color: AppColors.gold,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: Text(
+                              item.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              item.brand,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.card,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFB7A447),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: TextField(
+                                      controller: controller,
+                                      onChanged: (v) {
+                                        if (v.isNotEmpty) {
+                                          setState(
+                                            () => item.qty =
+                                                int.tryParse(v) ?? item.qty,
+                                          );
+                                        }
+                                      },
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      decoration: const InputDecoration(
+                                        border: InputBorder.none,
+                                        isCollapsed: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      item.unit,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // SPLIT BUTTON
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _openSplitOrderPage,
+                  icon: const Icon(
+                    Icons.call_split,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
+                  label: const Text(
+                    'Split the Order',
+                    style: TextStyle(
+                      color: AppColors.gold,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold, width: 2),
+                    minimumSize: const Size.fromHeight(54),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // DONE BUTTON
+              GestureDetector(
+                onTap: _openInventorySelectionModal,
+                child: Container(
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: AppColors.gold,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "D  o  n  e",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 8,
                         ),
                       ),
+                      Transform.rotate(
+                        angle: -0.8,
+                        child: const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -400,18 +631,366 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
   }
 }
 
-class _OrderItem {
-  final String productName;
-  final String brandName;
-  final String unitName;
-  final int quantity;
-  final String? batchLocation;
+// Inventory selection modal for stock-in
+class _InventorySelectionModal extends StatefulWidget {
+  final void Function(int inventoryId, String inventoryName) onSelected;
 
-  _OrderItem({
-    required this.productName,
-    required this.brandName,
-    required this.unitName,
-    required this.quantity,
-    this.batchLocation,
+  const _InventorySelectionModal({required this.onSelected});
+
+  @override
+  State<_InventorySelectionModal> createState() =>
+      _InventorySelectionModalState();
+}
+
+class _InventorySelectionModalState extends State<_InventorySelectionModal> {
+  int? _selectedInventoryId;
+  String? _selectedInventoryName;
+
+  Future<List<Map<String, dynamic>>> _fetchInventories() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('inventory')
+          .select('inventory_id, inventory_name')
+          .order('inventory_name');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Error fetching inventories: $e');
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.bgDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.65,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select Inventory',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose where to receive this order',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _fetchInventories(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.gold),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No inventories available',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    );
+                  }
+
+                  final inventories = snapshot.data!;
+                  return ListView.builder(
+                    itemCount: inventories.length,
+                    itemBuilder: (context, index) {
+                      final inventory = inventories[index];
+                      final invId = inventory['inventory_id'] as int;
+                      final invName = inventory['inventory_name'] as String;
+                      final isSelected = _selectedInventoryId == invId;
+
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedInventoryId = invId;
+                            _selectedInventoryName = invName;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.gold.withOpacity(0.2)
+                                : AppColors.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.gold
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                color: isSelected
+                                    ? AppColors.gold
+                                    : Colors.white54,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  invName,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? AppColors.gold
+                                        : Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selectedInventoryId != null
+                    ? () {
+                        widget.onSelected(
+                          _selectedInventoryId!,
+                          _selectedInventoryName!,
+                        );
+                      }
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.gold,
+                  disabledBackgroundColor: Colors.grey[600],
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Next',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Batch selection modal for stock-in
+class _BatchSelectionModal extends StatelessWidget {
+  final List<OrderItem> items;
+  final int inventoryId;
+  final String inventoryName;
+  final Map<int, String> selectedBatchDisplays;
+  final void Function(int itemIndex) onPickBatch;
+  final VoidCallback onConfirm;
+
+  const _BatchSelectionModal({
+    required this.items,
+    required this.inventoryId,
+    required this.inventoryName,
+    required this.selectedBatchDisplays,
+    required this.onPickBatch,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.bgDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Batches for $inventoryName',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Pick a batch for each product',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  final display = selectedBatchDisplays[i];
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${item.brand} • ${item.qty} ${item.unit}',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => onPickBatch(i),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: display != null
+                                      ? AppColors.gold.withOpacity(0.2)
+                                      : Colors.orange.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: display != null
+                                        ? AppColors.gold
+                                        : Colors.orange,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2,
+                                      color: display != null
+                                          ? AppColors.gold
+                                          : Colors.orange,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      display ?? 'Select Batch',
+                                      style: TextStyle(
+                                        color: display != null
+                                            ? AppColors.gold
+                                            : Colors.orange,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onConfirm,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.gold,
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Confirm',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OrderItem {
+  final int productId;
+  final String name;
+  final String brand;
+  final String unit;
+  int qty;
+
+  OrderItem({
+    required this.productId,
+    required this.name,
+    required this.brand,
+    required this.unit,
+    required this.qty,
   });
 }

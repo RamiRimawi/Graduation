@@ -40,13 +40,13 @@ class _StockInPageState extends State<StockInPage> {
     try {
       setState(() => _loading = true);
 
-      // Fetch supplier orders with status 'Accepted' and join with supplier and inventory
+      // Fetch supplier orders with status 'Accepted' and join with supplier
       final response = await Supabase.instance.client
           .from('supplier_order')
           .select('''
             order_id,
             supplier:supplier_id(name),
-            supplier_order_inventory(inventory:inventory_id(inventory_name))
+            order_date
           ''')
           .eq('order_status', 'Accepted')
           .order('order_id', ascending: false);
@@ -58,32 +58,23 @@ class _StockInPageState extends State<StockInPage> {
         final supplierData = order['supplier'] as Map?;
         final supplierName = supplierData?['name'] as String? ?? 'Unknown';
 
-        // Get unique inventory names for this order
-        final inventoryList = order['supplier_order_inventory'] as List?;
-        final inventoryNames = <String>{};
-
-        if (inventoryList != null) {
-          for (final inv in inventoryList) {
-            final inventoryData = inv['inventory'] as Map?;
-            final invName = inventoryData?['inventory_name'] as String?;
-            if (invName != null && invName.isNotEmpty) {
-              inventoryNames.add(invName);
-            }
+        // Format order date
+        final orderDateStr = order['order_date'] as String?;
+        String dateDisplay = '-';
+        if (orderDateStr != null && orderDateStr.isNotEmpty) {
+          try {
+            final dateTime = DateTime.parse(orderDateStr);
+            dateDisplay = '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+          } catch (e) {
+            dateDisplay = '-';
           }
         }
-
-        // Show inventory names or count if multiple
-        final inventoryDisplay = inventoryNames.isEmpty
-            ? '-'
-            : inventoryNames.length == 1
-            ? inventoryNames.first
-            : '${inventoryNames.length} Inventories';
 
         if (orderId != null) {
           orders.add({
             'id': orderId,
             'supplier': supplierName,
-            'inventory': inventoryDisplay,
+            'orderDate': dateDisplay,
           });
         }
       }
@@ -195,7 +186,7 @@ class _StockInPageState extends State<StockInPage> {
                   Expanded(
                     flex: 3,
                     child: Text(
-                      "Inventory",
+                      "Order Date",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -277,11 +268,11 @@ class _StockInPageState extends State<StockInPage> {
                                     ),
                                   ),
 
-                                  // Inventory #
+                                  // Order Date
                                   Expanded(
                                     flex: 3,
                                     child: Text(
-                                      "${o["inventory"]}",
+                                      "${o["orderDate"]}",
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         color: Colors.white,

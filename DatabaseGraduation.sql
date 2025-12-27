@@ -439,3 +439,35 @@ CREATE TABLE public.user_account_supplier (
   CONSTRAINT user_account_supplier_pkey PRIMARY KEY (supplier_id),
   CONSTRAINT user_account_supplier_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id)
 );
+
+
+
+
+
+
+
+payment_method_enum :	cash, check, endorsed check	
+
+
+
+unit_name_enum :	cm, box, pcs	
+
+
+
+supplier_order_status_enum :	Sent, Accepted, Rejected, Delivered, Updated, Hold, Pending	
+
+
+
+customer_check_status_enum : 	Cashed, Returned, Company Box, Endorsed	
+
+
+
+supplier_check_status_enum : 	Cashed, Returned, Pending	
+
+
+
+customer_order_status_enum : 	Received, Pinned, Prepared, Delivery, Delivered, Updated, Hold, Preparing	
+
+
+
+yes_no_enum : 	yes, no

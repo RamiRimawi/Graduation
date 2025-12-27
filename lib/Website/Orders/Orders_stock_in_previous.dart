@@ -7,6 +7,7 @@ import 'Orders_stock_in_receives.dart';
 import 'Orders_create_stock_in_page.dart';
 import '../../supabase_config.dart';
 import 'dart:ui' as ui;
+import 'orders_header.dart';
 
 // 🔹 Round Icon Button (matches other order pages)
 class _RoundIconButton extends StatelessWidget {
@@ -567,7 +568,7 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
-    final topPadding = height * 0.06;
+    final topPadding = height * 0.02;
 
     return Scaffold(
       body: Row(
@@ -579,90 +580,55 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                 padding: EdgeInsets.only(top: topPadding),
                 child: Column(
                   children: [
-                    // 🔹 العنوان + التوغّل + Create order
+                    // 🔹 HEADER
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: width > 800 ? 60 : 24,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Orders',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                      child: OrdersHeader(
+                        stockTab: stockTab,
+                        currentTab: currentTab,
+                        onStockTabChanged: (i) {
+                          if (i == 0) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OrdersPage(),
+                              ),
+                            );
+                          } else {
+                            setState(() => stockTab = i);
+                          }
+                        },
+                        onTabChanged: (index) {
+                          setState(() => currentTab = index);
+
+                          if (index == 0) {
+                            // Today  -> صفحة Stock-in العادية
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StockInPage(),
+                              ),
+                            );
+                          } else if (index == 1) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const OrdersStockInReceivesPage(),
+                              ),
+                            );
+                          }
+                        },
+                        onCreateOrder: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CreateStockInPage(),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              _StockToggle(
-                                selected: stockTab,
-                                onChanged: (i) {
-                                  if (i == 0) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const OrdersPage(),
-                                      ),
-                                    );
-                                  } else {
-                                    setState(() => stockTab = i);
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 16),
-                              _CreateOrderButton(
-                                onPressed: () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const CreateStockInPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              // 🔔 زر الإشعارات
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Material(
-                                    color: Colors.transparent,
-                                    shape: const CircleBorder(),
-                                    child: InkWell(
-                                      onTap: () {
-                                        // TODO: ممكن تضيف صفحة Notifications هنا لو حاب
-                                      },
-                                      customBorder: const CircleBorder(),
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(8),
-                                        child: Icon(
-                                          Icons.notifications_none_rounded,
-                                          color: Colors.white,
-                                          size: 24,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    right: 6,
-                                    top: 6,
-                                    child: Container(
-                                      width: 7,
-                                      height: 7,
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.blue, // 🔹 لون النقطة
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -675,41 +641,6 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                         ),
                         child: Column(
                           children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _TopTabs(
-                                current: currentTab,
-                                onTap: (index) {
-                                  setState(() => currentTab = index);
-
-                                  if (index == 0) {
-                                    // Today  -> صفحة Stock-in العادية
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const StockInPage(),
-                                      ),
-                                    );
-                                  } else if (index == 1) {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersStockInReceivesPage(),
-                                      ),
-                                    );
-                                  } else {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const StockInPage(),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
                             // --- Search field and filter button (matches other orders pages) ---
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
@@ -1488,176 +1419,6 @@ class _DateInputFieldState extends State<_DateInputField> {
           ),
       ],
     );
-  }
-}
-
-// 🔹 Stock-out / Stock-in toggle
-class _StockToggle extends StatelessWidget {
-  final int selected;
-  final ValueChanged<int> onChanged;
-  const _StockToggle({required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: ShapeDecoration(
-        color: const Color(0xFF1B1B1B),
-        shape: StadiumBorder(
-          side: BorderSide(color: AppColors.gold.withAlpha((.5 * 255).toInt())),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _pill(
-            context,
-            'Stock-out',
-            Icons.logout_rounded,
-            selected == 0,
-            () => onChanged(0),
-          ),
-          _pill(
-            context,
-            'Stock-in',
-            Icons.login_rounded,
-            selected == 1,
-            () => onChanged(1),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pill(
-    BuildContext ctx,
-    String label,
-    IconData icon,
-    bool selected,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(40),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        decoration: ShapeDecoration(
-          color: selected ? AppColors.card : Colors.transparent,
-          shape: const StadiumBorder(),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppColors.white),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// 🔹 زر Create order (نفس زر Stock-out)
-class _CreateOrderButton extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _CreateOrderButton({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const ShapeDecoration(
-        shape: StadiumBorder(),
-        gradient: LinearGradient(
-          colors: [Color(0xFFFFE14D), Color(0xFFFFE14D)],
-        ),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onPressed,
-          customBorder: const StadiumBorder(),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            child: Row(
-              children: [
-                Icon(Icons.add_box_rounded, color: Colors.black87),
-                SizedBox(width: 8),
-                Text(
-                  'Create order',
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// 🔹 تبويبات Today / Updated / Previous بنفس الستايل
-class _TopTabs extends StatelessWidget {
-  final int current;
-  final ValueChanged<int> onTap;
-  const _TopTabs({required this.current, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    const tabs = ['Today', 'Receives', 'Previous'];
-
-    return Row(
-      children: List.generate(tabs.length, (i) {
-        final active = current == i;
-        return Padding(
-          padding: const EdgeInsets.only(right: 22),
-          child: InkWell(
-            onTap: () => onTap(i),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tabs[i],
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.white.withAlpha(
-                      ((active ? 1 : .7) * 255).toInt(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  height: 3,
-                  width: active ? _textWidth(tabs[i], context) : 0,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.blue : Colors.transparent,
-                    borderRadius: const BorderRadius.all(Radius.circular(4)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  double _textWidth(String text, BuildContext context) {
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-      ),
-      maxLines: 1,
-      textDirection: ui.TextDirection.ltr,
-    )..layout();
-    return textPainter.width;
   }
 }
 
