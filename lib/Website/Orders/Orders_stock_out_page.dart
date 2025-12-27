@@ -6,7 +6,7 @@ import 'Orders_stock_in_page.dart';
 import 'Orders_stock_out_receives.dart';
 import 'Orders_stock_out_previous.dart';
 import 'Orders_detail_popup.dart';
-import 'widgets/orders_header.dart';
+import 'orders_header.dart';
 
 // 🎨 الألوان
 class AppColors {

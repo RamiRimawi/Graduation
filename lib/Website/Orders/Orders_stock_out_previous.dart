@@ -6,7 +6,7 @@ import 'Orders_stock_out_page.dart'; // عشان نرجع لصفحة Today
 import 'Orders_stock_out_receives.dart'; // عشان نروح لصفحة Receives
 import 'Orders_create_stock_out_page.dart';
 import 'Orders_stock_out_previous_popup.dart'; // Popup for order details
-import 'widgets/orders_header.dart';
+import 'orders_header.dart';
 
 // 🎨 الألوان نفس الباليت
 class AppColors {
