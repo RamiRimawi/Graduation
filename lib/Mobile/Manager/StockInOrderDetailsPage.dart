@@ -19,7 +19,9 @@ class StockInOrderDetailsPage extends StatefulWidget {
 class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
   bool _loading = true;
   String _supplierName = '';
+  // ignore: unused_field
   String _orderStatus = '';
+  // ignore: unused_field
   DateTime? _orderDate;
   List<OrderItem> _items = [];
 
@@ -339,20 +341,6 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchInventories() async {
-    try {
-      final supabase = Supabase.instance.client;
-      final response = await supabase
-          .from('inventory')
-          .select('inventory_id, inventory_name')
-          .order('inventory_name');
-
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      debugPrint('Error fetching inventories: $e');
-      return [];
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
