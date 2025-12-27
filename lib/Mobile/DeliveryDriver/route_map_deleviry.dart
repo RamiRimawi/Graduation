@@ -117,10 +117,10 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
       CameraFit.bounds(
         bounds: bounds,
         padding: const EdgeInsets.only(
-          top: 100,    // Space for back button
-          bottom: 280, // Space for bottom info card
+          top: 110,    // Space for back button
+          bottom: 290, // Space for bottom info card
           left: 50,
-          right: 50,
+          right: 60,
         ),
       ),
     );
@@ -229,93 +229,118 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                   });
                 },
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.dolphin',
-                  tileProvider: NetworkTileProvider(),
-                ),
-                
-                // Route polyline (draw first so markers appear on top)
-                if (routePoints.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: routePoints,
-                        strokeWidth: 5.0,
-                        color: const Color(0xFF2196F3),
-                        borderStrokeWidth: 2.0,
-                        borderColor: const Color(0xFF1565C0),
-                      ),
-                    ],
-                  ),
-                
-                MarkerLayer(
-                  markers: [
-                    // Delivery driver location (start point)
-                    if (deliveryDriverLocation != null)
-                      Marker(
-                        point: deliveryDriverLocation!,
-                        width: 50.0,
-                        height: 50.0,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.local_shipping,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    // Customer location (destination)
-                    Marker(
-                      point: deliveryLocation,
-                      width: 50.0,
-                      height: 50.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF4444),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
+
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.dolphin',
+                tileProvider: NetworkTileProvider(),
+              ),
+              
+              // ✅ غيّر الخط الأزرق فقط
+              if (routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: routePoints,
+                      strokeWidth: 8.0,  // ✅ نفس live_navigation
+                      color: const Color(0xFF42A5F5),  // ✅ نفس live_navigation
                     ),
                   ],
                 ),
-              ],
+              
+              MarkerLayer(
+                markers: [
+                  // ✅ غيّر أيقونة السائق
+                  if (deliveryDriverLocation != null)
+                    Marker(
+                      point: deliveryDriverLocation!,
+                      width: 70.0,
+                      height: 70.0,
+                      alignment: Alignment.center,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer glow
+                          Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2196F3).withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          // Middle white circle
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Blue truck icon
+                          Container(
+                            width: 45,
+                            height: 45,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.local_shipping,
+                              color: Color(0xFF2196F3),
+                              size: 28,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  
+                  // ✅ غيّر أيقونة الوجهة
+                  Marker(
+                    point: deliveryLocation,
+                    width: 50.0,
+                    height: 50.0,
+                    alignment: Alignment.center,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF5252),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.place,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             ),
 
             // Zoom In/Out Buttons
             Positioned(
               right: 16,
-              top: 80,
+              top: 20,
               child: Column(
                 children: [
                   Container(
@@ -408,7 +433,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                 ],
               ),
             ),
-
+          
             // Loading indicator
             if (_mapLoading || !_locationObtained)
               Container(

@@ -84,7 +84,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
 
   void _startDatabaseUpdates() {
     _dbUpdateTimer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 5),
       (_) => _updateLocationInDatabase(),
     );
   }
