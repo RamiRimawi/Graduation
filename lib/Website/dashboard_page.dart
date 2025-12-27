@@ -485,7 +485,8 @@ class _OrdersCardState extends State<_OrdersCard> {
           .inFilter('order_status', ['Received', 'Updated'])
           .order('customer_order_id', ascending: false);
 
-      // Fetch supplier orders (stock-in receives)
+      // Fetch supplier orders (stock-in receives): include Pending and Updated
+      // so we can show both in (NEW) and in (UPDATE) receives.
       final supplierOrdersResponse = await supabase
           .from('supplier_order')
           .select('''
@@ -494,13 +495,11 @@ class _OrdersCardState extends State<_OrdersCard> {
             order_date,
             order_status,
             created_by_id,
-            accountant_id,
-            last_tracing_by,
             supplier:supplier_id (
               name
             )
           ''')
-          .or('order_status.eq.Sent,order_status.eq.Updated')
+          .inFilter('order_status', ['Pending', 'Updated'])
           .order('order_date', ascending: false);
 
       final List<Map<String, dynamic>> allOrders = [];
@@ -531,50 +530,88 @@ class _OrdersCardState extends State<_OrdersCard> {
         });
       }
 
-      // Process supplier orders
-      for (final order in supplierOrdersResponse) {
+      // Resolve manager creators for supplier orders
+      final supplierOrders = (supplierOrdersResponse as List)
+          .cast<Map<String, dynamic>>();
+      final Set<int> creatorIds = supplierOrders
+          .map((o) => o['created_by_id'])
+          .whereType<int>()
+          .toSet();
+
+      final Map<int, String> managerNames = {};
+      final Map<int, String> accountantNames = {};
+      final Set<int> managerIds = {};
+      final Set<int> accountantIds = {};
+
+      if (creatorIds.isNotEmpty) {
+        // Resolve storage managers
+        final managerConditions = creatorIds
+            .map((id) => 'storage_manager_id.eq.$id')
+            .join(',');
+        final managers = await supabase
+            .from('storage_manager')
+            .select('storage_manager_id, name')
+            .or(managerConditions);
+        for (final m in managers) {
+          final id = m['storage_manager_id'] as int?;
+          if (id != null) {
+            managerIds.add(id);
+            managerNames[id] = m['name']?.toString() ?? 'Manager';
+          }
+        }
+
+        // Resolve accountants (some created_by_id values may refer to accountants)
+        final accountantConditions = creatorIds
+            .map((id) => 'accountant_id.eq.$id')
+            .join(',');
+        final accountants = await supabase
+            .from('accountant')
+            .select('accountant_id, name')
+            .or(accountantConditions);
+        for (final a in accountants) {
+          final id = a['accountant_id'] as int?;
+          if (id != null) {
+            accountantIds.add(id);
+            accountantNames[id] = a['name']?.toString() ?? 'Accountant';
+          }
+        }
+      }
+
+      // Process supplier orders: include manager-created Pending/Updated
+      // If creator lookup fails, still include the order and fall back to
+      // `last_tracing_by` or a generic label so "in" rows are visible.
+      for (final order in supplierOrders) {
+        final creatorId = order['created_by_id'] as int?;
+
         final orderDate = DateTime.parse(order['order_date']);
         final time =
             '${orderDate.hour}:${orderDate.minute.toString().padLeft(2, '0')}';
         final date = '${orderDate.day}/${orderDate.month}';
 
+        // Determine in type based on status
         String type = 'in (NEW)';
         if (order['order_status'] == 'Updated') {
           type = 'in (UPDATE)';
         }
 
-        // Get creator name
-        String createdBy = order['last_tracing_by'] ?? 'System';
-        if (order['created_by_id'] != null) {
-          // Try to get from storage_manager or accountant tables
-          try {
-            final managerResponse = await supabase
-                .from('storage_manager')
-                .select('name')
-                .eq('storage_manager_id', order['created_by_id'])
-                .maybeSingle();
-
-            if (managerResponse != null) {
-              createdBy = managerResponse['name'];
-            } else {
-              final accountantResponse = await supabase
-                  .from('accountant')
-                  .select('name')
-                  .eq('accountant_id', order['created_by_id'])
-                  .maybeSingle();
-
-              if (accountantResponse != null) {
-                createdBy = accountantResponse['name'];
-              }
-            }
-          } catch (e) {
-            // Keep default createdBy if lookup fails
+        // Resolve creator display name, preferring manager then accountant,
+        // falling back to `last_tracing_by` or a generic label.
+        String createdBy = 'System';
+        if (creatorId != null) {
+          if (managerNames.containsKey(creatorId)) {
+            createdBy = '${managerNames[creatorId]}';
+          } else if (accountantNames.containsKey(creatorId)) {
+            createdBy = '${accountantNames[creatorId]}';
+          } else if (order['last_tracing_by'] != null) {
+            createdBy = order['last_tracing_by']?.toString() ?? 'System';
           }
+        } else if (order['last_tracing_by'] != null) {
+          createdBy = order['last_tracing_by']?.toString() ?? 'System';
         }
 
         allOrders.add({
           'id': order['order_id'].toString(),
-          'name': order['supplier']['name'] ?? 'Unknown',
+          'name': order['supplier']?['name'] ?? 'Unknown',
           'type': type,
           'createdBy': createdBy,
           'time': time,

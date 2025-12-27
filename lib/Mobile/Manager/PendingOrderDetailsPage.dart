@@ -461,6 +461,7 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
       builder: (_) => SelectBatchSheet(
         productId: item.productId,
         inventoryId: _selectedInventoryId,
+        requiredQty: item.qty,
         onSelected: (batchId, displayText) {
           Navigator.pop(context);
           setState(() {
@@ -522,8 +523,13 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
             'Choose a staff member to assign this order',
             style: TextStyle(color: Colors.white70, fontSize: 13),
           ),
-          const SizedBox(height: 24),
-          Expanded(
+          const SizedBox(height: 2),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              // Allow the staff selector to size to its content but cap height
+              // so it doesn't force the modal to full screen.
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
             child: SelectStaffSheet(
               onSelected: (staffId, inventoryId, displayName) {
                 setState(() {

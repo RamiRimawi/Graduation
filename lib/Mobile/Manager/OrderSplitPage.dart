@@ -68,15 +68,19 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => SelectStaffSheet(
-        onSelected: (staffId, inventoryId, displayName) {
-          Navigator.pop(context);
-          setState(() {
-            _splits[index].staffId = staffId;
-            _splits[index].inventoryId = inventoryId;
-            _splits[index].staffName = displayName;
-          });
-        },
+      builder: (_) => Wrap(
+        children: [
+          SelectStaffSheet(
+            onSelected: (staffId, inventoryId, displayName) {
+              Navigator.pop(context);
+              setState(() {
+                _splits[index].staffId = staffId;
+                _splits[index].inventoryId = inventoryId;
+                _splits[index].staffName = displayName;
+              });
+            },
+          ),
+        ],
       ),
     );
   }
@@ -101,6 +105,7 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
       builder: (_) => SelectBatchSheet(
         productId: item.productId,
         inventoryId: split.inventoryId, // Filter by selected inventory
+        requiredQty: split.quantitiesByItem[itemIndex] ?? 0,
         onSelected: (batchId, displayText) {
           Navigator.pop(context);
           setState(() {

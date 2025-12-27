@@ -24,32 +24,34 @@ class DeleviryDetail extends StatefulWidget {
 }
 
 class _DeleviryDetailState extends State<DeleviryDetail> {
-    Future<bool?> _showSignaturePopup() async {
-      int? orderId = widget.orderId;
+  Future<bool?> _showSignaturePopup() async {
+    int? orderId = widget.orderId;
 
-      if (orderId == null) {
-        final ordersRes = await supabase
-            .from('customer_order')
-            .select('customer_order_id')
-            .eq('customer_id', widget.customerId)
-            .order('order_date', ascending: false)
-            .limit(1) as List<dynamic>;
+    if (orderId == null) {
+      final ordersRes =
+          await supabase
+                  .from('customer_order')
+                  .select('customer_order_id')
+                  .eq('customer_id', widget.customerId)
+                  .order('order_date', ascending: false)
+                  .limit(1)
+              as List<dynamic>;
 
-        if (ordersRes.isEmpty) return null;
-        orderId = ordersRes.first['customer_order_id'] as int;
-      }
-
-      return showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => SignatureConfirmation(
-          customerName: widget.customerName,
-          customerId: widget.customerId,
-          orderId: orderId!,
-          products: products,
-        ),
-      );
+      if (ordersRes.isEmpty) return null;
+      orderId = ordersRes.first['customer_order_id'] as int;
     }
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => SignatureConfirmation(
+        customerName: widget.customerName,
+        customerId: widget.customerId,
+        orderId: orderId!,
+        products: products,
+      ),
+    );
+  }
 
   int _selectedIndex = 0;
 
@@ -84,12 +86,14 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
       // Fallback: fetch latest order if not provided
       if (orderId == null) {
-        final ordersRes = await supabase
-            .from('customer_order')
-            .select('customer_order_id,order_date')
-            .eq('customer_id', widget.customerId)
-            .order('order_date', ascending: false)
-            .limit(1) as List<dynamic>;
+        final ordersRes =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id,order_date')
+                    .eq('customer_id', widget.customerId)
+                    .order('order_date', ascending: false)
+                    .limit(1)
+                as List<dynamic>;
 
         if (ordersRes.isEmpty) {
           setState(() {
@@ -103,10 +107,29 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       }
 
       // Fetch product info embedded: product name, brand name and unit name
-      final descRes = await supabase
-          .from('customer_order_description')
-          .select('product_id,delivered_quantity,quantity,product:product_id(name,brand:brand_id(name),unit:unit_id(unit_name))')
-          .eq('customer_order_id', orderId) as List<dynamic>;
+      final descRes =
+          await supabase
+                  .from('customer_order_description')
+                  .select(
+                    'product_id,quantity,product:product_id(name,brand:brand_id(name),unit:unit_id(unit_name))',
+                  )
+                  .eq('customer_order_id', orderId)
+              as List<dynamic>;
+
+      // Fetch prepared quantities from customer_order_inventory for this order
+      final invRes =
+          await supabase
+                  .from('customer_order_inventory')
+                  .select('product_id,prepared_quantity')
+                  .eq('customer_order_id', orderId)
+              as List<dynamic>;
+
+      final Map<int, int> preparedByProduct = {};
+      for (final r in invRes) {
+        final pid = r['product_id'] as int?;
+        final pq = r['prepared_quantity'] as int?;
+        if (pid != null && pq != null) preparedByProduct[pid] = pq;
+      }
 
       final List<Map<String, dynamic>> list = [];
       for (final d in descRes) {
@@ -117,7 +140,13 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
         final brandName = brandMap?['name'] as String? ?? 'Unknown';
         final unitMap = prod?['unit'] as Map<String, dynamic>?;
         final unitName = unitMap?['unit_name'] as String? ?? 'cm';
-        final qty = d['quantity'] ?? 0;
+        // Prefer prepared_quantity if available, otherwise fall back to description.quantity
+        final fallbackQty = (d['quantity'] as int?) ?? 0;
+        final qty =
+            (productIdTop != null &&
+                preparedByProduct.containsKey(productIdTop))
+            ? preparedByProduct[productIdTop]
+            : fallbackQty;
 
         list.add({
           'product_id': productIdTop,
@@ -209,18 +238,20 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
       // Fallback: fetch latest order ID for this customer if none was provided
       if (orderId == null) {
-        final ordersRes = await supabase
-            .from('customer_order')
-            .select('customer_order_id')
-            .eq('customer_id', widget.customerId)
-            .order('order_date', ascending: false)
-            .limit(1) as List<dynamic>;
+        final ordersRes =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id')
+                    .eq('customer_id', widget.customerId)
+                    .order('order_date', ascending: false)
+                    .limit(1)
+                as List<dynamic>;
 
         if (ordersRes.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No order found')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('No order found')));
           }
           return;
         }
@@ -229,10 +260,12 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       }
 
       // Update all order descriptions with delivered_quantity = quantity
-      final descRes = await supabase
-          .from('customer_order_description')
-          .select('customer_order_id,product_id,quantity')
-          .eq('customer_order_id', orderId) as List<dynamic>;
+      final descRes =
+          await supabase
+                  .from('customer_order_description')
+                  .select('customer_order_id,product_id,quantity')
+                  .eq('customer_order_id', orderId)
+              as List<dynamic>;
 
       // Update each description with delivered_quantity using composite key
       for (final desc in descRes) {
@@ -275,9 +308,9 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
       if (res == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Customer not found')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Customer not found')));
         }
         return;
       }
@@ -292,7 +325,11 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       if (lat == null || lng == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No coordinates for this customer. Please add location data in database.')), 
+            const SnackBar(
+              content: Text(
+                'No coordinates for this customer. Please add location data in database.',
+              ),
+            ),
           );
         }
         return;
@@ -301,21 +338,27 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
       final latDouble = lat is num ? lat.toDouble() : double.tryParse('$lat');
       final lngDouble = lng is num ? lng.toDouble() : double.tryParse('$lng');
 
-      debugPrint('Parsed coordinates: lat=$latDouble, lng=$lngDouble'); // Debug log
+      debugPrint(
+        'Parsed coordinates: lat=$latDouble, lng=$lngDouble',
+      ); // Debug log
 
       if (latDouble == null || lngDouble == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid coordinates for this customer')),
+            const SnackBar(
+              content: Text('Invalid coordinates for this customer'),
+            ),
           );
         }
         return;
       }
 
       if (!mounted) return;
-      
-      debugPrint('Opening map with: lat=$latDouble, lng=$lngDouble'); // Debug log
-      
+
+      debugPrint(
+        'Opening map with: lat=$latDouble, lng=$lngDouble',
+      ); // Debug log
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -332,9 +375,9 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
     } catch (e) {
       debugPrint('Error opening map: $e'); // Debug log
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load location: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load location: $e')));
       }
     } finally {
       if (mounted) setState(() => _openingMap = false);
@@ -439,115 +482,115 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
             //========== LIST OF PRODUCTS ==========
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : products.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No products found',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final product = products[index];
+                  ? const Center(
+                      child: Text(
+                        'No products found',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final product = products[index];
 
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2D2D2D),
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.25),
-                                      blurRadius: 1,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2D2D2D),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.25),
+                                  blurRadius: 1,
+                                  offset: const Offset(0, 4),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 18,
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      // Product Name
-                                      Expanded(
-                                        flex: 3,
-                                        child: Text(
-                                          product['name'],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                      // Brand
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          product['brand'],
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                      // Quantity (box + cm)
-                                      Expanded(
-                                        flex: 2,
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () => _editQuantity(index),
-                                              child: Container(
-                                                width: 50,
-                                                padding: const EdgeInsets.symmetric(
-                                                  vertical: 12,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFB7A447),
-                                                  borderRadius: BorderRadius.circular(14),
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: Text(
-                                                  '${product['quantity']}',
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF202020),
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              product['unit'],
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 18,
                               ),
-                            );
-                          },
-                        ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Product Name
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      product['name'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  // Brand
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      product['brand'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  // Quantity (box + cm)
+                                  Expanded(
+                                    flex: 2,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () => _editQuantity(index),
+                                          child: Container(
+                                            width: 50,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFB7A447),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              '${product['quantity']}',
+                                              style: const TextStyle(
+                                                color: Color(0xFF202020),
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          product['unit'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
 
             //========== BUTTONS: View Route on Map & Confirm Delivery ==========

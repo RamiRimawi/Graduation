@@ -6,6 +6,7 @@ import 'Orders_stock_in_page.dart';
 import 'Orders_stock_out_receives.dart';
 import 'Orders_stock_out_previous.dart';
 import 'Orders_detail_popup.dart';
+import 'widgets/orders_header.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -386,7 +387,7 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
-    final topPadding = height * 0.06;
+    final topPadding = height * 0.02;
 
     return Scaffold(
       body: Row(
@@ -398,56 +399,56 @@ class _OrdersPageState extends State<OrdersPage> {
                 padding: EdgeInsets.only(top: topPadding),
                 child: Column(
                   children: [
-                    // 🔹 العنوان + الأزرار
+                    // 🔹 HEADER
                     Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: width > 800 ? 60 : 24,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Orders',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                      child: OrdersHeader(
+                        stockTab: stockTab,
+                        currentTab: 0, // Today tab
+                        onStockTabChanged: (i) {
+                          if (i == 1) {
+                            // ⬅️ الانتقال إلى صفحة Stock-in
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StockInPage(),
+                              ),
+                            );
+                          } else {
+                            setState(() => stockTab = i);
+                          }
+                        },
+                        onTabChanged: (index) {
+                          if (index == 1) {
+                            // 👉 الانتقال إلى صفحة Stock-out Receives
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OrdersReceivesPage(),
+                              ),
+                            );
+                          } else if (index == 2) {
+                            // 👉 الانتقال إلى صفحة Stock-out Previous
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StockOutPrevious(),
+                              ),
+                            );
+                          }
+                          // index == 0 = Today -> نفس الصفحة، ما نعمل شيء
+                        },
+                        onCreateOrder: () {
+                          // ➕ الانتقال إلى صفحة Create Stock-Out Order
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const CreateStockOutPage(),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              _StockToggle(
-                                selected: stockTab,
-                                onChanged: (i) {
-                                  if (i == 1) {
-                                    // ⬅️ الانتقال إلى صفحة Stock-in
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const StockInPage(),
-                                      ),
-                                    );
-                                  } else {
-                                    setState(() => stockTab = i);
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 16),
-                              _CreateOrderButton(
-                                onPressed: () {
-                                  // ➕ الانتقال إلى صفحة Create Stock-Out Order
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const CreateStockOutPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -460,36 +461,6 @@ class _OrdersPageState extends State<OrdersPage> {
                         ),
                         child: Column(
                           children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: _SimpleTabs(
-                                tabs: const ['Today', 'Receives', 'Previous'],
-                                onTap: (index) {
-                                  if (index == 1) {
-                                    // 👉 الانتقال إلى صفحة Stock-out Receives
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OrdersReceivesPage(),
-                                      ),
-                                    );
-                                  } else if (index == 2) {
-                                    // 👉 الانتقال إلى صفحة Stock-out Previous
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const StockOutPrevious(),
-                                      ),
-                                    );
-                                  }
-                                  // index == 0 = Today -> نفس الصفحة، ما نعمل شيء
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
                             // 🔹 البحث + فلتر
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
@@ -857,58 +828,6 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 }
 
-class _SimpleTabs extends StatefulWidget {
-  final List<String> tabs;
-  final ValueChanged<int> onTap;
-  const _SimpleTabs({required this.tabs, required this.onTap});
-
-  @override
-  State<_SimpleTabs> createState() => _SimpleTabsState();
-}
-
-class _SimpleTabsState extends State<_SimpleTabs> {
-  int current = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(widget.tabs.length, (i) {
-        final active = current == i;
-        return Padding(
-          padding: EdgeInsets.only(right: i == widget.tabs.length - 1 ? 0 : 22),
-          child: GestureDetector(
-            onTap: () {
-              setState(() => current = i);
-              widget.onTap(i);
-            },
-            child: Container(
-              padding: const EdgeInsets.only(bottom: 6),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: active ? AppColors.blue : Colors.transparent,
-                    width: active ? 3 : 0,
-                  ),
-                ),
-              ),
-              child: Text(
-                widget.tabs[i],
-                style: TextStyle(
-                  color: active
-                      ? AppColors.white
-                      : AppColors.white.withOpacity(0.7),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}
-
 // 🔹 حقل البحث
 class _SearchField extends StatelessWidget {
   final String hint;
@@ -1058,73 +977,6 @@ class _CreateOrderButton extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-// 🔹 Stock-in / Stock-out
-class _StockToggle extends StatelessWidget {
-  final int selected;
-  final ValueChanged<int> onChanged;
-  const _StockToggle({required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: ShapeDecoration(
-        color: const Color(0xFF1B1B1B),
-        shape: StadiumBorder(
-          side: BorderSide(color: AppColors.gold.withOpacity(.5)),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _pill(
-            context,
-            'Stock-out',
-            Icons.logout_rounded,
-            selected == 0,
-            () => onChanged(0),
-          ),
-          _pill(
-            context,
-            'Stock-in',
-            Icons.login_rounded,
-            selected == 1,
-            () => onChanged(1),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pill(
-    BuildContext ctx,
-    String label,
-    IconData icon,
-    bool selected,
-    VoidCallback onTap,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(40),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        decoration: ShapeDecoration(
-          color: selected ? AppColors.card : Colors.transparent,
-          shape: const StadiumBorder(),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppColors.white),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
     );
   }
 }

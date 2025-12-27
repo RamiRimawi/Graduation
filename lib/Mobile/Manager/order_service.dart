@@ -29,6 +29,19 @@ class OrderService {
       final customerName =
           orderResponse['customer']['name'] as String? ?? 'Unknown';
 
+      // Fetch prepared quantities from customer_order_inventory (if any)
+      final inventoryRows = await supabase
+          .from('customer_order_inventory')
+          .select('product_id, prepared_quantity')
+          .eq('customer_order_id', orderId);
+
+      final Map<int, int> preparedQtyByProduct = {};
+      for (final row in inventoryRows) {
+        final pid = row['product_id'] as int?;
+        final pq = row['prepared_quantity'] as int?;
+        if (pid != null && pq != null) preparedQtyByProduct[pid] = pq;
+      }
+
       // Convert items to OrderItem list
       final items = <OrderItem>[];
       for (final itemData in itemsResponse) {
@@ -46,12 +59,19 @@ class OrderService {
               'Unit';
         }
 
+        // Use prepared_quantity from customer_order_inventory when available;
+        // otherwise fall back to the ordered quantity in customer_order_description.
+        final productId = itemData['product_id'] as int? ?? 0;
+        final qty = preparedQtyByProduct.containsKey(productId)
+            ? preparedQtyByProduct[productId]!
+            : (itemData['quantity'] as int? ?? 0);
+
         final item = OrderItem(
-          itemData['product_id'] as int? ?? 0,
+          productId,
           productData['name'] as String? ?? 'Unknown',
           brandData?['name'] as String? ?? 'Unknown',
           unitName,
-          itemData['quantity'] as int? ?? 0,
+          qty,
         );
         items.add(item);
       }

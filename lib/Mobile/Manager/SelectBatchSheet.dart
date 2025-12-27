@@ -5,12 +5,14 @@ import 'manager_theme.dart';
 class SelectBatchSheet extends StatefulWidget {
   final int productId;
   final int? inventoryId; // Optional: filter by inventory
+  final int? requiredQty; // Optional: required quantity to check against batch
   final void Function(int batchId, String displayText) onSelected;
 
   const SelectBatchSheet({
     super.key,
     required this.productId,
     this.inventoryId,
+    this.requiredQty,
     required this.onSelected,
   });
 
@@ -69,6 +71,7 @@ class _SelectBatchSheetState extends State<SelectBatchSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.bgDark,
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
@@ -166,6 +169,7 @@ class _SelectBatchSheetState extends State<SelectBatchSheet> {
                       location: location,
                       quantity: quantity,
                       inventoryName: inventoryName,
+                      requiredQty: widget.requiredQty,
                       onTap: () {
                         widget.onSelected(batchId, displayText);
                       },
@@ -187,6 +191,7 @@ class _BatchCard extends StatelessWidget {
   final String location;
   final int quantity;
   final String inventoryName;
+  final int? requiredQty;
   final VoidCallback onTap;
 
   const _BatchCard({
@@ -194,13 +199,53 @@ class _BatchCard extends StatelessWidget {
     required this.location,
     required this.quantity,
     required this.inventoryName,
+    this.requiredQty,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () async {
+        if (requiredQty != null && quantity < requiredQty!) {
+          // Show warning dialog
+          final shouldContinue = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: AppColors.bgDark,
+              title: const Text(
+                'Insufficient Quantity',
+                style: TextStyle(color: AppColors.gold),
+              ),
+              content: Text(
+                'The selected batch has $quantity units, but $requiredQty are required. Do you want to continue?',
+                style: const TextStyle(color: Colors.white),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text(
+                    'Continue',
+                    style: TextStyle(color: AppColors.gold),
+                  ),
+                ),
+              ],
+            ),
+          );
+          if (shouldContinue == true) {
+            onTap();
+          }
+        } else {
+          onTap();
+        }
+      },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
