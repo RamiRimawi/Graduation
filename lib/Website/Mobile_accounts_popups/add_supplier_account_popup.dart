@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../supabase_config.dart';
-import '../MobileAccounts_shared_popup_widgets.dart';
+import '../MobileAccounts/MobileAccounts_shared_popup_widgets.dart';
 
 class AddSupplierAccountPopup extends StatefulWidget {
   final VoidCallback? onAccountCreated;

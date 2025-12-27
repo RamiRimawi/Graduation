@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../supabase_config.dart';
 import 'sidebar.dart';
-import 'Orders_detail_popup.dart';
-import 'Orders_stock_out_page.dart';
+import 'Orders/Orders_detail_popup.dart';
+import 'Orders/Orders_stock_out_page.dart';
 
 const Color gold = Color(0xFFB7A447);
 const Color blue = Color(0xFF50B2E7);

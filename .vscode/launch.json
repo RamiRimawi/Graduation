@@ -6,7 +6,7 @@
       "name": "Run Flutter on Chrome",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main_mobile.dart",
+      "program": "lib/main_website.dart",
       "flutterMode": "debug"
     }
   ]

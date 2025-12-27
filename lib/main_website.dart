@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'supabase_config.dart';
 import 'Website/login_page.dart';
-import 'Website/Dashboard_page.dart';
-import 'Website/Delivery_page.dart';
-import 'Website/Mobile_accounts_page.dart';
-import 'Website/management_page.dart';
-import 'Website/Payment_page.dart';
-import 'Website/Report_page.dart';
-import 'Website/inventory_page.dart';
-import 'Website/Orders_stock_out_page.dart';
-import 'Website/Account_page.dart';
+import 'Website/dashboard_page.dart';
+import 'Website/account_page.dart';
+import 'Website/Delivery/delivery_page.dart';
+import 'Website/MobileAccounts/mobile_accounts_page.dart';
+import 'Website/Management/Management_page.dart';
+import 'Website/Payment/Payment_page.dart';
+import 'Website/Report/report_page.dart';
+import 'Website/Inventory/inventory_page.dart';
+import 'Website/Orders/Orders_stock_out_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
