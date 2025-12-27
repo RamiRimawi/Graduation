@@ -3,9 +3,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_compass/flutter_compass.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math' as math;
 import '../../supabase_config.dart';
 
 class LiveNavigation extends StatefulWidget {
@@ -30,61 +30,63 @@ class LiveNavigation extends StatefulWidget {
   State<LiveNavigation> createState() => _LiveNavigationState();
 }
 
-class _LiveNavigationState extends State<LiveNavigation> {
+class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStateMixin {
   MapController? _mapController;
   LatLng? _currentDriverLocation;
+  LatLng? _previousLocation;
   List<LatLng> _routePoints = [];
   double _remainingDistance = 0;
   double _remainingTime = 0;
+  double _currentBearing = 0;
+  double _currentSpeed = 0;
   StreamSubscription<Position>? _positionStream;
-  StreamSubscription<CompassEvent>? _compassStream;
   Timer? _routeUpdateTimer;
-  Timer? _locationUpdateTimer;
+  Timer? _dbUpdateTimer;
   bool _arrivedAtDestination = false;
-  DateTime? _lastUpdate;
-  int _updateCount = 0;
-  bool _compassMode = true;
+  bool _isFollowingDriver = true;
+  
+  late AnimationController _rotationAnimationController;
+  late Animation<double> _rotationAnimation;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    
+    _rotationAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _rotationAnimation = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(
+        parent: _rotationAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    )..addListener(() {
+      if (_isFollowingDriver) {
+        _mapController?.rotate(_rotationAnimation.value);
+      }
+    });
+    
     _startLiveTracking();
-    _startLocationUpdates();
-    _startCompassTracking();
+    _startDatabaseUpdates();
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
-    _compassStream?.cancel();
     _routeUpdateTimer?.cancel();
-    _locationUpdateTimer?.cancel();
+    _dbUpdateTimer?.cancel();
+    _rotationAnimationController.dispose();
     super.dispose();
   }
 
-  void _startLocationUpdates() {
-    _locationUpdateTimer = Timer.periodic(
+  void _startDatabaseUpdates() {
+    _dbUpdateTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _updateLocationInDatabase(),
     );
-  }
-
-  void _startCompassTracking() {
-    _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
-      if (_compassMode && _currentDriverLocation != null) {
-        double heading = event.heading ?? 0;
-
-        // تحويل الاتجاه من 0-360 درجة إلى راديان للخريطة
-        // نستخدم القيمة السالبة لأن الدوران في الخريطة عكس عقارب الساعة
-        double rotation = -heading * (3.141592653589793 / 180.0);
-
-        // تدوير الخريطة بناءً على اتجاه الجهاز
-        _mapController?.rotate(rotation);
-
-        debugPrint('🧭 Compass heading: ${heading.toStringAsFixed(1)}°');
-      }
-    });
   }
 
   Future<void> _updateLocationInDatabase() async {
@@ -99,9 +101,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
           })
           .eq('delivery_driver_id', widget.deliveryDriverId);
 
-      debugPrint('📍 Location updated in DB: ${_currentDriverLocation!.latitude}, ${_currentDriverLocation!.longitude}');
+      debugPrint('📍 Location updated in DB');
     } catch (e) {
-      debugPrint('❌ Error updating location in database: $e');
+      debugPrint('❌ Error updating location: $e');
     }
   }
 
@@ -115,6 +117,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
       if (permission == LocationPermission.whileInUse || 
           permission == LocationPermission.always) {
+        
         final initialPosition = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
         );
@@ -124,48 +127,142 @@ class _LiveNavigationState extends State<LiveNavigation> {
             initialPosition.latitude, 
             initialPosition.longitude
           );
+          _previousLocation = _currentDriverLocation;
         });
 
         await _updateRoute();
 
         const LocationSettings locationSettings = LocationSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: 10,
+          distanceFilter: 3,
+          timeLimit: Duration(seconds: 1),
         );
 
         _positionStream = Geolocator.getPositionStream(
           locationSettings: locationSettings,
         ).listen((Position position) {
-          final newLocation = LatLng(position.latitude, position.longitude);
-
-          setState(() {
-            _currentDriverLocation = newLocation;
-          });
-
-          _mapController?.move(newLocation, 17.0);
-
-          final distanceToDestination = _calculateDistance(
-            newLocation,
-            LatLng(widget.customerLatitude, widget.customerLongitude),
-          );
-
-          if (distanceToDestination < 0.05 && !_arrivedAtDestination) {
-            setState(() => _arrivedAtDestination = true);
-            _showArrivalDialog();
-          }
-
-          debugPrint('🚚 Driver moved to: $newLocation');
-          debugPrint('📏 Distance to destination: ${distanceToDestination.toStringAsFixed(3)} km');
+          _handleNewPosition(position);
         });
 
         _routeUpdateTimer = Timer.periodic(
-          const Duration(seconds: 30),
+          const Duration(seconds: 20),
           (_) => _updateRoute(),
         );
       }
     } catch (e) {
       debugPrint('Error starting live tracking: $e');
     }
+  }
+
+  void _handleNewPosition(Position position) {
+    final newLocation = LatLng(position.latitude, position.longitude);
+
+    if (_previousLocation != null) {
+      final distance = _calculateDistance(_previousLocation!, newLocation);
+      
+      // Update speed
+      if (position.speed > 0) {
+        _currentSpeed = position.speed * 3.6; // m/s to km/h
+      } else {
+        _currentSpeed = 0;
+      }
+      
+      // Update bearing only if moved significantly
+      if (distance > 0.005) { // 5 meters
+        final bearing = _calculateBearing(_previousLocation!, newLocation);
+        
+        setState(() {
+          _currentBearing = bearing;
+        });
+        
+        // Rotate map to follow direction
+        if (_isFollowingDriver) {
+          _smoothRotateMap(-bearing);
+        }
+        
+        debugPrint('🧭 Bearing: ${bearing.toStringAsFixed(1)}°, Speed: ${_currentSpeed.toStringAsFixed(1)} km/h');
+      }
+    }
+
+    setState(() {
+      _previousLocation = _currentDriverLocation;
+      _currentDriverLocation = newLocation;
+    });
+
+    // Auto-follow driver
+    if (_isFollowingDriver && _currentDriverLocation != null) {
+      _followDriver();
+    }
+
+    // Check arrival - 5 meters
+    final distanceToDestination = _calculateDistance(
+      newLocation,
+      LatLng(widget.customerLatitude, widget.customerLongitude),
+    );
+
+    if (distanceToDestination < 0.005 && !_arrivedAtDestination) {
+      setState(() => _arrivedAtDestination = true);
+      _showArrivalDialog();
+      debugPrint('🎯 Arrived! Distance: ${(distanceToDestination * 1000).toStringAsFixed(1)}m');
+    }
+  }
+
+  void _followDriver() {
+    if (_mapController == null || _currentDriverLocation == null) return;
+    
+    // Dynamic zoom based on speed
+    double zoom = 17.0;
+    if (_currentSpeed > 60) {
+      zoom = 15.5;
+    } else if (_currentSpeed > 40) {
+      zoom = 16.0;
+    } else if (_currentSpeed > 20) {
+      zoom = 16.5;
+    } else {
+      zoom = 17.0;
+    }
+
+    _mapController!.move(_currentDriverLocation!, zoom);
+  }
+
+  void _smoothRotateMap(double targetRotation) {
+    double normalizeAngle(double angle) {
+      while (angle > 180) angle -= 360;
+      while (angle < -180) angle += 360;
+      return angle;
+    }
+
+    final currentRotation = _mapController?.camera.rotation ?? 0;
+    final normalizedTarget = normalizeAngle(targetRotation);
+    final normalizedCurrent = normalizeAngle(currentRotation);
+    
+    double delta = normalizeAngle(normalizedTarget - normalizedCurrent);
+    final newTarget = normalizedCurrent + delta;
+
+    _rotationAnimation = Tween<double>(
+      begin: normalizedCurrent,
+      end: newTarget,
+    ).animate(
+      CurvedAnimation(
+        parent: _rotationAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _rotationAnimationController.forward(from: 0);
+  }
+
+  double _calculateBearing(LatLng start, LatLng end) {
+    final lat1 = start.latitude * math.pi / 180;
+    final lat2 = end.latitude * math.pi / 180;
+    final dLon = (end.longitude - start.longitude) * math.pi / 180;
+
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+
+    final bearing = math.atan2(y, x) * 180 / math.pi;
+    return (bearing + 360) % 360;
   }
 
   Future<void> _updateRoute() async {
@@ -179,7 +276,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
           'https://router.project-osrm.org/route/v1/driving/${startPoint.longitude},${startPoint.latitude};${endPoint.longitude},${endPoint.latitude}?overview=full&geometries=geojson';
 
       final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 8),
       );
 
       if (response.statusCode == 200) {
@@ -199,12 +296,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
             _routePoints = newRoutePoints;
             _remainingDistance = newDistance;
             _remainingTime = newDuration;
-            _lastUpdate = DateTime.now();
-            _updateCount++;
           });
 
-          debugPrint('🔄 Route updated (#$_updateCount): ${newDistance.toStringAsFixed(1)} km, ${newDuration.toStringAsFixed(0)} min');
-          debugPrint('⏰ Update time: ${_lastUpdate.toString()}');
+          debugPrint('🔄 Route updated: ${newDistance.toStringAsFixed(1)} km');
         }
       }
     } catch (e) {
@@ -216,8 +310,6 @@ class _LiveNavigationState extends State<LiveNavigation> {
     const Distance distance = Distance();
     return distance.as(LengthUnit.Kilometer, point1, point2);
   }
-
-
 
   void _showArrivalDialog() {
     showDialog(
@@ -236,9 +328,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close live_navigation
-              Navigator.pop(context); // Close route_map_deleviry
+              Navigator.pop(context);
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
             child: const Text(
               'OK',
@@ -266,86 +358,110 @@ class _LiveNavigationState extends State<LiveNavigation> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _currentDriverLocation ?? destinationLocation,
-                initialZoom: 16.0,
-                minZoom: 8.0,
-                maxZoom: 18.0,
-                bounds: LatLngBounds(
-                  LatLng(31.45, 34.70),
-                  LatLng(32.60, 35.70),
+                initialZoom: 17.0,
+                minZoom: 10.0,
+                maxZoom: 19.0,
+                keepAlive: true,
+                interactionOptions: InteractionOptions(
+                  flags: _isFollowingDriver 
+                    ? InteractiveFlag.all & ~InteractiveFlag.rotate
+                    : InteractiveFlag.all,
                 ),
-                boundsOptions: const FitBoundsOptions(
-                  padding: EdgeInsets.all(50.0),
-                ),
-                interactiveFlags: _compassMode 
-                    ? InteractiveFlag.all 
-                    : InteractiveFlag.all & ~InteractiveFlag.rotate,
+                onPositionChanged: (position, hasGesture) {
+                  if (hasGesture) {
+                    setState(() {
+                      _isFollowingDriver = false;
+                    });
+                  }
+                },
               ),
               children: [
                 TileLayer(
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.example.dolphin',
+                  tileProvider: NetworkTileProvider(),
                 ),
+                
+                // Route line - Blue path on streets
                 if (_routePoints.isNotEmpty)
                   PolylineLayer(
                     polylines: [
                       Polyline(
                         points: _routePoints,
-                        strokeWidth: 5.0,
-                        color: const Color(0xFF2196F3),
+                        strokeWidth: 8.0,
+                        color: const Color(0xFF42A5F5),
                       ),
                     ],
                   ),
+                
                 MarkerLayer(
                   markers: [
+                    // Driver marker - Directional arrow pointing to movement direction
                     if (_currentDriverLocation != null)
                       Marker(
                         point: _currentDriverLocation!,
-                        width: 60.0,
-                        height: 60.0,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2196F3).withOpacity(0.3),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2196F3),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 3,
+                        width: 70.0,
+                        height: 70.0,
+                        alignment: Alignment.center,
+                        rotate: false, // We handle rotation manually
+                        child: Transform.rotate(
+                          angle: _currentBearing * math.pi / 180,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Outer glow
+                              Container(
+                                width: 70,
+                                height: 70,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2196F3).withOpacity(0.15),
+                                  shape: BoxShape.circle,
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.4),
-                                    blurRadius: 8,
-                                  ),
-                                ],
                               ),
-                              child: const Icon(
-                                Icons.local_shipping,
-                                color: Colors.white,
-                                size: 20,
+                              // Middle white circle
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              // Blue arrow icon
+                              Container(
+                                width: 45,
+                                height: 45,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.navigation,
+                                  color: Color(0xFF2196F3),
+                                  size: 30,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                    
+                    // Destination marker
                     Marker(
                       point: destinationLocation,
                       width: 50.0,
                       height: 50.0,
+                      alignment: Alignment.center,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFF4444),
+                          color: const Color(0xFFFF5252),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white,
@@ -353,7 +469,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
+                              color: Colors.black.withOpacity(0.3),
                               blurRadius: 6,
                             ),
                           ],
@@ -369,6 +485,8 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 ),
               ],
             ),
+            
+            // Customer info card (top)
             Positioned(
               top: 16,
               left: 16,
@@ -436,20 +554,22 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 ),
               ),
             ),
+            
+            // Controls (right side)
             Positioned(
               top: 130,
               right: 16,
               child: Column(
                 children: [
-                  // زر تبديل وضع البوصلة
+                  // Follow driver button
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF2D2D2D).withOpacity(0.95),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: _compassMode 
-                            ? const Color(0xFF2196F3) 
-                            : const Color(0xFFB7A447).withOpacity(0.3),
+                        color: _isFollowingDriver
+                              ? const Color(0xFF2196F3)
+                              : Colors.white60,  
                         width: 2,
                       ),
                       boxShadow: [
@@ -461,60 +581,75 @@ class _LiveNavigationState extends State<LiveNavigation> {
                     ),
                     child: IconButton(
                       icon: Icon(
-                        Icons.explore,
-                        color: _compassMode 
-                            ? const Color(0xFF2196F3) 
-                            : Colors.white70,
+                        Icons.my_location,
+                        color: _isFollowingDriver
+                            ? const Color(0xFF2196F3)
+                            : Colors.white60,  
                         size: 28,
                       ),
                       onPressed: () {
                         setState(() {
-                          _compassMode = !_compassMode;
-                          if (!_compassMode) {
-                            // إعادة تعيين دوران الخريطة عند إيقاف وضع البوصلة
-                            _mapController?.rotate(0);
-                          }
+                          _isFollowingDriver = true;
                         });
-                      },
-                      tooltip: _compassMode 
-                          ? 'تعطيل وضع البوصلة' 
-                          : 'تفعيل وضع البوصلة',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // زر العودة إلى الموقع الحالي
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D2D2D).withOpacity(0.95),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFB7A447).withOpacity(0.3),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.my_location,
-                        color: Colors.white70,
-                        size: 28,
-                      ),
-                      onPressed: () {
                         if (_currentDriverLocation != null) {
-                          _mapController?.move(_currentDriverLocation!, 16.0);
+                          _followDriver();
                         }
                       },
-                      tooltip: 'العودة إلى موقعي',
+                      tooltip: _isFollowingDriver 
+                          ? 'Following your location' 
+                          : 'Center on my location',
                     ),
                   ),
+                  
+                  // Speed indicator
+                  if (_currentSpeed > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFF2196F3).withOpacity(0.3),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              '${_currentSpeed.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                color: Color(0xFF2196F3),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Text(
+                              'km/h',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
+            
+            // Navigation info (bottom)
             Positioned(
               bottom: 16,
               left: 16,
@@ -614,9 +749,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
                               ),
                               TextButton(
                                 onPressed: () {
-                                  Navigator.pop(context); // Close dialog
-                                  Navigator.pop(context); // Close live_navigation
-                                  Navigator.pop(context); // Close route_map_deleviry, return to deleviry_detail
+                                  Navigator.pop(context);
+                                  Navigator.pop(context);
+                                  Navigator.pop(context);
                                 },
                                 child: const Text(
                                   'End Route',

@@ -39,7 +39,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
   double distance = 0;
   double duration = 0;
   LatLng? deliveryDriverLocation;
-  // Fallback driver location (Ramallah city center)
   static const LatLng _fallbackDriverLocation = LatLng(31.9454, 35.2075);
 
   @override
@@ -58,7 +57,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     try {
       LocationPermission permission = await Geolocator.requestPermission();
 
-      // Keep asking until granted; if denied forever use fallback
       while (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -102,13 +100,32 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     _getShortestRoute(_fallbackDriverLocation);
   }
 
-  double _calculateZoomByDistance(double distanceKm) {
-    // المسافة بالكيلومتر -> مستوى الزوم المناسب
-    if (distanceKm < 1) return 17.0;      // قريب جداً - زوم عالي
-    if (distanceKm < 5) return 15.0;      // قريب - زوم متوسط
-    if (distanceKm < 20) return 13.0;     // متوسط - زوم عادي
-    if (distanceKm < 50) return 11.0;     // بعيد - زوم منخفض
-    return 9.0;                           // بعيد جداً - زوم منخفض جداً
+  // Function to fit the entire route in view
+  void _fitRouteInView() {
+    if (_mapController == null || deliveryDriverLocation == null) return;
+
+    final endPoint = LatLng(widget.latitude, widget.longitude);
+    
+    // Create bounds that include both start and end points
+    final bounds = LatLngBounds.fromPoints([
+      deliveryDriverLocation!,
+      endPoint,
+    ]);
+
+    // Fit the camera to show the entire route with padding
+    _mapController!.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.only(
+          top: 100,    // Space for back button
+          bottom: 280, // Space for bottom info card
+          left: 50,
+          right: 50,
+        ),
+      ),
+    );
+
+    debugPrint('📍 Map fitted to show entire route');
   }
 
   Future<void> _getShortestRoute(LatLng startPoint) async {
@@ -140,26 +157,22 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
               .toList();
 
           // Get distance and duration
-          distance = (route['distance'] as num).toDouble() / 1000; // Convert to km
-          duration = (route['duration'] as num).toDouble() / 60; // Convert to minutes
+          distance = (route['distance'] as num).toDouble() / 1000;
+          duration = (route['duration'] as num).toDouble() / 60;
 
-
-          // حساب الزوم المناسب بناءً على المسافة
-          final appropriateZoom = _calculateZoomByDistance(distance);
-      
           setState(() {
             _mapLoading = false;
           });
 
-          // تطبيق الزوم الذكي
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted && _mapController != null && deliveryDriverLocation != null) {
-              _mapController!.move(deliveryDriverLocation!, appropriateZoom);
-              debugPrint('🔍 Zoom adjusted to $appropriateZoom for distance $distance km');
+          // Fit the entire route in view after map is ready
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _fitRouteInView();
             }
           });
-        }
+
           debugPrint('Route calculated: $distance km, $duration min');
+        }
       }
     } catch (e) {
       debugPrint('Error getting route: $e');
@@ -168,7 +181,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
   }
 
   void _startNavigation() {
-    // Open live navigation screen
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -193,109 +205,110 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
       body: SafeArea(
         child: Stack(
           children: [
-            // OpenStreetMap
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: deliveryDriverLocation ?? deliveryLocation,
-                initialZoom: 14.0,
+                initialZoom: 13.0,
                 minZoom: 8.0,
                 maxZoom: 18.0,
-                // Restrict strictly to Palestine area
                 bounds: LatLngBounds(
-                  LatLng(31.45, 34.70),  // Southwest corner
-                  LatLng(32.60, 35.70),  // Northeast corner
+                  LatLng(31.45, 34.70),
+                  LatLng(32.60, 35.70),
                 ),
                 boundsOptions: const FitBoundsOptions(
                   padding: EdgeInsets.all(50.0),
                 ),
-                // Enforce bounds strictly - don't allow panning outside
                 interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 onMapReady: () {
-                  Future.delayed(const Duration(milliseconds: 500), () {
+                  // Fit route when map is ready
+                  Future.delayed(const Duration(milliseconds: 300), () {
                     if (mounted && deliveryDriverLocation != null) {
-                      _mapController?.move(deliveryDriverLocation!, 13.0);
+                      _fitRouteInView();
                     }
                   });
                 },
               ),
               children: [
                 TileLayer(
-                  // استخدم مزود مفاتيح لتفادي حجب OSM
-                  urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.example.dolphin',
                   tileProvider: NetworkTileProvider(),
                 ),
+                
+                // Route polyline (draw first so markers appear on top)
+                if (routePoints.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: routePoints,
+                        strokeWidth: 5.0,
+                        color: const Color(0xFF2196F3),
+                        borderStrokeWidth: 2.0,
+                        borderColor: const Color(0xFF1565C0),
+                      ),
+                    ],
+                  ),
+                
                 MarkerLayer(
                   markers: [
                     // Delivery driver location (start point)
                     if (deliveryDriverLocation != null)
                       Marker(
                         point: deliveryDriverLocation!,
-                        width: 40.0,
-                        height: 40.0,
+                        width: 50.0,
+                        height: 50.0,
                         child: Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFF2196F3),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: Colors.white,
-                              width: 2,
+                              width: 3,
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.3),
-                                blurRadius: 4,
+                                blurRadius: 6,
                               ),
                             ],
                           ),
                           child: const Icon(
                             Icons.local_shipping,
                             color: Colors.white,
-                            size: 20,
+                            size: 24,
                           ),
                         ),
                       ),
                     // Customer location (destination)
                     Marker(
                       point: deliveryLocation,
-                      width: 40.0,
-                      height: 40.0,
+                      width: 50.0,
+                      height: 50.0,
                       child: Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF4444),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white,
-                            width: 2,
+                            width: 3,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.3),
-                              blurRadius: 4,
+                              blurRadius: 6,
                             ),
                           ],
                         ),
                         child: const Icon(
                           Icons.location_on,
                           color: Colors.white,
-                          size: 20,
+                          size: 24,
                         ),
                       ),
                     ),
                   ],
                 ),
-                // Route polyline
-                if (routePoints.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: routePoints,
-                        strokeWidth: 4.0,
-                        color: const Color(0xFF2196F3),
-                      ),
-                    ],
-                  ),
               ],
             ),
 
@@ -305,7 +318,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
               top: 80,
               child: Column(
                 children: [
-                  // Zoom In Button
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF2D2D2D),
@@ -328,9 +340,8 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                         if (_mapController != null) {
                           final currentZoom = _mapController!.camera.zoom;
                           if (currentZoom < 18.0) {
-                            // Zoom toward the customer point for better focus
                             _mapController!.move(
-                              deliveryLocation,
+                              _mapController!.camera.center,
                               currentZoom + 1,
                             );
                           }
@@ -339,7 +350,6 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // Zoom Out Button
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF2D2D2D),
@@ -371,11 +381,35 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  // Fit to route button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D2D2D),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.fit_screen,
+                        color: Color(0xFFB7A447),
+                        size: 24,
+                      ),
+                      onPressed: _fitRouteInView,
+                      tooltip: 'Show full route',
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // Loading indicator while waiting for location/route
+            // Loading indicator
             if (_mapLoading || !_locationObtained)
               Container(
                 color: const Color(0xFF202020),
@@ -417,6 +451,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                 ),
               ),
             ),
+            
             // Customer info and action button
             Positioned(
               bottom: 16,
@@ -492,8 +527,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF67CD67)
-                                      .withOpacity(0.5),
+                                  color: const Color(0xFF67CD67).withOpacity(0.5),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),
