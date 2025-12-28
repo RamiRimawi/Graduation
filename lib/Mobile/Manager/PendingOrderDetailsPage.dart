@@ -30,6 +30,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   // ignore: unused_field
   final Map<int, String> _selectedBatchDisplays = {};
 
+  // Track if quantities were modified
+  bool _quantitiesModified = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +58,34 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         },
       ),
     );
+  }
+
+  void _openActionSelectorModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ActionSelectorModal(
+        onNormalSend: _openOrderConfirmationModal,
+        onSendToAccountant: _sendUpdateToAccountant,
+      ),
+    );
+  }
+
+  Future<void> _sendUpdateToAccountant() async {
+    if (_orderData == null) return;
+
+    // Here you would implement the logic to send update to accountant
+    // For now, just show a success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Order update sent to accountant for review'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // You might want to navigate back or update the order status
+    // Navigator.pop(context, true);
   }
 
   Future<void> _sendNonSplitOrder() async {
@@ -254,6 +285,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   itemCount: items.length,
                   itemBuilder: (_, i) {
                     final item = items[i];
+                    final originalQty = item.qty; // Store original quantity
                     final controller = TextEditingController(
                       text: item.qty.toString(),
                     );
@@ -318,10 +350,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                                         controller: controller,
                                         onChanged: (v) {
                                           if (v.isNotEmpty) {
-                                            setState(
-                                              () => item.qty =
-                                                  int.tryParse(v) ?? item.qty,
-                                            );
+                                            final newQty =
+                                                int.tryParse(v) ?? item.qty;
+                                            if (newQty != originalQty) {
+                                              setState(() {
+                                                item.qty = newQty;
+                                                _quantitiesModified = true;
+                                              });
+                                            } else {
+                                              setState(() => item.qty = newQty);
+                                            }
                                           }
                                         },
                                         textAlign: TextAlign.center,
@@ -399,7 +437,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               // SEND BUTTON
               CustomSendButton(
                 text: 's  e  n  d',
-                onTap: _openOrderConfirmationModal,
+                onTap: _quantitiesModified
+                    ? _openActionSelectorModal
+                    : _openOrderConfirmationModal,
               ),
             ],
           ),
@@ -777,6 +817,148 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ActionSelectorModal extends StatelessWidget {
+  final VoidCallback onNormalSend;
+  final VoidCallback onSendToAccountant;
+
+  const _ActionSelectorModal({
+    required this.onNormalSend,
+    required this.onSendToAccountant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final maxHeight = media.size.height * 0.66;
+
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bgDark,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        // Respect keyboard insets and provide some bottom padding
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + media.viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              // Limit height so modal never exceeds screen and causes overflow
+              maxHeight: maxHeight,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.edit, color: AppColors.gold, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Quantity Updated - Choose Action',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'How would you like to proceed with the updated quantities?',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+
+                // Option 1: Continue with Edit (text left, icon right)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onNormalSend();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Expanded(
+                          child: Text(
+                            'Continue with Edit',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Option 2: Send to Accountant (text left, icon right)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onSendToAccountant();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Expanded(
+                          child: Text(
+                            'Send to Accountant',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.account_balance,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
