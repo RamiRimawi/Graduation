@@ -24,10 +24,9 @@ class _CustomerDetailState extends State<CustomerDetail> {
   int _selectedIndex = 0;
 
   // NEW: حالة الزر (Done أو Send Update)
-  bool _isUpdateMode = false;
   bool _saving = false;
   bool _loading = true;
-  List<Map<String, dynamic>> products = const [];
+  List<Map<String, dynamic>> products = [];
 
   @override
   void initState() {
@@ -42,60 +41,113 @@ class _CustomerDetailState extends State<CustomerDetail> {
       final String? userIdStr = prefs.getString('current_user_id');
       final int? staffId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
-      // Fetch customer_order_inventory items assigned to this staff
+      // Fetch customer_order_inventory items assigned to this staff (no FK joins)
       final List<dynamic> inventoryItems = await Supabase.instance.client
           .from('customer_order_inventory')
           .select(
-            'product_id, batch_id, batch(product:product_id(name, brand:brand_id(name), unit:unit_id(unit_name)), storage_location_descrption)',
+            'product_id, quantity, prepared_quantity, batch_id, inventory_id',
           )
           .eq('customer_order_id', widget.customerId)
           .eq('prepared_by', staffId ?? 0)
           .order('product_id');
 
-      final mapped = inventoryItems.map<Map<String, dynamic>>((row) {
-        final batch = row['batch'] as Map?;
-        final product = batch?['product'] as Map?;
-        final brandMap = product?['brand'] as Map?;
-        final unitMap = product?['unit'] as Map?;
+      // Early exit
+      if (inventoryItems.isEmpty) {
+        if (mounted) {
+          setState(() {
+            products = [];
+            _loading = false;
+          });
+        }
+        return;
+      }
 
-        return {
-          'product_id': row['product_id'] as int?,
-          'name': product?['name']?.toString() ?? 'Unknown',
-          'brand': brandMap?['name']?.toString() ?? 'Unknown',
-          'quantity': 0, // Will be fetched separately
-          'unit': unitMap?['unit_name']?.toString() ?? 'cm',
-          'batch_id': row['batch_id'] as int?,
+      // Fetch product details separately
+      final productIds = inventoryItems
+          .map((row) => row['product_id'] as int?)
+          .where((id) => id != null)
+          .cast<int>()
+          .toSet()
+          .toList();
+
+      final productsResponse = await Supabase.instance.client
+          .from('product')
+          .select(
+            'product_id, name, brand:brand_id(name), unit:unit_id(unit_name)',
+          )
+          .inFilter('product_id', productIds);
+
+      final productMap = {
+        for (final p in productsResponse) p['product_id'] as int: p,
+      };
+
+      // Fetch batch details for the allocations
+      final batchIds = inventoryItems
+          .map((row) => row['batch_id'] as int?)
+          .where((id) => id != null)
+          .cast<int>()
+          .toSet()
+          .toList();
+
+      Map<int, Map<String, dynamic>> batchMap = {};
+      if (batchIds.isNotEmpty) {
+        final batchesResponse = await Supabase.instance.client
+            .from('batch')
+            .select(
+              'batch_id, quantity, storage_location_descrption, inventory_id',
+            )
+            .inFilter('batch_id', batchIds);
+
+        batchMap = {
+          for (final b in batchesResponse)
+            b['batch_id'] as int: Map<String, dynamic>.from(b),
+        };
+      }
+
+      final Map<int, Map<String, dynamic>> grouped = {};
+
+      for (final row in inventoryItems) {
+        final int? productId = row['product_id'] as int?;
+        if (productId == null) continue;
+
+        final productDetails = productMap[productId];
+        final brandMap = productDetails?['brand'] as Map?;
+        final unitMap = productDetails?['unit'] as Map?;
+        final batchId = row['batch_id'] as int?;
+        final batch = batchId != null ? batchMap[batchId] : null;
+
+        grouped.putIfAbsent(productId, () {
+          return {
+            'product_id': productId,
+            'name': productDetails?['name']?.toString() ?? 'Unknown',
+            'brand': brandMap?['name']?.toString() ?? 'Unknown',
+            'unit': unitMap?['unit_name']?.toString() ?? 'Unit',
+            'quantity': 0,
+            'inventory_id': row['inventory_id'] as int?,
+            'allocations': <Map<String, dynamic>>[],
+          };
+        });
+
+        final requiredQty = (row['quantity'] as num?)?.toInt() ?? 0;
+        final preparedQty =
+            (row['prepared_quantity'] as num?)?.toInt() ?? requiredQty;
+
+        grouped[productId]!['quantity'] =
+            (grouped[productId]!['quantity'] as int? ?? 0) + requiredQty;
+
+        (grouped[productId]!['allocations'] as List<Map<String, dynamic>>).add({
+          'batch_id': batchId,
+          'inventory_id': row['inventory_id'] as int?,
           'storage_location':
               batch?['storage_location_descrption']?.toString() ?? 'N/A',
-        };
-      }).toList();
-
-      // Fetch quantities from customer_order_description
-      if (mapped.isNotEmpty) {
-        final List<dynamic> descriptions = await Supabase.instance.client
-            .from('customer_order_description')
-            .select('product_id, quantity')
-            .eq('customer_order_id', widget.customerId)
-            .filter(
-              'product_id',
-              'in',
-              mapped.map((m) => m['product_id']).toList(),
-            );
-
-        // Map quantities back to products
-        for (final item in mapped) {
-          final productId = item['product_id'];
-          final desc = descriptions.firstWhere(
-            (d) => d['product_id'] == productId,
-            orElse: () => {'quantity': 0},
-          );
-          item['quantity'] = (desc['quantity'] as num?)?.toInt() ?? 0;
-        }
+          'available_qty': (batch?['quantity'] as num?)?.toInt() ?? 0,
+          'prepared_qty': preparedQty,
+        });
       }
 
       if (mounted) {
         setState(() {
-          products = mapped;
+          products = grouped.values.toList();
           _loading = false;
         });
       }
@@ -116,65 +168,470 @@ class _CustomerDetailState extends State<CustomerDetail> {
     setState(() => _selectedIndex = index);
   }
 
-  // ======================================
-  // دالة تعديل الـ quantity فقط
-  // ======================================
-  void _editQuantity(int index) {
-    final controller = TextEditingController(
-      text: products[index]['quantity'].toString(),
+  int _allocatedQty(Map<String, dynamic> product) {
+    final allocations = List<Map<String, dynamic>>.from(
+      product['allocations'] ?? [],
     );
+    return allocations.fold<int>(
+      0,
+      (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+    );
+  }
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF2D2D2D),
-          title: const Text(
-            'Edit Quantity',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
-              hintText: 'Enter quantity',
-              hintStyle: TextStyle(color: Colors.white70),
-              enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white38),
-              ),
-              focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFFB7A447)),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                final value = int.tryParse(controller.text);
-                if (value != null && value > 0) {
-                  setState(() {
-                    products[index]['quantity'] = value;
-                    _isUpdateMode = true; // تفعيل وضع التحديث عند تعديل الكمية
-                  });
-                }
-                Navigator.pop(context);
+  List<Map<String, dynamic>> _normalizeAllocations(
+    List<Map<String, dynamic>> allocations,
+    int requiredQty,
+  ) {
+    int remaining = requiredQty;
+    final normalized = <Map<String, dynamic>>[];
+
+    for (final alloc in allocations) {
+      final available = alloc['available_qty'] as int? ?? remaining;
+      if (remaining <= 0) break;
+      final take = remaining > available ? available : remaining;
+      normalized.add({...alloc, 'prepared_qty': take});
+      remaining -= take;
+    }
+
+    // If nothing allocated and required > 0, seed an empty allocation to be filled in sheet
+    if (normalized.isEmpty && requiredQty > 0 && allocations.isNotEmpty) {
+      normalized.add({...allocations.first, 'prepared_qty': 0});
+    }
+
+    return normalized;
+  }
+
+  String _buildLocationSummary(Map<String, dynamic> product) {
+    final allocations = List<Map<String, dynamic>>.from(
+      product['allocations'] ?? [],
+    );
+    if (allocations.isEmpty) return 'No batch selected';
+
+    return allocations
+        .map((alloc) {
+          final loc = alloc['storage_location'] ?? 'N/A';
+          final qty = alloc['prepared_qty'] ?? 0;
+          return '$loc • qty($qty)';
+        })
+        .join('\n');
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAvailableBatches({
+    required int productId,
+    int? inventoryId,
+  }) async {
+    var query = Supabase.instance.client
+        .from('batch')
+        .select('batch_id, quantity, storage_location_descrption, inventory_id')
+        .eq('product_id', productId)
+        .gt('quantity', 0);
+
+    if (inventoryId != null) {
+      query = query.eq('inventory_id', inventoryId);
+    }
+
+    final response = await query.order('batch_id');
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<Map<String, dynamic>?> _showBatchPicker({
+    required int productId,
+    required int? inventoryId,
+    required Set<int> excludeBatchIds,
+  }) async {
+    try {
+      final batches = await _fetchAvailableBatches(
+        productId: productId,
+        inventoryId: inventoryId,
+      );
+
+      final filtered = batches.where((b) {
+        final bid = b['batch_id'] as int?;
+        return bid != null && !excludeBatchIds.contains(bid);
+      }).toList();
+
+      if (filtered.isEmpty) {
+        _showErrorSnack('No other batches available for this product.');
+        return null;
+      }
+
+      return await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        backgroundColor: const Color(0xFF2D2D2D),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: filtered.length,
+              itemBuilder: (context, idx) {
+                final batch = filtered[idx];
+                final bid = batch['batch_id'] as int?;
+                final qty = batch['quantity'] as int? ?? 0;
+                final loc =
+                    batch['storage_location_descrption']?.toString() ??
+                    'Unknown';
+                final inv = batch['inventory_id'] as int?;
+
+                return ListTile(
+                  title: Text(
+                    'Batch ${bid ?? '-'}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    'Qty: $qty • $loc',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  onTap: () => Navigator.pop(context, {
+                    'batch_id': bid,
+                    'inventory_id': inv,
+                    'storage_location': loc,
+                    'available_qty': qty,
+                    'prepared_qty': 0,
+                  }),
+                );
               },
-              child: const Text(
-                'Save',
-                style: TextStyle(color: Color(0xFFB7A447)),
-              ),
             ),
-          ],
+          );
+        },
+      );
+    } catch (e) {
+      _showErrorSnack('Error loading batches: $e');
+      return null;
+    }
+  }
+
+  Future<void> _openAllocationSheet(int index) async {
+    final product = products[index];
+    final int requiredQty = product['quantity'] as int? ?? 0;
+    final int productId = product['product_id'] as int? ?? 0;
+    final int? inventoryId = product['inventory_id'] as int?;
+
+    // Create a deep copy to preserve original state
+    List<Map<String, dynamic>> allocations =
+        (product['allocations'] as List? ?? [])
+            .map((alloc) => Map<String, dynamic>.from(alloc as Map))
+            .toList();
+
+    // Track validation errors across rebuilds
+    Map<int, String?> errors = {};
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF202020),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final total = allocations.fold<int>(
+              0,
+              (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+            );
+            final remaining = requiredQty - total;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white38,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    product['name'] ?? 'Product',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Allocate $requiredQty ${product['unit'] ?? ''}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 320,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: allocations.length,
+                      itemBuilder: (context, allocIndex) {
+                        final alloc = allocations[allocIndex];
+                        final controller = TextEditingController(
+                          text: (alloc['prepared_qty'] as int? ?? 0).toString(),
+                        );
+
+                        return Card(
+                          color: const Color(0xFF2D2D2D),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${alloc['storage_location']} • qty(${alloc['prepared_qty'] ?? 0})',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    allocations.length > 1 && allocIndex > 0
+                                        ? IconButton(
+                                            onPressed: () {
+                                              setModalState(() {
+                                                // Return quantity to first batch before deleting
+                                                if (allocIndex > 0) {
+                                                  final deletedQty =
+                                                      allocations[allocIndex]['prepared_qty']
+                                                          as int? ??
+                                                      0;
+                                                  final firstBatchQty =
+                                                      allocations[0]['prepared_qty']
+                                                          as int? ??
+                                                      0;
+                                                  allocations[0]['prepared_qty'] =
+                                                      firstBatchQty +
+                                                      deletedQty;
+                                                }
+                                                allocations.removeAt(
+                                                  allocIndex,
+                                                );
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.white70,
+                                            ),
+                                          )
+                                        : const SizedBox(
+                                            width: 48,
+                                          ), // Placeholder to maintain layout
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: controller,
+                                  keyboardType: TextInputType.number,
+                                  enabled:
+                                      allocIndex != 0, // Disable first batch
+                                  style: TextStyle(
+                                    color: allocIndex == 0
+                                        ? Colors.white60
+                                        : Colors.white,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Qty from this batch',
+                                    labelStyle: TextStyle(
+                                      color: allocIndex == 0
+                                          ? Colors.white38
+                                          : Colors.white70,
+                                    ),
+                                    filled: true,
+                                    fillColor: allocIndex == 0
+                                        ? const Color(0x20FFFFFF)
+                                        : const Color(0x10FFFFFF),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Colors.white38,
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFB7A447),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    disabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: Colors.white24,
+                                      ),
+                                    ),
+                                    errorText: errors[allocIndex],
+                                    errorStyle: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  onChanged: (value) {
+                                    final parsed = int.tryParse(value) ?? 0;
+                                    setModalState(() {
+                                      // Show error if exceeds first batch qty (only for additional batches)
+                                      if (allocIndex > 0) {
+                                        final firstBatchQty =
+                                            allocations[0]['prepared_qty']
+                                                as int? ??
+                                            0;
+                                        if (parsed > firstBatchQty) {
+                                          errors[allocIndex] =
+                                              'Enter from 0 to $firstBatchQty';
+                                        } else {
+                                          errors[allocIndex] = null;
+                                        }
+                                      }
+
+                                      // Store entered value (non-negative)
+                                      final newValue = parsed < 0 ? 0 : parsed;
+
+                                      // Update this batch with new value
+                                      allocations[allocIndex]['prepared_qty'] =
+                                          newValue;
+
+                                      // Auto-calculate first batch as remainder of all other batches
+                                      if (allocations.isNotEmpty) {
+                                        final totalOthers = allocations
+                                            .asMap()
+                                            .entries
+                                            .where((e) => e.key != 0)
+                                            .fold<int>(
+                                              0,
+                                              (sum, e) =>
+                                                  sum +
+                                                  (e.value['prepared_qty']
+                                                          as int? ??
+                                                      0),
+                                            );
+                                        final firstBatchValue =
+                                            requiredQty - totalOthers;
+                                        allocations[0]['prepared_qty'] =
+                                            firstBatchValue < 0
+                                            ? 0
+                                            : firstBatchValue;
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final exclude = allocations
+                                .map((a) => a['batch_id'] as int? ?? -1)
+                                .toSet();
+
+                            final selected = await _showBatchPicker(
+                              productId: productId,
+                              inventoryId: inventoryId,
+                              excludeBatchIds: exclude,
+                            );
+
+                            if (selected != null) {
+                              setModalState(() {
+                                allocations.add(selected);
+                              });
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFB7A447)),
+                          ),
+                          icon: const Icon(Icons.add, color: Color(0xFFB7A447)),
+                          label: const Text(
+                            'Add Batch',
+                            style: TextStyle(color: Color(0xFFB7A447)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Filter out batches with qty = 0
+                            allocations.removeWhere(
+                              (alloc) =>
+                                  (alloc['prepared_qty'] as int? ?? 0) == 0,
+                            );
+
+                            final newTotal = allocations.fold<int>(
+                              0,
+                              (sum, alloc) =>
+                                  sum + (alloc['prepared_qty'] as int? ?? 0),
+                            );
+
+                            if (newTotal != requiredQty) {
+                              _showErrorSnack(
+                                'Allocate full quantity ($newTotal/$requiredQty).',
+                              );
+                              return;
+                            }
+
+                            // Apply changes only when Save is clicked
+                            if (mounted) {
+                              setState(() {
+                                products[index]['allocations'] = allocations;
+                              });
+                            }
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB7A447),
+                            foregroundColor: const Color(0xFF202020),
+                          ),
+                          child: const Text(
+                            'Save',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  void _showErrorSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -190,28 +647,71 @@ class _CustomerDetailState extends State<CustomerDetail> {
 
       for (final product in products) {
         final pid = product['product_id'] as int?;
-        final qty = product['quantity'] as int? ?? 0;
-        final batchId = product['batch_id'] as int?;
         if (pid == null) continue;
 
-        // Update customer_order_inventory: set prepared_by, batch_id, and prepared_quantity
+        final requiredQty = product['quantity'] as int? ?? 0;
+        final allocations = List<Map<String, dynamic>>.from(
+          product['allocations'] ?? [],
+        );
+
+        // Check if allocations are already properly distributed (manual adjustments)
+        final currentTotal = allocations.fold<int>(
+          0,
+          (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+        );
+
+        final normalized = currentTotal == requiredQty
+            ? allocations // Use manual allocations if they sum correctly
+            : _normalizeAllocations(
+                allocations,
+                requiredQty,
+              ); // Otherwise normalize
+
+        products[products.indexOf(product)]['allocations'] = normalized;
+        final totalAllocated = normalized.fold<int>(
+          0,
+          (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+        );
+
+        if (totalAllocated != requiredQty) {
+          _showErrorSnack(
+            'Allocate full quantity for ${product['name']} ($totalAllocated/$requiredQty).',
+          );
+          setState(() => _saving = false);
+          return;
+        }
+
+        // Remove previous allocations for this staff/product and recreate
         await Supabase.instance.client
             .from('customer_order_inventory')
-            .update({
-              'prepared_by': staffId,
-              'batch_id': batchId,
-              'prepared_quantity': qty,
-              'last_action_by': staffName ?? 'Unknown',
-              'last_action_time': now.toIso8601String(),
-            })
+            .delete()
             .eq('customer_order_id', widget.customerId)
-            .eq('product_id', pid);
+            .eq('product_id', pid)
+            .eq('prepared_by', staffId ?? 0);
+
+        for (final alloc in normalized) {
+          final picked = alloc['prepared_qty'] as int? ?? 0;
+          if (picked <= 0) continue;
+
+          await Supabase.instance.client
+              .from('customer_order_inventory')
+              .insert({
+                'customer_order_id': widget.customerId,
+                'product_id': pid,
+                'inventory_id': alloc['inventory_id'],
+                'quantity': picked,
+                'prepared_by': staffId,
+                'batch_id': alloc['batch_id'],
+                'prepared_quantity': picked,
+                'last_action_by': staffName ?? 'Unknown',
+                'last_action_time': now.toIso8601String(),
+              });
+        }
 
         // Update quantity in customer_order_description
         await Supabase.instance.client
             .from('customer_order_description')
             .update({
-              'quantity': qty,
               'last_action_by': staffName ?? 'Unknown',
               'last_action_time': now.toIso8601String(),
             })
@@ -380,7 +880,6 @@ class _CustomerDetailState extends State<CustomerDetail> {
                 ],
               ),
             ),
-            // خط تحت الهيدر
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
               child: Container(height: 1, color: const Color(0xFFFFFFFF)),
@@ -399,6 +898,9 @@ class _CustomerDetailState extends State<CustomerDetail> {
                       itemCount: products.length,
                       itemBuilder: (context, index) {
                         final product = products[index];
+                        final requiredQty = product['quantity'] as int? ?? 0;
+                        final allocatedQty = _allocatedQty(product);
+                        final unitLabel = product['unit'] ?? 'Unit';
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -419,8 +921,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                 // TOP SECTION: Product Name, Brand, Quantity (matching header layout)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 18,
+                                    horizontal: 12,
+                                    vertical: 14,
                                   ),
                                   child: Row(
                                     crossAxisAlignment:
@@ -431,9 +933,11 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                         flex: 3,
                                         child: Text(
                                           product['name'],
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -443,54 +947,94 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                         flex: 2,
                                         child: Text(
                                           product['brand'],
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 16,
+                                            fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ),
                                       // Quantity (box + unit)
-                                      Expanded(
+                                      Flexible(
                                         flex: 2,
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            GestureDetector(
-                                              onTap: () => _editQuantity(index),
+                                            Flexible(
                                               child: Container(
-                                                width: 50,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 8,
-                                                      horizontal: 12,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 40,
+                                                      maxWidth: 60,
                                                     ),
                                                 decoration: BoxDecoration(
                                                   color: const Color(
                                                     0xFFB7A447,
                                                   ),
                                                   borderRadius:
-                                                      BorderRadius.circular(12),
+                                                      BorderRadius.circular(10),
                                                 ),
                                                 alignment: Alignment.center,
-                                                child: Text(
-                                                  '${product['quantity']}',
+                                                child: TextFormField(
+                                                  initialValue: '$requiredQty',
+                                                  keyboardType:
+                                                      TextInputType.number,
+                                                  textAlign: TextAlign.center,
                                                   style: const TextStyle(
                                                     color: Color(0xFF202020),
-                                                    fontSize: 16,
+                                                    fontSize: 13,
                                                     fontWeight: FontWeight.bold,
                                                   ),
+                                                  decoration:
+                                                      const InputDecoration(
+                                                        border:
+                                                            InputBorder.none,
+                                                        contentPadding:
+                                                            EdgeInsets.symmetric(
+                                                              vertical: 6,
+                                                              horizontal: 6,
+                                                            ),
+                                                        isDense: true,
+                                                      ),
+                                                  onChanged: (value) {
+                                                    final newQty = int.tryParse(
+                                                      value,
+                                                    );
+                                                    if (newQty != null &&
+                                                        newQty > 0) {
+                                                      products[index]['quantity'] =
+                                                          newQty;
+                                                      final allocations =
+                                                          List<
+                                                            Map<String, dynamic>
+                                                          >.from(
+                                                            product['allocations'] ??
+                                                                [],
+                                                          );
+                                                      products[index]['allocations'] =
+                                                          _normalizeAllocations(
+                                                            allocations,
+                                                            newQty,
+                                                          );
+                                                    }
+                                                  },
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              product['unit'] ?? 'cm',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                unitLabel,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
                                             ),
                                           ],
@@ -500,26 +1044,45 @@ class _CustomerDetailState extends State<CustomerDetail> {
                                   ),
                                 ),
                                 // BOTTOM SECTION: Storage Location (Full Width)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 14,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xB8894D26),
-                                    borderRadius: const BorderRadius.only(
-                                      bottomLeft: Radius.circular(20),
-                                      bottomRight: Radius.circular(20),
+                                GestureDetector(
+                                  onTap: () => _openAllocationSheet(index),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
                                     ),
-                                  ),
-                                  child: Text(
-                                    product['storage_location'],
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xB8894D26),
+                                      borderRadius: const BorderRadius.only(
+                                        bottomLeft: Radius.circular(20),
+                                        bottomRight: Radius.circular(20),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _buildLocationSummary(product),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Tap to adjust batches',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -540,9 +1103,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
                 child: ElevatedButton(
                   onPressed: _showConfirmationDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isUpdateMode
-                        ? const Color(0xFF50B2E7) // أزرق في وضع Send Update
-                        : const Color(0xFFB7A447), // ذهبي في وضع Done
+                    backgroundColor: const Color(0xFFB7A447),
                     foregroundColor: const Color(0xFF202020),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -551,20 +1112,20 @@ class _CustomerDetailState extends State<CustomerDetail> {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                    children: const [
                       Text(
-                        _isUpdateMode ? 'Send  Update' : ' Done ',
-                        style: const TextStyle(
+                        ' Done ',
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 3,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Icon(
                         Icons.arrow_right_alt,
                         size: 50,
-                        color: Colors.black, // أبيض مع الأزرق، أسود مع الذهبي
+                        color: Colors.black,
                       ),
                     ],
                   ),
