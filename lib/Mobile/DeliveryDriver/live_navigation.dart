@@ -30,7 +30,7 @@ class LiveNavigation extends StatefulWidget {
   State<LiveNavigation> createState() => _LiveNavigationState();
 }
 
-class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStateMixin {
+class _LiveNavigationState extends State<LiveNavigation> {
   MapController? _mapController;
   LatLng? _currentDriverLocation;
   LatLng? _previousLocation;
@@ -39,36 +39,19 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
   double _remainingTime = 0;
   double _currentBearing = 0;
   double _currentSpeed = 0;
+  // ignore: unused_field
+  double _gpsAccuracy = 0;
+
   StreamSubscription<Position>? _positionStream;
   Timer? _routeUpdateTimer;
   Timer? _dbUpdateTimer;
   bool _arrivedAtDestination = false;
   bool _isFollowingDriver = true;
-  
-  late AnimationController _rotationAnimationController;
-  late Animation<double> _rotationAnimation;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    
-    _rotationAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    
-    _rotationAnimation = Tween<double>(begin: 0, end: 0).animate(
-      CurvedAnimation(
-        parent: _rotationAnimationController,
-        curve: Curves.easeInOut,
-      ),
-    )..addListener(() {
-      if (_isFollowingDriver) {
-        _mapController?.rotate(_rotationAnimation.value);
-      }
-    });
-    
     _startLiveTracking();
     _startDatabaseUpdates();
   }
@@ -78,7 +61,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
     _positionStream?.cancel();
     _routeUpdateTimer?.cancel();
     _dbUpdateTimer?.cancel();
-    _rotationAnimationController.dispose();
     super.dispose();
   }
 
@@ -118,8 +100,9 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
       if (permission == LocationPermission.whileInUse || 
           permission == LocationPermission.always) {
         
+        // ✅ استخدام أفضل دقة ممكنة
         final initialPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          desiredAccuracy: LocationAccuracy.bestForNavigation,
         );
 
         setState(() {
@@ -128,14 +111,20 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
             initialPosition.longitude
           );
           _previousLocation = _currentDriverLocation;
+          _gpsAccuracy = initialPosition.accuracy; // ✅ حفظ دقة GPS
+          
+          _currentBearing = _calculateBearing(
+            _currentDriverLocation!,
+            LatLng(widget.customerLatitude, widget.customerLongitude),
+          );
         });
 
         await _updateRoute();
 
+        // ✅ أفضل إعدادات للدقة
         const LocationSettings locationSettings = LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 3,
-          timeLimit: Duration(seconds: 1),
+          accuracy: LocationAccuracy.bestForNavigation, // ✅ أعلى دقة
+          distanceFilter: 2, // ✅ تحديث كل 2 متر
         );
 
         _positionStream = Geolocator.getPositionStream(
@@ -156,100 +145,66 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
 
   void _handleNewPosition(Position position) {
     final newLocation = LatLng(position.latitude, position.longitude);
+    
+    _gpsAccuracy = position.accuracy;
 
     if (_previousLocation != null) {
       final distance = _calculateDistance(_previousLocation!, newLocation);
-      
-      // Update speed
-      if (position.speed > 0) {
-        _currentSpeed = position.speed * 3.6; // m/s to km/h
-      } else {
-        _currentSpeed = 0;
-      }
-      
-      // Update bearing only if moved significantly
-      if (distance > 0.005) { // 5 meters
-        final bearing = _calculateBearing(_previousLocation!, newLocation);
-        
-        setState(() {
-          _currentBearing = bearing;
-        });
-        
-        // Rotate map to follow direction
-        if (_isFollowingDriver) {
-          _smoothRotateMap(-bearing);
-        }
-        
-        debugPrint('🧭 Bearing: ${bearing.toStringAsFixed(1)}°, Speed: ${_currentSpeed.toStringAsFixed(1)} km/h');
-      }
+      debugPrint('📏 Moved: ${(distance * 1000).toStringAsFixed(1)} meters');
+    }
+
+    if (position.speed > 0) {
+      _currentSpeed = position.speed * 3.6;
+    } else {
+      _currentSpeed = 0;
+    }
+
+    double newBearing;
+    if (_previousLocation != null && _currentSpeed > 1) {
+      newBearing = _calculateBearing(_previousLocation!, newLocation);
+    } else {
+      newBearing = _calculateBearing(
+        newLocation,
+        LatLng(widget.customerLatitude, widget.customerLongitude),
+      );
     }
 
     setState(() {
       _previousLocation = _currentDriverLocation;
       _currentDriverLocation = newLocation;
+      _currentBearing = newBearing;
     });
 
-    // Auto-follow driver
     if (_isFollowingDriver && _currentDriverLocation != null) {
       _followDriver();
     }
 
-    // Check arrival - 5 meters
-    final distanceToDestination = _calculateDistance(
-      newLocation,
-      LatLng(widget.customerLatitude, widget.customerLongitude),
-    );
+    // ✅ فحص الوصول بدقة عالية
+    _checkArrival(newLocation, position.accuracy);
+  }
 
-    if (distanceToDestination < 0.005 && !_arrivedAtDestination) {
+  // ✅ دالة جديدة للفحص الدقيق للوصول
+  void _checkArrival(LatLng currentLocation, double gpsAccuracy) {
+    if (_arrivedAtDestination) return;
+
+    final destinationPoint = LatLng(
+      widget.customerLatitude, 
+      widget.customerLongitude
+    );
+    
+    // حساب المسافة بالأمتار
+    final distanceInMeters = _calculateDistance(currentLocation, destinationPoint) * 1000;
+    
+    // ✅ الحد الأدنى للوصول: 3 متر أو دقة GPS (أيهما أكبر)
+    final arrivalThreshold = math.max(3.0, gpsAccuracy);
+    
+    debugPrint('🎯 Distance to destination: ${distanceInMeters.toStringAsFixed(1)}m | GPS Accuracy: ${gpsAccuracy.toStringAsFixed(1)}m | Threshold: ${arrivalThreshold.toStringAsFixed(1)}m');
+
+    if (distanceInMeters <= arrivalThreshold) {
       setState(() => _arrivedAtDestination = true);
       _showArrivalDialog();
-      debugPrint('🎯 Arrived! Distance: ${(distanceToDestination * 1000).toStringAsFixed(1)}m');
+      debugPrint('✅ ARRIVED! Distance: ${distanceInMeters.toStringAsFixed(1)}m within ${arrivalThreshold.toStringAsFixed(1)}m threshold');
     }
-  }
-
-  void _followDriver() {
-    if (_mapController == null || _currentDriverLocation == null) return;
-    
-    // Dynamic zoom based on speed
-    double zoom = 17.0;
-    if (_currentSpeed > 60) {
-      zoom = 15.5;
-    } else if (_currentSpeed > 40) {
-      zoom = 16.0;
-    } else if (_currentSpeed > 20) {
-      zoom = 16.5;
-    } else {
-      zoom = 17.0;
-    }
-
-    _mapController!.move(_currentDriverLocation!, zoom);
-  }
-
-  void _smoothRotateMap(double targetRotation) {
-    double normalizeAngle(double angle) {
-      while (angle > 180) angle -= 360;
-      while (angle < -180) angle += 360;
-      return angle;
-    }
-
-    final currentRotation = _mapController?.camera.rotation ?? 0;
-    final normalizedTarget = normalizeAngle(targetRotation);
-    final normalizedCurrent = normalizeAngle(currentRotation);
-    
-    double delta = normalizeAngle(normalizedTarget - normalizedCurrent);
-    final newTarget = normalizedCurrent + delta;
-
-    _rotationAnimation = Tween<double>(
-      begin: normalizedCurrent,
-      end: newTarget,
-    ).animate(
-      CurvedAnimation(
-        parent: _rotationAnimationController,
-        curve: Curves.easeOut,
-      ),
-    );
-
-    _rotationAnimationController.forward(from: 0);
   }
 
   double _calculateBearing(LatLng start, LatLng end) {
@@ -263,6 +218,21 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
 
     final bearing = math.atan2(y, x) * 180 / math.pi;
     return (bearing + 360) % 360;
+  }
+
+  void _followDriver() {
+    if (_mapController == null || _currentDriverLocation == null) return;
+    
+    double zoom = 17.0;
+    if (_currentSpeed > 60) {
+      zoom = 15.5;
+    } else if (_currentSpeed > 40) {
+      zoom = 16.0;
+    } else if (_currentSpeed > 20) {
+      zoom = 16.5;
+    }
+
+    _mapController!.move(_currentDriverLocation!, zoom);
   }
 
   Future<void> _updateRoute() async {
@@ -298,7 +268,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
             _remainingTime = newDuration;
           });
 
-          debugPrint('🔄 Route updated: ${newDistance.toStringAsFixed(1)} km');
+          debugPrint('🔄 Route updated: ${newDistance.toStringAsFixed(1)} km, ${newDuration.toStringAsFixed(0)} min');
         }
       }
     } catch (e) {
@@ -312,35 +282,35 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
   }
 
   void _showArrivalDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'Arrived at Destination!',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'You have arrived at the customer location.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text(
-              'OK',
-              style: TextStyle(color: Color(0xFFB7A447)),
-            ),
-          ),
-        ],
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) => AlertDialog(
+      backgroundColor: const Color(0xFF2D2D2D),
+      title: const Text(
+        'Arrived at Destination!',
+        style: TextStyle(color: Colors.white),
       ),
-    );
-  }
+      content: const Text(
+        'You have arrived at the customer location.',
+        style: TextStyle(color: Colors.white70),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.pop(context);
+            Navigator.pop(context);
+          },
+          child: const Text(
+            'OK',
+            style: TextStyle(color: Color(0xFFB7A447)),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -363,9 +333,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                 maxZoom: 19.0,
                 keepAlive: true,
                 interactionOptions: InteractionOptions(
-                  flags: _isFollowingDriver 
-                    ? InteractiveFlag.all & ~InteractiveFlag.rotate
-                    : InteractiveFlag.all,
+                  flags: InteractiveFlag.all,
                 ),
                 onPositionChanged: (position, hasGesture) {
                   if (hasGesture) {
@@ -382,7 +350,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                   tileProvider: NetworkTileProvider(),
                 ),
                 
-                // Route line - Blue path on streets
                 if (_routePoints.isNotEmpty)
                   PolylineLayer(
                     polylines: [
@@ -396,20 +363,17 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                 
                 MarkerLayer(
                   markers: [
-                    // Driver marker - Directional arrow pointing to movement direction
                     if (_currentDriverLocation != null)
                       Marker(
                         point: _currentDriverLocation!,
                         width: 70.0,
                         height: 70.0,
                         alignment: Alignment.center,
-                        rotate: false, // We handle rotation manually
                         child: Transform.rotate(
                           angle: _currentBearing * math.pi / 180,
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              // Outer glow
                               Container(
                                 width: 70,
                                 height: 70,
@@ -418,7 +382,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                                   shape: BoxShape.circle,
                                 ),
                               ),
-                              // Middle white circle
                               Container(
                                 width: 50,
                                 height: 50,
@@ -434,7 +397,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                                   ],
                                 ),
                               ),
-                              // Blue arrow icon
                               Container(
                                 width: 45,
                                 height: 45,
@@ -453,7 +415,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                         ),
                       ),
                     
-                    // Destination marker
                     Marker(
                       point: destinationLocation,
                       width: 50.0,
@@ -486,7 +447,6 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
               ],
             ),
             
-            // Customer info card (top)
             Positioned(
               top: 16,
               left: 16,
@@ -555,110 +515,55 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
               ),
             ),
             
-            // Controls (right side)
             Positioned(
               top: 130,
               right: 16,
-              child: Column(
-                children: [
-                  // Follow driver button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D2D2D).withOpacity(0.95),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _isFollowingDriver
-                              ? const Color(0xFF2196F3)
-                              : Colors.white60,  
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.my_location,
-                        color: _isFollowingDriver
-                            ? const Color(0xFF2196F3)
-                            : Colors.white60,  
-                        size: 28,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isFollowingDriver = true;
-                        });
-                        if (_currentDriverLocation != null) {
-                          _followDriver();
-                        }
-                      },
-                      tooltip: _isFollowingDriver 
-                          ? 'Following your location' 
-                          : 'Center on my location',
-                    ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _isFollowingDriver
+                          ? const Color(0xFF2196F3)
+                          : Colors.white60,  
+                    width: 2,
                   ),
-                  
-                  // Speed indicator
-                  if (_currentSpeed > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2D2D2D).withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: const Color(0xFF2196F3).withOpacity(0.3),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              '${_currentSpeed.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                color: Color(0xFF2196F3),
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Text(
-                              'km/h',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 8,
                     ),
-                ],
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    Icons.my_location,
+                    color: _isFollowingDriver
+                        ? const Color(0xFF2196F3)
+                        : Colors.white60,  
+                    size: 28,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isFollowingDriver = true;
+                    });
+                    if (_currentDriverLocation != null) {
+                      _followDriver();
+                    }
+                  },
+                ),
               ),
             ),
             
-            // Navigation info (bottom)
             Positioned(
               bottom: 16,
               left: 16,
               right: 16,
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2D2D2D).withOpacity(0.98),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: const Color(0xFF2196F3).withOpacity(0.5),
                     width: 2,
@@ -683,7 +588,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                                   : '--',
                               style: const TextStyle(
                                 color: Color(0xFF2196F3),
-                                fontSize: 36,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -698,7 +603,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                         ),
                         Container(
                           width: 2,
-                          height: 50,
+                          height: 40,
                           color: Colors.white30,
                         ),
                         Column(
@@ -709,7 +614,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                                   : '--',
                               style: const TextStyle(
                                 color: Color(0xFF2196F3),
-                                fontSize: 36,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -724,7 +629,7 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: () {
                         showDialog(
@@ -764,9 +669,9 @@ class _LiveNavigationState extends State<LiveNavigation> with TickerProviderStat
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFFF4444),
-                        minimumSize: const Size(double.infinity, 50),
+                        minimumSize: const Size(double.infinity, 42),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       child: const Text(
