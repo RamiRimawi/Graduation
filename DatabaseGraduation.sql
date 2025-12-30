@@ -109,6 +109,8 @@ CREATE TABLE public.customer_order (
   last_action_by text,
   last_action_time timestamp without time zone,
   discount_value real DEFAULT 0,
+  update_action text,
+  update_description text,
   CONSTRAINT customer_order_pkey PRIMARY KEY (customer_order_id),
   CONSTRAINT customer_order_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id),
   CONSTRAINT customer_order_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id),
@@ -126,6 +128,7 @@ CREATE TABLE public.customer_order_description (
   delivered_date timestamp without time zone,
   last_action_by text,
   last_action_time timestamp without time zone,
+  updated_quantity integer,
   CONSTRAINT customer_order_description_pkey PRIMARY KEY (customer_order_id, product_id),
   CONSTRAINT customer_order_description_customer_order_id_fkey FOREIGN KEY (customer_order_id) REFERENCES public.customer_order(customer_order_id),
   CONSTRAINT customer_order_description_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id)
@@ -466,7 +469,7 @@ supplier_check_status_enum : 	Cashed, Returned, Pending
 
 
 
-customer_order_status_enum : 	Received, Pinned, Prepared, Delivery, Delivered, Updated, Hold, Preparing	
+customer_order_status_enum : 	Received, Pinned, Prepared, Delivery, Delivered, Updated to Accountant, Hold, Preparing, Updated to Customer, Canceled
 
 
 

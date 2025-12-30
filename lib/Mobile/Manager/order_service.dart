@@ -87,6 +87,76 @@ class OrderService {
     }
   }
 
+  /// Send update to accountant: update order status and changed item quantities
+  static Future<bool> sendUpdateToAccountant({
+    required int orderId,
+    required Map<int, int> updatedQuantities,
+    required String updateDescription,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final managerIdStr = prefs.getString('current_user_id');
+      final int? managerId = managerIdStr != null
+          ? int.tryParse(managerIdStr)
+          : null;
+      String? managerName = prefs.getString('current_user_name');
+
+      if (managerName == null || managerName.isEmpty) {
+        if (managerId != null) {
+          try {
+            final managerResponse = await supabase
+                .from('storage_manager')
+                .select('name')
+                .eq('storage_manager_id', managerId)
+                .single();
+            managerName = managerResponse['name'] as String?;
+          } catch (e) {
+            print('Error fetching manager name: $e');
+            managerName = 'Manager';
+          }
+        } else {
+          managerName = 'Manager';
+        }
+      }
+
+      final now = DateTime.now().toIso8601String();
+
+      // Update only the changed product rows in customer_order_description
+      for (final entry in updatedQuantities.entries) {
+        final productId = entry.key;
+        final newQty = entry.value;
+
+        await supabase
+            .from('customer_order_description')
+            .update({
+              'updated_quantity': newQty,
+              'last_action_by': managerName ?? 'Manager',
+              'last_action_time': now,
+            })
+            .eq('customer_order_id', orderId)
+            .eq('product_id', productId);
+      }
+
+      // Update order header: status, last action, time and store update_description on order
+      final updateData = {
+        'order_status': 'Updated to Accountant',
+        'update_description': updateDescription,
+        'last_action_by': managerName ?? 'Manager',
+        'last_action_time': now,
+      };
+
+      await supabase
+          .from('customer_order')
+          .update(updateData)
+          .eq('customer_order_id', orderId);
+
+      return true;
+    } catch (e) {
+      print('Error sending update to accountant: $e');
+      return false;
+    }
+  }
+
   /// Fetch all pending orders for manager
   static Future<List<OrderSummary>> fetchPendingOrders() async {
     try {

@@ -168,7 +168,7 @@ class _OrdersPageState extends State<OrdersPage> {
             status == 'Prepared' ||
             status == 'Preparing' || // <-- Added this line
             status == 'Delivery' ||
-            status == 'Updated') {
+            status == 'Updated to Accountant') {
           shouldShow = true;
         } else if (status == 'Delivered') {
           // Only show Delivered if delivered_date is today
@@ -527,7 +527,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                               if (row.orderStatus ==
                                                       'Received' ||
                                                   row.orderStatus ==
-                                                      'Updated') {
+                                                      'Updated to Accountant') {
                                                 _openOrderPopup(row);
                                               } else {
                                                 // Fetch order details as in _openOrderPopup
@@ -800,7 +800,7 @@ class _OrdersPageState extends State<OrdersPage> {
 
   String _mapStatus(String orderStatus) {
     switch (orderStatus) {
-      case 'Updated':
+      case 'Updated to Accountant':
         return 'UPDATE';
       default:
         return 'NEW';

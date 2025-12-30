@@ -32,6 +32,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   // Track if quantities were modified
   bool _quantitiesModified = false;
+  // Keep original quantities to detect changes (productId -> qty)
+  final Map<int, int> _originalQuantities = {};
 
   @override
   void initState() {
@@ -75,17 +77,104 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   Future<void> _sendUpdateToAccountant() async {
     if (_orderData == null) return;
 
-    // Here you would implement the logic to send update to accountant
-    // For now, just show a success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Order update sent to accountant for review'),
-        backgroundColor: Colors.green,
+    // Prepare map of products that were modified by manager
+    final Map<int, int> modified = {};
+    for (final item in _orderData!.items) {
+      final orig = _originalQuantities[item.productId];
+      if (orig == null) continue;
+      if (item.qty != orig) modified[item.productId] = item.qty;
+    }
+
+    if (modified.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No quantity changes to send to accountant'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final TextEditingController descCtrl = TextEditingController();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send update to Accountant'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Put description field above the confirmation message
+            const SizedBox(height: 6),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Update Description',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: descCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: AppColors.gold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Are you sure you want to send updated quantities to accountant?',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(foregroundColor: AppColors.gold),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
       ),
     );
 
-    // You might want to navigate back or update the order status
-    // Navigator.pop(context, true);
+    if (confirm != true) return;
+
+    // Call service to apply updates
+    final success = await OrderService.sendUpdateToAccountant(
+      orderId: widget.orderId,
+      updatedQuantities: modified,
+      updateDescription: descCtrl.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order update sent to accountant for review'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send update. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _sendNonSplitOrder() async {
@@ -197,6 +286,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         }
 
         _orderData = snapshot.data;
+        // Initialize original quantities to detect manager edits
+        if (_orderData != null && _originalQuantities.isEmpty) {
+          for (final it in _orderData!.items) {
+            _originalQuantities[it.productId] = it.qty;
+          }
+        }
         return _buildOrderDetailsUI();
       },
     );
@@ -907,7 +1002,11 @@ class _ActionSelectorModal extends StatelessWidget {
                             ),
                           ),
                         ),
-                        Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                        Icon(
+                          Icons.arrow_forward,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ],
                     ),
                   ),

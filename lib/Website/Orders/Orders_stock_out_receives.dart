@@ -80,7 +80,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
           .select(
             'customer_order_id, order_status, order_date, last_action_by, customer:customer_id(name)',
           )
-          .inFilter('order_status', ['Received', 'Updated', 'Hold'])
+          .inFilter('order_status', ['Received', 'Updated to Accountant', 'Hold'])
           .order('customer_order_id', ascending: false);
 
       final ordersList = <OrderReceiveRow>[];
@@ -103,7 +103,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
         final date = '${orderDate.day}/${orderDate.month}';
 
         // Type: "out (UPDATE)" for Updated, "out (NEW)" for Received, "out" for Hold
-        final type = status == 'Updated'
+        final type = status == 'Updated to Accountant'
             ? 'out (UPDATE)'
             : status == 'Hold'
             ? 'out'
@@ -587,7 +587,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
 
   String _mapStatus(String orderStatus) {
     switch (orderStatus) {
-      case 'Updated':
+      case 'Updated to Accountant':
         return 'UPDATE';
       case 'Hold':
         return 'HOLD';
