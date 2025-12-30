@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'order_item.dart';
-import 'manager_theme.dart';
+import '../manager_theme.dart';
 
 class DeliveryOrderDetailsPage extends StatefulWidget {
   final int orderId;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../bottom_navbar.dart';
 import '../account_page.dart';
-import 'manager_theme.dart';
+import '../manager_theme.dart';
 import 'HomeManager.dart';
 import 'StockOutPage.dart';
 import 'Stock-inPage.dart';

@@ -32,19 +32,21 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? userIdStr = prefs.getString('current_user_id');
-      final int? supplierId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      final int? supplierId = userIdStr != null
+          ? int.tryParse(userIdStr)
+          : null;
 
       if (supplierId == null) {
         setState(() => _isLoading = false);
         return;
       }
 
-      // Fetch all supplier_order records for this supplier
+      // Fetch all supplier_order records for this supplier with statuses Sent or Accepted
       final orders = await supabase
           .from('supplier_order')
           .select('order_id, created_by_id, order_date, order_status')
           .eq('supplier_id', supplierId)
-          .eq('order_status', 'Sent')
+          .filter('order_status', 'in', ['Sent', 'Accepted'])
           .order('order_date', ascending: false);
 
       final List<Map<String, dynamic>> ordersWithProducts = [];
@@ -61,26 +63,10 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
 
         final productCount = (products as List).length.toString();
 
-        // Get creator/contact name (try to get from any related table or use ID)
-        final createdById = order['created_by_id'];
-        String creatorName = 'Order #$orderId';
-
-        if (createdById != null) {
-          // Try to fetch name from storage_manager table
-          final creator = await supabase
-              .from('storage_manager')
-              .select('name')
-              .eq('storage_manager_id', createdById)
-              .maybeSingle();
-
-          if (creator != null && creator['name'] != null) {
-            creatorName = creator['name'] as String;
-          }
-        }
-
         ordersWithProducts.add({
           'id': orderId.toString(),
-          'name': creatorName,
+          // UI requirement: always show Dolphin Company as the customer name
+          'name': 'Dolphin Company',
           'productCount': productCount,
           'order': order,
         });
@@ -103,40 +89,37 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFB7A447),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : _orders.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 32.0),
-                      child: Text(
-                        'No orders yet',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                    itemCount: _orders.length,
-                    itemBuilder: (context, index) {
-                      final orderData = _orders[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _buildCard(
-                          id: orderData['id'],
-                          name: orderData['name'],
-                          products: orderData['productCount'],
-                          orderId: orderData['order']['order_id'],
-                        ),
-                      );
-                    },
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Text(
+                    'No orders yet',
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                    textAlign: TextAlign.center,
                   ),
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                itemCount: _orders.length,
+                itemBuilder: (context, index) {
+                  final orderData = _orders[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildCard(
+                      id: orderData['id'],
+                      name: orderData['name'],
+                      products: orderData['productCount'],
+                      orderId: orderData['order']['order_id'],
+                      orderStatus:
+                          orderData['order']['order_status'] as String?,
+                    ),
+                  );
+                },
+              ),
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
@@ -160,6 +143,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
     required String name,
     required String products,
     required int orderId,
+    String? orderStatus,
   }) {
     return GestureDetector(
       onTap: () async {
@@ -169,6 +153,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
             builder: (_) => OrderDetailsPage(
               orderId: orderId,
               customerName: name,
+              readOnly: orderStatus == 'Accepted',
             ),
           ),
         );
@@ -177,112 +162,142 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
           await _loadOrders();
         }
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 1,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 1,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Text(
-                    'ID #',
-                    style: TextStyle(
-                      color: Color(0xFFB7A447),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(width: 34),
-                  Text(
-                    'Customer Name',
-                    style: TextStyle(
-                      color: Color(0xFFB7A447),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 2),
-
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    id,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 23,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 28),
-
-                  Expanded(
-                    child: Text(
-                      'Dolphin Company',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    children: const [
+                      Text(
+                        'ID #',
+                        style: TextStyle(
+                          color: Color(0xFFB7A447),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                      SizedBox(width: 34),
+                      Text(
+                        'Customer Name',
+                        style: TextStyle(
+                          color: Color(0xFFB7A447),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(width: 16),
+                  const SizedBox(height: 2),
 
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF262626),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          products,
-                          style: const TextStyle(
-                            color: Color(0xFFFFEFFF),
-                            fontSize: 25,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        id,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 23,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(height: 3),
-                        const Text(
-                          'products',
+                      ),
+                      const SizedBox(width: 28),
+
+                      Expanded(
+                        child: const Text(
+                          'Dolphin Company',
                           style: TextStyle(
-                            color: Color(0xFFB7A447),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Container(
+                        width: 84,
+                        height: 84,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF262626),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              products,
+                              style: const TextStyle(
+                                color: Color(0xFFFFEFFF),
+                                fontSize: 25,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'products',
+                              style: TextStyle(
+                                color: Color(0xFFB7A447),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+
+          // Status badge (top-right)
+          if (orderStatus != null)
+            Positioned(
+              top: -6,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: orderStatus == 'Sent'
+                      ? Color(0xFFB7A447)
+                      : orderStatus == 'Accepted'
+                      ? Colors.green
+                      : Colors.grey,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  orderStatus == 'Sent'
+                      ? 'NEW'
+                      : (orderStatus == 'Accepted' ? 'Accepted' : orderStatus),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

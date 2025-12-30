@@ -259,6 +259,340 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
     return total <= 0 ? '-' : _formatMoney(total);
   }
 
+  // ============= HANDLERS FOR "IN" ORDERS (NEW) =============
+  Future<void> _handleRejectNewIn(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Delete from supplier_order_description first (foreign key)
+      await supabase
+          .from('supplier_order_description')
+          .delete()
+          .eq('order_id', widget.orderId!);
+
+      // Delete from supplier_order
+      await supabase
+          .from('supplier_order')
+          .delete()
+          .eq('order_id', widget.orderId!);
+
+      // Notify parent to refresh
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order deleted successfully'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting order: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleLaterNewIn(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System';
+
+      final quantityChanged = _hasQuantityChanged();
+      final priceData = _calculateUpdatedPrices();
+      final productTotals = priceData['product_totals'] as Map<int, num>;
+
+      // Update supplier_order to Hold
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Hold',
+            'total_cost': priceData['subtotal'],
+            'total_balance':
+                priceData['subtotal'], // no tax for supplier orders
+            'last_action_by': accountantName,
+            'last_action_time': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', widget.orderId!);
+
+      // Update quantities if changed
+      if (quantityChanged) {
+        for (final product in _products) {
+          final productId = _getProductId(product['id']);
+          final currentQty = (product['quantity'] ?? 0) as int;
+          final originalQty = _originalQuantities[productId] ?? 0;
+          if (currentQty != originalQty) {
+            await supabase
+                .from('supplier_order_description')
+                .update({
+                  'quantity': currentQty,
+                  'total_price': productTotals[productId],
+                  'last_action_by': accountantName,
+                  'last_action_time': DateTime.now().toIso8601String(),
+                })
+                .eq('order_id', widget.orderId!)
+                .eq('product_id', productId);
+          }
+        }
+      }
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order set to Hold'),
+          backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error setting order to Hold: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleSendNewIn(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System';
+
+      final quantityChanged = _hasQuantityChanged();
+      final priceData = _calculateUpdatedPrices();
+      final productTotals = priceData['product_totals'] as Map<int, num>;
+
+      // Update supplier_order to Sent
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Sent',
+            'total_cost': priceData['subtotal'],
+            'total_balance':
+                priceData['subtotal'], // no tax for supplier orders
+            'last_action_by': accountantName,
+            'last_action_time': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', widget.orderId!);
+
+      // Update quantities if changed
+      if (quantityChanged) {
+        for (final product in _products) {
+          final productId = _getProductId(product['id']);
+          final currentQty = (product['quantity'] ?? 0) as int;
+          final originalQty = _originalQuantities[productId] ?? 0;
+          if (currentQty != originalQty) {
+            await supabase
+                .from('supplier_order_description')
+                .update({
+                  'quantity': currentQty,
+                  'total_price': productTotals[productId],
+                  'last_action_by': accountantName,
+                  'last_action_time': DateTime.now().toIso8601String(),
+                })
+                .eq('order_id', widget.orderId!)
+                .eq('product_id', productId);
+          }
+        }
+      }
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order sent successfully'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending order: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  // ============= HANDLERS FOR "IN" ORDERS (UPDATE) =============
+  Future<void> _handleAcceptUpdateIn(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System';
+
+      // Update supplier_order to Sent
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Sent',
+            'last_action_by': accountantName,
+            'last_action_time': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', widget.orderId!);
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Update accepted, order set to Sent'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error accepting update: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleRejectUpdateIn(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System';
+
+      // Update supplier_order to Rejected
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Rejected',
+            'last_action_by': accountantName,
+            'last_action_time': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', widget.orderId!);
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Update rejected'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error rejecting update: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  // ============= ORIGINAL HANDLER FOR "OUT" ORDERS =============
   Future<void> _handleSendOrder(BuildContext context) async {
     try {
       // Get accountant information
@@ -739,109 +1073,142 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                             children: [
                                               SizedBox(
                                                 width: 40,
-                                                child: TextFormField(
-                                                  key: ValueKey(
-                                                    'qty_${product["id"]}',
-                                                  ),
-                                                  initialValue:
-                                                      product["quantity"] ==
-                                                              0 ||
+                                                child:
+                                                    (widget.orderType == 'in' &&
+                                                        widget.status ==
+                                                            'UPDATE')
+                                                    ? Center(
+                                                        child: Text(
                                                           product["quantity"]
-                                                              is! num
-                                                      ? ''
-                                                      : product["quantity"]
-                                                            .toString(),
-                                                  keyboardType:
-                                                      TextInputType.number,
-                                                  cursorColor: Colors.white,
-                                                  inputFormatters: [
-                                                    FilteringTextInputFormatter
-                                                        .digitsOnly,
-                                                  ],
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    color: Colors.black,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14,
-                                                  ),
-                                                  decoration:
-                                                      const InputDecoration(
-                                                        border:
-                                                            InputBorder.none,
-                                                        contentPadding:
-                                                            EdgeInsets.zero,
-                                                        isDense: true,
-                                                        hintText: '0',
-                                                        hintStyle: TextStyle(
-                                                          color: Colors.black54,
+                                                              .toString(),
+                                                          style:
+                                                              const TextStyle(
+                                                                color: Colors
+                                                                    .black,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 14,
+                                                              ),
+                                                        ),
+                                                      )
+                                                    : TextFormField(
+                                                        key: ValueKey(
+                                                          'qty_${product["id"]}',
+                                                        ),
+                                                        initialValue:
+                                                            product["quantity"] ==
+                                                                    0 ||
+                                                                product["quantity"]
+                                                                    is! num
+                                                            ? ''
+                                                            : product["quantity"]
+                                                                  .toString(),
+                                                        keyboardType:
+                                                            TextInputType
+                                                                .number,
+                                                        cursorColor:
+                                                            Colors.white,
+                                                        inputFormatters: [
+                                                          FilteringTextInputFormatter
+                                                              .digitsOnly,
+                                                        ],
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: const TextStyle(
+                                                          color: Colors.black,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: 14,
                                                         ),
-                                                      ),
-                                                  onChanged: (value) {
-                                                    setState(() {
-                                                      final newQty =
-                                                          int.tryParse(value) ??
-                                                          0;
-                                                      product["quantity"] =
-                                                          newQty;
-
-                                                      // Update the total for this product
-                                                      final priceStr =
-                                                          product['price']
-                                                              ?.toString() ??
-                                                          '0';
-                                                      final price =
-                                                          num.tryParse(
-                                                            priceStr.replaceAll(
-                                                              RegExp(
-                                                                r'[^0-9.-]',
+                                                        decoration:
+                                                            const InputDecoration(
+                                                              border:
+                                                                  InputBorder
+                                                                      .none,
+                                                              contentPadding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              isDense: true,
+                                                              hintText: '0',
+                                                              hintStyle: TextStyle(
+                                                                color: Colors
+                                                                    .black54,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 14,
                                                               ),
-                                                              '',
                                                             ),
-                                                          ) ??
-                                                          0;
-                                                      final newTotal =
-                                                          price * newQty;
-                                                      product["total"] =
-                                                          _formatMoney(
-                                                            newTotal,
-                                                          );
-
-                                                      // Check if this product now has sufficient stock
-                                                      // Handle product ID as either String or int
-                                                      final productIdValue =
-                                                          product['id'];
-                                                      final productId =
-                                                          productIdValue is int
-                                                          ? productIdValue
-                                                          : int.tryParse(
-                                                                  productIdValue
-                                                                      .toString(),
+                                                        onChanged: (value) {
+                                                          setState(() {
+                                                            final newQty =
+                                                                int.tryParse(
+                                                                  value,
                                                                 ) ??
                                                                 0;
-                                                      final availableQty =
-                                                          _productAvailableQty[productId] ??
-                                                          0;
+                                                            product["quantity"] =
+                                                                newQty;
 
-                                                      // Check if this product now has sufficient stock (only for stock-out orders)
-                                                      if (widget.orderType !=
-                                                          'in') {
-                                                        if (newQty >
-                                                            availableQty) {
-                                                          _insufficientProducts
-                                                              .add(productId);
-                                                        } else {
-                                                          _insufficientProducts
-                                                              .remove(
-                                                                productId,
-                                                              );
-                                                        }
-                                                      }
-                                                    });
-                                                  },
-                                                ),
+                                                            // Update the total for this product
+                                                            final priceStr =
+                                                                product['price']
+                                                                    ?.toString() ??
+                                                                '0';
+                                                            final price =
+                                                                num.tryParse(
+                                                                  priceStr.replaceAll(
+                                                                    RegExp(
+                                                                      r'[^0-9.-]',
+                                                                    ),
+                                                                    '',
+                                                                  ),
+                                                                ) ??
+                                                                0;
+                                                            final newTotal =
+                                                                price * newQty;
+                                                            product["total"] =
+                                                                _formatMoney(
+                                                                  newTotal,
+                                                                );
+
+                                                            // Check if this product now has sufficient stock
+                                                            // Handle product ID as either String or int
+                                                            final productIdValue =
+                                                                product['id'];
+                                                            final productId =
+                                                                productIdValue
+                                                                    is int
+                                                                ? productIdValue
+                                                                : int.tryParse(
+                                                                        productIdValue
+                                                                            .toString(),
+                                                                      ) ??
+                                                                      0;
+                                                            final availableQty =
+                                                                _productAvailableQty[productId] ??
+                                                                0;
+
+                                                            // Check if this product now has sufficient stock (only for stock-out orders)
+                                                            if (widget
+                                                                    .orderType !=
+                                                                'in') {
+                                                              if (newQty >
+                                                                  availableQty) {
+                                                                _insufficientProducts
+                                                                    .add(
+                                                                      productId,
+                                                                    );
+                                                              } else {
+                                                                _insufficientProducts
+                                                                    .remove(
+                                                                      productId,
+                                                                    );
+                                                              }
+                                                            }
+                                                          });
+                                                        },
+                                                      ),
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
@@ -1032,7 +1399,17 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (widget.status == "NEW") ...[
+                        if (widget.orderType == 'in' &&
+                            widget.status == "NEW") ...[
+                          _OrderButton(
+                            label: "Later",
+                            color: Colors.grey.shade600,
+                            icon: Icons.access_time,
+                            onPressed: () => _handleLaterNewIn(context),
+                          ),
+                          const SizedBox(width: 14),
+                        ] else if (widget.orderType != 'in' &&
+                            widget.status == "NEW") ...[
                           _OrderButton(
                             label: "Later",
                             color: Colors.grey.shade600,
@@ -1047,7 +1424,18 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                               : "Reject Order",
                           color: Colors.red.shade700,
                           icon: Icons.cancel_outlined,
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () {
+                            if (widget.orderType == 'in' &&
+                                (widget.status == 'NEW' ||
+                                    widget.status == 'HOLD')) {
+                              _handleRejectNewIn(context);
+                            } else if (widget.orderType == 'in' &&
+                                widget.status == 'UPDATE') {
+                              _handleRejectUpdateIn(context);
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
                         ),
                         const SizedBox(width: 14),
                         _OrderButton(
@@ -1058,7 +1446,18 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                               : "Send Order",
                           color: Colors.yellow.shade600,
                           icon: Icons.send_rounded,
-                          onPressed: () => _handleSendOrder(context),
+                          onPressed: () {
+                            if (widget.orderType == 'in' &&
+                                (widget.status == 'NEW' ||
+                                    widget.status == 'HOLD')) {
+                              _handleSendNewIn(context);
+                            } else if (widget.orderType == 'in' &&
+                                widget.status == 'UPDATE') {
+                              _handleAcceptUpdateIn(context);
+                            } else {
+                              _handleSendOrder(context);
+                            }
+                          },
                         ),
                       ],
                     ),

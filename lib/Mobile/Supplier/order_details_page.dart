@@ -3,15 +3,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
 import '../account_page.dart';
+import '../manager_theme.dart';
 
 class OrderDetailsPage extends StatefulWidget {
   final int orderId;
   final String customerName;
+  final bool readOnly;
 
   const OrderDetailsPage({
     super.key,
     required this.orderId,
     required this.customerName,
+    this.readOnly = false,
   });
 
   @override
@@ -23,6 +26,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   List<Map<String, dynamic>> products = [];
   bool isLoading = true;
   String supplierName = '';
+  double taxPercent = 0.0;
 
   @override
   void initState() {
@@ -38,7 +42,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     // Fallback: fetch supplier name by current_user_id if not in prefs
     if (name.isEmpty) {
       final String? userIdStr = prefs.getString('current_user_id');
-      final int? supplierId = userIdStr != null ? int.tryParse(userIdStr) : null;
+      final int? supplierId = userIdStr != null
+          ? int.tryParse(userIdStr)
+          : null;
 
       if (supplierId != null) {
         final supplier = await supabase
@@ -106,9 +112,26 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         }
       }
 
+      // Fetch tax percent from supplier_order (if present)
+      double fetchedTax = 0.0;
+      try {
+        final orderRow = await supabase
+            .from('supplier_order')
+            .select('tax_percent')
+            .eq('order_id', widget.orderId)
+            .maybeSingle();
+
+        if (orderRow != null && orderRow['tax_percent'] != null) {
+          fetchedTax = (orderRow['tax_percent'] as num).toDouble();
+        }
+      } catch (e) {
+        debugPrint('Error fetching tax percent: $e');
+      }
+
       setState(() {
         products = productsList;
         isLoading = false;
+        taxPercent = fetchedTax;
       });
     } catch (e) {
       debugPrint('Error loading order products: $e');
@@ -119,7 +142,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A),
+      backgroundColor: AppColors.bgDark,
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
         child: Column(
@@ -198,62 +221,168 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                       ),
                     )
                   : products.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No products in this order',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final p = products[index];
-                            return _buildRow(p, index);
-                          },
-                        ),
+                  ? const Center(
+                      child: Text(
+                        'No products in this order',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final p = products[index];
+                        return _buildRow(p, index);
+                      },
+                    ),
             ),
 
             const SizedBox(height: 12),
 
-            // ---------------- SUBMIT BUTTON ----------------
-            GestureDetector(
-              onTap: isUpdated ? _handleSendUpdate : _handleDone,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                decoration: BoxDecoration(
-                  color: isUpdated
-                      ? const Color(0xFF50B2E7)
-                      : const Color(0xFFF9D949),
-                  borderRadius: BorderRadius.circular(16),
+            // ---------------- TOTALS SUMMARY ----------------
+            if (!isLoading && products.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
                   children: [
-                    Text(
-                      isUpdated ? "Send Update" : "Done",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                        color: isUpdated
-                            ? Colors.white
-                            : const Color(0xFF1A1A1A),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Total cost',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                        Text(
+                          _computeTotalCost().toStringAsFixed(2),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.send,
-                      color: isUpdated ? Colors.white : const Color(0xFF1A1A1A),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total balance (${taxPercent.toStringAsFixed(0)}%)',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          (_computeTotalCost() * (1 + taxPercent / 100))
+                              .toStringAsFixed(2),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 12),
+            ],
+
+            // ---------------- ACTION BUTTONS (side-by-side) ----------------
+            if (!widget.readOnly)
+              Row(
+                children: [
+                  // Reject (left)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _handleReject,
+                      child: Container(
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Center(
+                              child: Text(
+                                'Reject\nOrder',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.3,
+                                  letterSpacing: 5,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Accept / Send Update (right)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: isUpdated ? _handleSendUpdate : _handleDone,
+                      child: Container(
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: isUpdated
+                              ? const Color(0xFF50B2E7)
+                              : const Color(0xFFB7A447),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Center(
+                              child: Text(
+                                isUpdated ? 'Send\nUpdate' : 'Accept\nOrder',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.3,
+                                  letterSpacing: 5,
+                                ),
+                              ),
+                            ),
+                            Transform.rotate(
+                              angle: -0.8,
+                              child: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -274,7 +403,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   // ============= HANDLE DONE BUTTON =============
   Future<void> _handleDone() async {
     try {
-      final nowIso = DateTime.now().toIso8601String().split('.').first; // Trim to seconds
+      final nowIso = DateTime.now()
+          .toIso8601String()
+          .split('.')
+          .first; // Trim to seconds
       // Update order status to 'Accepted'
       await supabase
           .from('supplier_order')
@@ -298,10 +430,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       debugPrint('Error accepting order: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -310,7 +439,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   // ============= HANDLE SEND UPDATE BUTTON =============
   Future<void> _handleSendUpdate() async {
     try {
-      final nowIso = DateTime.now().toIso8601String().split('.').first; // Trim to seconds
+      final nowIso = DateTime.now()
+          .toIso8601String()
+          .split('.')
+          .first; // Trim to seconds
 
       // Update quantities for changed products
       for (final product in products) {
@@ -327,11 +459,34 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         }
       }
 
-      // Update order status to 'Updated'
+      // Calculate total cost from current quantities and prices
+      final double totalCost = products.fold<double>(0.0, (sum, product) {
+        final qty = (product['quantity'] as num?)?.toDouble() ?? 0.0;
+        final price = (product['price_per_product'] as num?)?.toDouble() ?? 0.0;
+        return sum + qty * price;
+      });
+
+      // Read tax percent from order (default 0) and compute balance including tax
+      final orderRow = await supabase
+          .from('supplier_order')
+          .select('tax_percent')
+          .eq('order_id', widget.orderId)
+          .maybeSingle();
+
+      final double taxPercent =
+          (orderRow != null && orderRow['tax_percent'] != null)
+          ? (orderRow['tax_percent'] as num).toDouble()
+          : 0.0;
+
+      final double totalBalance = totalCost + (totalCost * taxPercent / 100.0);
+
+      // Update order status to 'Updated' and update totals (cost + balance)
       final orderUpdate = await supabase
           .from('supplier_order')
           .update({
             'order_status': 'Updated',
+            'total_cost': totalCost,
+            'total_balance': totalBalance,
             'last_tracing_by': supplierName,
             'last_tracing_time': nowIso,
           })
@@ -356,10 +511,43 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       debugPrint('Error updating order: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ============= HANDLE REJECT BUTTON =============
+  Future<void> _handleReject() async {
+    try {
+      final nowIso = DateTime.now()
+          .toIso8601String()
+          .split('.')
+          .first; // Trim to seconds
+      // Update order status to 'Rejected'
+      await supabase
+          .from('supplier_order')
+          .update({
+            'order_status': 'Rejected',
+            'last_tracing_by': supplierName,
+            'last_tracing_time': nowIso,
+          })
+          .eq('order_id', widget.orderId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order rejected successfully!'),
             backgroundColor: Colors.red,
           ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint('Error rejecting order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -432,6 +620,14 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     );
   }
 
+  double _computeTotalCost() {
+    return products.fold<double>(0.0, (sum, product) {
+      final qty = (product['quantity'] as num?)?.toDouble() ?? 0.0;
+      final price = (product['price_per_product'] as num?)?.toDouble() ?? 0.0;
+      return sum + qty * price;
+    });
+  }
+
   // ------------------------------------------------------------------
   // ROW COMPONENT (Product Line)
   // ------------------------------------------------------------------
@@ -447,7 +643,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         children: [
           // Product name
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Text(
               p['name'],
               style: const TextStyle(
@@ -455,6 +651,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
               ),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -471,6 +668,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -482,7 +680,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               GestureDetector(
-                onTap: () => _editQuantity(index),
+                onTap: widget.readOnly ? null : () => _editQuantity(index),
                 child: Container(
                   width: 55,
                   padding: const EdgeInsets.symmetric(vertical: 10),
