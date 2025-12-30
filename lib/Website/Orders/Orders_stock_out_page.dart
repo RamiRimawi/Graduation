@@ -49,6 +49,8 @@ class _OrderDetailData {
   final DateTime orderDate;
   final num? taxPercent;
   final num? totalPrice;
+  final num discountValue;
+  final String? updateDescription;
   final int orderId;
   final List<Map<String, dynamic>> products;
   final Map<String, dynamic>? manager;
@@ -60,6 +62,8 @@ class _OrderDetailData {
     required this.orderDate,
     required this.products,
     required this.orderId,
+    this.discountValue = 0,
+    this.updateDescription,
     this.city,
     this.address,
     this.taxPercent,
@@ -696,6 +700,8 @@ class _OrdersPageState extends State<OrdersPage> {
         orderDate: detail.orderDate,
         taxPercent: detail.taxPercent,
         totalPrice: detail.totalPrice,
+        discountValue: detail.discountValue,
+        updateDescription: detail.updateDescription,
         orderId: int.tryParse(order.id) ?? detail.orderId,
         onOrderUpdated: _fetchOrders,
       );
@@ -721,9 +727,11 @@ class _OrdersPageState extends State<OrdersPage> {
           order_date,
           tax_percent,
           total_balance,
+          discount_value,
           managed_by_id,
           prepared_by_id,
           delivered_by_id,
+          update_description,
           customer:customer_id(name, address, customer_city:customer_city(name)),
           manager:managed_by_id(name),
           storage_staff:prepared_by_id(name),
@@ -739,7 +747,7 @@ class _OrdersPageState extends State<OrdersPage> {
     final items = await supabase
         .from('customer_order_description')
         .select(
-          'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+          'product_id, quantity, updated_quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
         )
         .eq('customer_order_id', parsedId ?? orderId);
 
@@ -749,20 +757,22 @@ class _OrdersPageState extends State<OrdersPage> {
       final brand = product?['brand'] as Map<String, dynamic>?;
       final unit = product?['unit'] as Map<String, dynamic>?;
       final quantity = (item['quantity'] ?? 0) as num;
+      final updatedQuantity = item['updated_quantity'] as num?;
       final total = (item['total_price'] ?? 0) as num;
       final price = (product?['selling_price'] ?? 0) as num;
+
+      // For UPDATE status, use updated_quantity if available, otherwise use original quantity
+      final effectiveQuantity = updatedQuantity ?? quantity;
 
       products.add({
         'id': item['product_id']?.toString() ?? '-',
         'name': product?['name'] ?? 'Unknown',
         'brand': brand?['name'] ?? '-',
         'price': _formatMoney(price),
-        'quantity': quantity,
-        'total': _formatMoney(
-          total == 0 && price != 0
-              ? price * (quantity == 0 ? 1 : quantity)
-              : total,
-        ),
+        'quantity': effectiveQuantity,
+        'updated_quantity': updatedQuantity,
+        'original_quantity': quantity,
+        'total': _formatMoney(price * effectiveQuantity),
         'unit_name': unit?['unit_name'] ?? 'pcs',
       });
     }
@@ -779,6 +789,8 @@ class _OrdersPageState extends State<OrdersPage> {
       orderDate: orderDate,
       taxPercent: order['tax_percent'] as num?,
       totalPrice: order['total_balance'] as num?,
+      discountValue: (order['discount_value'] ?? 0) as num,
+      updateDescription: order['update_description'] as String?,
       orderId: parsedId ?? int.tryParse(orderId) ?? 0,
       products: products,
       manager:

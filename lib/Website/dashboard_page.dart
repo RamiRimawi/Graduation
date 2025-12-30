@@ -82,7 +82,7 @@ class _TopStepsRowState extends State<_TopStepsRow> {
         switch (status) {
           case 'Received':
           case 'Pinned':
-          case 'Updated':
+          case 'Updated to Accountant':
           case 'Hold':
             pending++;
             break;
@@ -137,7 +137,7 @@ class _TopStepsRowState extends State<_TopStepsRow> {
               onTap: () => _navigateToOrdersWithFilter(context, [
                 'Received',
                 'Sended to manager',
-                'Updated',
+                'Updated to Accountant',
               ]),
             ),
             _ArrowSpacer(width: _arrowW),
@@ -482,7 +482,7 @@ class _OrdersCardState extends State<_OrdersCard> {
           .select(
             'customer_order_id, order_status, order_date, last_action_by, customer:customer_id(name)',
           )
-          .inFilter('order_status', ['Received', 'Updated'])
+          .inFilter('order_status', ['Received', 'Updated to Accountant'])
           .order('customer_order_id', ascending: false);
 
       // Fetch supplier orders (stock-in receives): include Pending and Updated
@@ -512,7 +512,7 @@ class _OrdersCardState extends State<_OrdersCard> {
         final date = '${orderDate.day}/${orderDate.month}';
 
         String type = 'out (NEW)';
-        if (order['order_status'] == 'Updated') {
+        if (order['order_status'] == 'Updated to Accountant') {
           type = 'out (UPDATE)';
         }
 

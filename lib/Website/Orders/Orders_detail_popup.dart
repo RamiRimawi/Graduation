@@ -59,7 +59,9 @@ class OrderDetailPopup {
     DateTime? orderDate,
     num? taxPercent,
     num? totalPrice,
+    num? discountValue,
     int? orderId,
+    String? updateDescription,
     VoidCallback? onOrderUpdated,
   }) {
     showDialog(
@@ -75,7 +77,9 @@ class OrderDetailPopup {
         orderDate: orderDate,
         taxPercent: taxPercent,
         totalPrice: totalPrice,
+        discountValue: discountValue,
         orderId: orderId,
+        updateDescription: updateDescription,
         onOrderUpdated: onOrderUpdated,
       ),
     );
@@ -91,8 +95,10 @@ class _OrderDetailDialog extends StatefulWidget {
   final DateTime? orderDate;
   final num? taxPercent;
   final num? totalPrice;
+  final num? discountValue;
   final int? orderId; // Add order ID to track which order to update
   final VoidCallback? onOrderUpdated;
+  final String? updateDescription;
 
   const _OrderDetailDialog({
     required this.orderType,
@@ -103,7 +109,9 @@ class _OrderDetailDialog extends StatefulWidget {
     this.orderDate,
     this.taxPercent,
     this.totalPrice,
+    this.discountValue,
     this.orderId,
+    this.updateDescription,
     this.onOrderUpdated,
   });
 
@@ -226,7 +234,30 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
   Map<String, dynamic> _calculateUpdatedPrices() {
     // Calculate subtotal with new quantities
     final subtotal = _calculateSubtotal();
-    final discount = _discountValue;
+    // For UPDATE status, don't apply tax or discount
+    if (widget.status == "UPDATE") {
+      // Calculate product totals for UPDATE status
+      final Map<int, num> productTotals = {};
+      for (final product in _products) {
+        final productId = _getProductId(product['id']);
+        final quantity = (product['quantity'] ?? 0) as num;
+        final priceStr = product['price']?.toString() ?? '0';
+        final price =
+            num.tryParse(priceStr.replaceAll(RegExp(r'[^0-9.-]'), '')) ?? 0;
+        productTotals[productId] = price * quantity;
+      }
+      return {
+        'subtotal': subtotal,
+        'total_balance': subtotal,
+        'product_totals': productTotals,
+      };
+    }
+    // Only apply discount when discount field is shown (NEW/HOLD status)
+    final discount =
+        (widget.orderType == "out" &&
+            (widget.status == "NEW" || widget.status == "HOLD"))
+        ? _discountValue
+        : 0;
     // Calculate tax
     final taxPercent = widget.taxPercent ?? 0;
     final taxAmount = subtotal * taxPercent / 100;
@@ -253,9 +284,19 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
 
   String _calculateTotal() {
     final subtotal = _calculateSubtotal();
+    // For UPDATE status, show only subtotal (no tax/discount) since accountant is reviewing quantity changes
+    if (widget.status == "UPDATE") {
+      return subtotal <= 0 ? '-' : _formatMoney(subtotal);
+    }
     final taxPercent = widget.taxPercent ?? 0;
     final taxAmount = subtotal * taxPercent / 100;
-    final total = subtotal + taxAmount - _discountValue;
+    // Only apply discount when discount field is shown (NEW/HOLD status)
+    final discount =
+        (widget.orderType == "out" &&
+            (widget.status == "NEW" || widget.status == "HOLD"))
+        ? _discountValue
+        : 0;
+    final total = subtotal + taxAmount - discount;
     return total <= 0 ? '-' : _formatMoney(total);
   }
 
@@ -766,6 +807,278 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
     }
   }
 
+  // ============= HANDLERS FOR "OUT" ORDERS (UPDATE STATUS) =============
+
+  /// Reject Update: Set status to Canceled, update_action = "Rejected by {accountant}"
+  Future<void> _handleRejectUpdateOut(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'Accountant';
+
+      final now = DateTime.now().toIso8601String();
+
+      await supabase
+          .from('customer_order')
+          .update({
+            'order_status': 'Canceled',
+            'update_action': 'Rejected by $accountantName',
+            'last_action_by': accountantName,
+            'last_action_time': now,
+          })
+          .eq('customer_order_id', widget.orderId!);
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order update rejected and canceled'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error rejecting update: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  /// Send to Customer: Show confirmation with editable description, set status to "Updated to Customer"
+  Future<void> _handleSendToCustomerOut(BuildContext context) async {
+    final descriptionController = TextEditingController(
+      text: widget.updateDescription ?? '',
+    );
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Send to Customer',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Update Description',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: descriptionController,
+              maxLines: 3,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: const Color(0xFFB7A447)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Are you sure you want to send this update to customer?',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              foregroundColor: const Color(0xFFB7A447),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'Accountant';
+
+      final now = DateTime.now().toIso8601String();
+
+      await supabase
+          .from('customer_order')
+          .update({
+            'order_status': 'Updated to Customer',
+            'update_description': descriptionController.text.trim(),
+            'last_action_by': accountantName,
+            'last_action_time': now,
+          })
+          .eq('customer_order_id', widget.orderId!);
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Update sent to customer'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending to customer: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  /// Accept Update: Set status to Pinned, update_action = "Accepted by {accountant}",
+  /// recalculate costs, update quantities from updated_quantity
+  Future<void> _handleAcceptUpdateOut(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'Accountant';
+
+      final now = DateTime.now().toIso8601String();
+
+      // Calculate new totals based on current quantities in _products
+      final priceData = _calculateUpdatedPrices();
+      final productTotals = priceData['product_totals'] as Map<int, num>;
+
+      // Update customer_order_description for products with updated_quantity
+      for (final product in _products) {
+        final productId = _getProductId(product['id']);
+        final updatedQty = product['updated_quantity'];
+
+        if (updatedQty != null) {
+          // Use the current quantity from the editable field
+          final newQty = (product['quantity'] ?? 0) as int;
+
+          await supabase
+              .from('customer_order_description')
+              .update({
+                'quantity': newQty,
+                'total_price': productTotals[productId],
+                'updated_quantity':
+                    null, // Clear updated_quantity after accepting
+                'last_action_by': accountantName,
+                'last_action_time': now,
+              })
+              .eq('customer_order_id', widget.orderId!)
+              .eq('product_id', productId);
+        }
+      }
+
+      // Update customer_order with new totals and status
+      await supabase
+          .from('customer_order')
+          .update({
+            'order_status': 'Pinned',
+            'update_action': 'Accepted by $accountantName',
+            'total_cost': priceData['subtotal'],
+            'total_balance': priceData['total_balance'],
+            'last_action_by': accountantName,
+            'last_action_time': now,
+          })
+          .eq('customer_order_id', widget.orderId!);
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order update accepted and set to Pinned.'),
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error accepting update: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isCustomerOut = widget.orderType == "out";
@@ -863,6 +1176,55 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                     ),
 
                     const SizedBox(height: 10),
+
+                    // Display update description for UPDATE status (moved here below title)
+                    if (widget.status == "UPDATE" &&
+                        widget.updateDescription != null &&
+                        widget.updateDescription!.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3A3A3A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFB7A447),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Color(0xFFB7A447),
+                                  size: 18,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Update Description:',
+                                  style: TextStyle(
+                                    color: Color(0xFFB7A447),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.updateDescription!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
 
                     // -------------------- بيانات العميل / المورد --------------------
                     Row(
@@ -1033,56 +1395,115 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                     Expanded(
                                       flex: 2,
                                       child: Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                (widget.orderType != 'in' &&
-                                                    _insufficientProducts
-                                                        .contains(
-                                                          _getProductId(
-                                                            product["id"],
+                                        child:
+                                            (widget.orderType == 'out' &&
+                                                widget.status == 'UPDATE' &&
+                                                product['updated_quantity'] !=
+                                                    null)
+                                            ? Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Connected grey box for original quantity (now on left)
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
                                                           ),
-                                                        ))
-                                                ? Colors.red.shade700
-                                                : (product["quantity"] ?? 0) > 0
-                                                ? const Color(0xFFB7A447)
-                                                : const Color(0xFF6F6F6F),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            border:
-                                                (widget.orderType != 'in' &&
-                                                    _insufficientProducts
-                                                        .contains(
-                                                          _getProductId(
-                                                            product["id"],
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            const Color.fromARGB(
+                                                              255,
+                                                              171,
+                                                              67,
+                                                              67,
+                                                            ),
+                                                        borderRadius:
+                                                            const BorderRadius.only(
+                                                              topLeft:
+                                                                  Radius.circular(
+                                                                    6,
+                                                                  ),
+                                                              bottomLeft:
+                                                                  Radius.circular(
+                                                                    6,
+                                                                  ),
+                                                            ),
+                                                        border: Border.all(
+                                                          color: const Color(
+                                                            0xFFB7A447,
                                                           ),
-                                                        ))
-                                                ? Border.all(
-                                                    color: Colors.red.shade300,
-                                                    width: 2,
-                                                  )
-                                                : null,
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              SizedBox(
-                                                width: 40,
-                                                child:
-                                                    (widget.orderType == 'in' &&
-                                                        widget.status ==
-                                                            'UPDATE')
-                                                    ? Center(
-                                                        child: Text(
-                                                          product["quantity"]
-                                                              .toString(),
-                                                          style:
-                                                              const TextStyle(
+                                                          width: 1,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        '${product['original_quantity']}',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    // Editable updated quantity with unit (now on right)
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 4,
+                                                            vertical: 4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(
+                                                          0xFFB7A447,
+                                                        ),
+                                                        borderRadius:
+                                                            const BorderRadius.only(
+                                                              topRight:
+                                                                  Radius.circular(
+                                                                    6,
+                                                                  ),
+                                                              bottomRight:
+                                                                  Radius.circular(
+                                                                    6,
+                                                                  ),
+                                                            ),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          SizedBox(
+                                                            width: 40,
+                                                            child: TextFormField(
+                                                              key: ValueKey(
+                                                                'qty_${product["id"]}',
+                                                              ),
+                                                              initialValue:
+                                                                  (product['updated_quantity'] ??
+                                                                          product['quantity'] ??
+                                                                          0)
+                                                                      .toString(),
+                                                              keyboardType:
+                                                                  TextInputType
+                                                                      .number,
+                                                              cursorColor:
+                                                                  Colors.white,
+                                                              inputFormatters: [
+                                                                FilteringTextInputFormatter
+                                                                    .digitsOnly,
+                                                              ],
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              style: const TextStyle(
                                                                 color: Colors
                                                                     .black,
                                                                 fontWeight:
@@ -1090,138 +1511,274 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                                                         .bold,
                                                                 fontSize: 14,
                                                               ),
-                                                        ),
-                                                      )
-                                                    : TextFormField(
-                                                        key: ValueKey(
-                                                          'qty_${product["id"]}',
-                                                        ),
-                                                        initialValue:
-                                                            product["quantity"] ==
-                                                                    0 ||
-                                                                product["quantity"]
-                                                                    is! num
-                                                            ? ''
-                                                            : product["quantity"]
-                                                                  .toString(),
-                                                        keyboardType:
-                                                            TextInputType
-                                                                .number,
-                                                        cursorColor:
-                                                            Colors.white,
-                                                        inputFormatters: [
-                                                          FilteringTextInputFormatter
-                                                              .digitsOnly,
+                                                              decoration: const InputDecoration(
+                                                                border:
+                                                                    InputBorder
+                                                                        .none,
+                                                                contentPadding:
+                                                                    EdgeInsets
+                                                                        .zero,
+                                                                isDense: true,
+                                                              ),
+                                                              onChanged: (value) {
+                                                                setState(() {
+                                                                  final newQty =
+                                                                      int.tryParse(
+                                                                        value,
+                                                                      ) ??
+                                                                      0;
+                                                                  product["quantity"] =
+                                                                      newQty;
+
+                                                                  // Update total price
+                                                                  final priceStr =
+                                                                      product['price']
+                                                                          ?.toString() ??
+                                                                      '0';
+                                                                  final price =
+                                                                      num.tryParse(
+                                                                        priceStr.replaceAll(
+                                                                          RegExp(
+                                                                            r'[^0-9.-]',
+                                                                          ),
+                                                                          '',
+                                                                        ),
+                                                                      ) ??
+                                                                      0;
+                                                                  final newTotal =
+                                                                      price *
+                                                                      newQty;
+                                                                  product["total"] =
+                                                                      _formatMoney(
+                                                                        newTotal,
+                                                                      );
+                                                                });
+                                                              },
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 4,
+                                                          ),
+                                                          Text(
+                                                            product["unit_name"] ??
+                                                                'pcs',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .white
+                                                                  .withOpacity(
+                                                                    0.9,
+                                                                  ),
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
                                                         ],
-                                                        textAlign:
-                                                            TextAlign.center,
-                                                        style: const TextStyle(
-                                                          color: Colors.black,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 14,
-                                                        ),
-                                                        decoration:
-                                                            const InputDecoration(
-                                                              border:
-                                                                  InputBorder
-                                                                      .none,
-                                                              contentPadding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              isDense: true,
-                                                              hintText: '0',
-                                                              hintStyle: TextStyle(
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            : Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                      vertical: 4,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      (widget.orderType !=
+                                                              'in' &&
+                                                          _insufficientProducts
+                                                              .contains(
+                                                                _getProductId(
+                                                                  product["id"],
+                                                                ),
+                                                              ))
+                                                      ? Colors.red.shade700
+                                                      : (product["quantity"] ??
+                                                                0) >
+                                                            0
+                                                      ? const Color(0xFFB7A447)
+                                                      : const Color(0xFF6F6F6F),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                  border:
+                                                      (widget.orderType !=
+                                                              'in' &&
+                                                          _insufficientProducts
+                                                              .contains(
+                                                                _getProductId(
+                                                                  product["id"],
+                                                                ),
+                                                              ))
+                                                      ? Border.all(
+                                                          color: Colors
+                                                              .red
+                                                              .shade300,
+                                                          width: 2,
+                                                        )
+                                                      : null,
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 40,
+                                                      child:
+                                                          (widget.orderType ==
+                                                                  'in' &&
+                                                              widget.status ==
+                                                                  'UPDATE')
+                                                          ? Center(
+                                                              child: Text(
+                                                                product["quantity"]
+                                                                    .toString(),
+                                                                style: const TextStyle(
+                                                                  color: Colors
+                                                                      .black,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 14,
+                                                                ),
+                                                              ),
+                                                            )
+                                                          : TextFormField(
+                                                              key: ValueKey(
+                                                                'qty_${product["id"]}',
+                                                              ),
+                                                              initialValue:
+                                                                  product["quantity"] ==
+                                                                          0 ||
+                                                                      product["quantity"]
+                                                                          is! num
+                                                                  ? ''
+                                                                  : product["quantity"]
+                                                                        .toString(),
+                                                              keyboardType:
+                                                                  TextInputType
+                                                                      .number,
+                                                              cursorColor:
+                                                                  Colors.white,
+                                                              inputFormatters: [
+                                                                FilteringTextInputFormatter
+                                                                    .digitsOnly,
+                                                              ],
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              style: const TextStyle(
                                                                 color: Colors
-                                                                    .black54,
+                                                                    .black,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .bold,
                                                                 fontSize: 14,
                                                               ),
-                                                            ),
-                                                        onChanged: (value) {
-                                                          setState(() {
-                                                            final newQty =
-                                                                int.tryParse(
-                                                                  value,
-                                                                ) ??
-                                                                0;
-                                                            product["quantity"] =
-                                                                newQty;
-
-                                                            // Update the total for this product
-                                                            final priceStr =
-                                                                product['price']
-                                                                    ?.toString() ??
-                                                                '0';
-                                                            final price =
-                                                                num.tryParse(
-                                                                  priceStr.replaceAll(
-                                                                    RegExp(
-                                                                      r'[^0-9.-]',
-                                                                    ),
-                                                                    '',
-                                                                  ),
-                                                                ) ??
-                                                                0;
-                                                            final newTotal =
-                                                                price * newQty;
-                                                            product["total"] =
-                                                                _formatMoney(
-                                                                  newTotal,
-                                                                );
-
-                                                            // Check if this product now has sufficient stock
-                                                            // Handle product ID as either String or int
-                                                            final productIdValue =
-                                                                product['id'];
-                                                            final productId =
-                                                                productIdValue
-                                                                    is int
-                                                                ? productIdValue
-                                                                : int.tryParse(
-                                                                        productIdValue
-                                                                            .toString(),
+                                                              decoration: const InputDecoration(
+                                                                border:
+                                                                    InputBorder
+                                                                        .none,
+                                                                contentPadding:
+                                                                    EdgeInsets
+                                                                        .zero,
+                                                                isDense: true,
+                                                                hintText: '0',
+                                                                hintStyle: TextStyle(
+                                                                  color: Colors
+                                                                      .black54,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 14,
+                                                                ),
+                                                              ),
+                                                              onChanged: (value) {
+                                                                setState(() {
+                                                                  final newQty =
+                                                                      int.tryParse(
+                                                                        value,
                                                                       ) ??
                                                                       0;
-                                                            final availableQty =
-                                                                _productAvailableQty[productId] ??
-                                                                0;
+                                                                  product["quantity"] =
+                                                                      newQty;
 
-                                                            // Check if this product now has sufficient stock (only for stock-out orders)
-                                                            if (widget
-                                                                    .orderType !=
-                                                                'in') {
-                                                              if (newQty >
-                                                                  availableQty) {
-                                                                _insufficientProducts
-                                                                    .add(
-                                                                      productId,
-                                                                    );
-                                                              } else {
-                                                                _insufficientProducts
-                                                                    .remove(
-                                                                      productId,
-                                                                    );
-                                                              }
-                                                            }
-                                                          });
-                                                        },
+                                                                  // Update the total for this product
+                                                                  final priceStr =
+                                                                      product['price']
+                                                                          ?.toString() ??
+                                                                      '0';
+                                                                  final price =
+                                                                      num.tryParse(
+                                                                        priceStr.replaceAll(
+                                                                          RegExp(
+                                                                            r'[^0-9.-]',
+                                                                          ),
+                                                                          '',
+                                                                        ),
+                                                                      ) ??
+                                                                      0;
+                                                                  final newTotal =
+                                                                      price *
+                                                                      newQty;
+                                                                  product["total"] =
+                                                                      _formatMoney(
+                                                                        newTotal,
+                                                                      );
+
+                                                                  // Check if this product now has sufficient stock
+                                                                  // Handle product ID as either String or int
+                                                                  final productIdValue =
+                                                                      product['id'];
+                                                                  final productId =
+                                                                      productIdValue
+                                                                          is int
+                                                                      ? productIdValue
+                                                                      : int.tryParse(
+                                                                              productIdValue.toString(),
+                                                                            ) ??
+                                                                            0;
+                                                                  final availableQty =
+                                                                      _productAvailableQty[productId] ??
+                                                                      0;
+
+                                                                  // Check if this product now has sufficient stock (only for stock-out orders)
+                                                                  if (widget
+                                                                          .orderType !=
+                                                                      'in') {
+                                                                    if (newQty >
+                                                                        availableQty) {
+                                                                      _insufficientProducts
+                                                                          .add(
+                                                                            productId,
+                                                                          );
+                                                                    } else {
+                                                                      _insufficientProducts
+                                                                          .remove(
+                                                                            productId,
+                                                                          );
+                                                                    }
+                                                                  }
+                                                                });
+                                                              },
+                                                            ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      product["unit_name"] ??
+                                                          'pcs',
+                                                      style: TextStyle(
+                                                        color: Colors.white
+                                                            .withOpacity(0.9),
+                                                        fontWeight:
+                                                            FontWeight.w600,
                                                       ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                product["unit_name"] ?? 'pcs',
-                                                style: TextStyle(
-                                                  color: Colors.white
-                                                      .withOpacity(0.9),
-                                                  fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                        ),
                                       ),
                                     ),
 
@@ -1418,6 +1975,17 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                           ),
                           const SizedBox(width: 14),
                         ],
+                        // Add "Send to Customer" button for OUT orders with UPDATE status
+                        if (widget.orderType == 'out' &&
+                            widget.status == "UPDATE") ...[
+                          _OrderButton(
+                            label: "Send to Customer",
+                            color: Colors.yellow.shade600,
+                            icon: Icons.send_rounded,
+                            onPressed: () => _handleSendToCustomerOut(context),
+                          ),
+                          const SizedBox(width: 14),
+                        ],
                         _OrderButton(
                           label: widget.status == "UPDATE"
                               ? "Reject Update"
@@ -1432,6 +2000,9 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                             } else if (widget.orderType == 'in' &&
                                 widget.status == 'UPDATE') {
                               _handleRejectUpdateIn(context);
+                            } else if (widget.orderType == 'out' &&
+                                widget.status == 'UPDATE') {
+                              _handleRejectUpdateOut(context);
                             } else {
                               Navigator.pop(context);
                             }
@@ -1444,8 +2015,10 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                               : widget.status == "HOLD"
                               ? "Send Order"
                               : "Send Order",
-                          color: Colors.yellow.shade600,
-                          icon: Icons.send_rounded,
+                          color: Colors.green.shade600,
+                          icon: widget.status == "UPDATE"
+                              ? Icons.check
+                              : Icons.send_rounded,
                           onPressed: () {
                             if (widget.orderType == 'in' &&
                                 (widget.status == 'NEW' ||
@@ -1454,6 +2027,9 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                             } else if (widget.orderType == 'in' &&
                                 widget.status == 'UPDATE') {
                               _handleAcceptUpdateIn(context);
+                            } else if (widget.orderType == 'out' &&
+                                widget.status == 'UPDATE') {
+                              _handleAcceptUpdateOut(context);
                             } else {
                               _handleSendOrder(context);
                             }

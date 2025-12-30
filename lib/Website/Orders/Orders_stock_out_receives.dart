@@ -34,6 +34,8 @@ class _OrderDetailData {
   final DateTime orderDate;
   final num? taxPercent;
   final num? totalPrice;
+  final num discountValue;
+  final String? updateDescription;
   final int orderId;
   final List<Map<String, dynamic>> products;
 
@@ -42,6 +44,8 @@ class _OrderDetailData {
     required this.orderDate,
     required this.products,
     required this.orderId,
+    this.discountValue = 0,
+    this.updateDescription,
     this.city,
     this.address,
     this.taxPercent,
@@ -80,7 +84,11 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
           .select(
             'customer_order_id, order_status, order_date, last_action_by, customer:customer_id(name)',
           )
-          .inFilter('order_status', ['Received', 'Updated to Accountant', 'Hold'])
+          .inFilter('order_status', [
+            'Received',
+            'Updated to Accountant',
+            'Hold',
+          ])
           .order('customer_order_id', ascending: false);
 
       final ordersList = <OrderReceiveRow>[];
@@ -508,6 +516,8 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
         orderDate: detail.orderDate,
         taxPercent: detail.taxPercent,
         totalPrice: detail.totalPrice,
+        discountValue: detail.discountValue,
+        updateDescription: detail.updateDescription,
         orderId: int.tryParse(order.id) ?? detail.orderId,
       );
     } catch (e) {
@@ -528,7 +538,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
     final order = await supabase
         .from('customer_order')
         .select(
-          'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
+          'order_date, tax_percent, total_balance, discount_value, update_description, customer:customer_id(name, address, customer_city:customer_city(name))',
         )
         .eq('customer_order_id', parsedId ?? orderId)
         .maybeSingle();
@@ -540,7 +550,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
     final items = await supabase
         .from('customer_order_description')
         .select(
-          'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+          'product_id, quantity, updated_quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
         )
         .eq('customer_order_id', parsedId ?? orderId);
 
@@ -550,20 +560,22 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
       final brand = product?['brand'] as Map<String, dynamic>?;
       final unit = product?['unit'] as Map<String, dynamic>?;
       final quantity = (item['quantity'] ?? 0) as num;
+      final updatedQuantity = item['updated_quantity'] as num?;
       final total = (item['total_price'] ?? 0) as num;
       final price = (product?['selling_price'] ?? 0) as num;
+
+      // For UPDATE status, use updated_quantity if available, otherwise use original quantity
+      final effectiveQuantity = updatedQuantity ?? quantity;
 
       products.add({
         'id': item['product_id']?.toString() ?? '-',
         'name': product?['name'] ?? 'Unknown',
         'brand': brand?['name'] ?? '-',
         'price': _formatMoney(price),
-        'quantity': quantity,
-        'total': _formatMoney(
-          total == 0 && price != 0
-              ? price * (quantity == 0 ? 1 : quantity)
-              : total,
-        ),
+        'quantity': effectiveQuantity,
+        'updated_quantity': updatedQuantity,
+        'original_quantity': quantity,
+        'total': _formatMoney(price * effectiveQuantity),
         'unit_name': unit?['unit_name'] ?? 'pcs',
       });
     }
@@ -580,6 +592,8 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
       orderDate: orderDate,
       taxPercent: order['tax_percent'] as num?,
       totalPrice: order['total_balance'] as num?,
+      discountValue: (order['discount_value'] ?? 0) as num,
+      updateDescription: order['update_description'] as String?,
       orderId: parsedId ?? int.tryParse(orderId) ?? 0,
       products: products,
     );
