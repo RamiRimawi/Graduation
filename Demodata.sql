@@ -1368,5 +1368,5 @@ INSERT INTO outgoing_payment (supplier_id, amount, date_time, description, last_
 (200000007, 400.00, '2023-05-15 14:55:00', 'Complete bathroom payment', 'system', NOW(), 'cash', NULL),
 (200000008, 125.00, '2023-05-20 11:10:00', 'Renovation project payment', 'system', NOW(), 'cash', NULL),
 (200000009, 85.00, '2023-05-25 16:25:00', 'Building supplies payment', 'system', NOW(), 'cash', NULL),
-(200000010, 110.00, '2023-05-30 13:40:00', 'Fixture purchase payment', 'system', NOW(), 'cash', NULL),
+(200000010, 110.00, '2023-05-30 13:40:00', 'Fixture purchase payment', 'system', NOW(), 'cash', NULL);
 
