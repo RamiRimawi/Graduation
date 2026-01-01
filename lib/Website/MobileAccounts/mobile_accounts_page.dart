@@ -43,7 +43,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
   String _searchQuery = '';
 
   // Filter state
-  Set<String> _selectedRoles = {};
+  final Set<String> _selectedRoles = {};
   final GlobalKey _filterButtonKey = GlobalKey();
   OverlayEntry? _filterOverlay;
 
@@ -578,7 +578,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
                       BoxShadow(
-                        color: const Color(0xFF3D3D3D),
+                        color: Color(0xFF3D3D3D),
                         offset: Offset(0, 10),
                         blurRadius: 24,
                       ),

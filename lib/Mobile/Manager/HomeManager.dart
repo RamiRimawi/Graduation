@@ -455,7 +455,7 @@ class LowStockCard extends StatelessWidget {
                     Expanded(
                       flex: 3,
                       child: Padding(
-                        padding: const EdgeInsets.only(left: 12),
+                        padding: EdgeInsets.only(left: 12),
                         child: Text(
                           'Brand',
                           style: TextStyle(

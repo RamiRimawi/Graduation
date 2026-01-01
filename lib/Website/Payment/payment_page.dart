@@ -1015,8 +1015,8 @@ class _ProfitChartState extends State<_ProfitChart>
               )
             )
           ''')
-          .gte('order_date', '${selectedYear}-01-01')
-          .lte('order_date', '${selectedYear}-12-31');
+          .gte('order_date', '$selectedYear-01-01')
+          .lte('order_date', '$selectedYear-12-31');
 
       // Prepare monthly profit array
       List<double> monthlyProfit = List.filled(12, 0.0);
@@ -1181,7 +1181,7 @@ class _ProfitChartState extends State<_ProfitChart>
                                   return Text(
                                     value == 0
                                         ? '0'
-                                        : '${value.toStringAsFixed(0)}',
+                                        : value.toStringAsFixed(0),
                                     style: const TextStyle(
                                       color: AppColors.grey,
                                       fontSize: 10,

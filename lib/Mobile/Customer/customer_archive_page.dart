@@ -7,7 +7,7 @@ import 'customer_cart_page.dart';
 import '../account_page.dart';
 
 class CustomerArchivePage extends StatefulWidget {
-  const CustomerArchivePage({Key? key}) : super(key: key);
+  const CustomerArchivePage({super.key});
 
   @override
   State<CustomerArchivePage> createState() => _CustomerArchivePageState();
@@ -283,7 +283,7 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           const SizedBox(height: 10),
                         ],
                       );
-                    }).toList(),
+                    }),
                   ]
                 else
                   ...

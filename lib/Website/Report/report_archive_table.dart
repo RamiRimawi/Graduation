@@ -18,7 +18,7 @@ class _ArchiveTableState extends State<ArchiveTable> {
   final TextEditingController _searchController = TextEditingController();
 
   // Filter variables
-  Set<String> _selectedTypes = {}; // 'In', 'Out'
+  final Set<String> _selectedTypes = {}; // 'In', 'Out'
   String _selectedInventory = '';
   DateTime? _fromDate;
   DateTime? _toDate;

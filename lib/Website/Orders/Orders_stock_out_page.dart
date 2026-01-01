@@ -84,7 +84,7 @@ class _OrdersPageState extends State<OrdersPage> {
   String? _error;
   List<OrderRow> _orders = [];
   String _searchQuery = '';
-  Set<String> _selectedStatuses = {};
+  final Set<String> _selectedStatuses = {};
   final GlobalKey _filterButtonKey = GlobalKey();
   OverlayEntry? _filterOverlay;
 

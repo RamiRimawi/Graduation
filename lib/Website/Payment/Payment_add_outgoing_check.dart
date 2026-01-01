@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../sidebar.dart';
 
 Future<int?> getAccountantId() async {
@@ -259,7 +260,15 @@ class _AddOutgoingCheckPageState extends State<AddOutgoingCheckPage> {
       final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (picked == null) return;
 
-      final bytes = await picked.readAsBytes();
+      // Crop the image
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        uiSettings: [WebUiSettings(context: context)],
+      );
+
+      if (croppedFile == null) return;
+
+      final bytes = await croppedFile.readAsBytes();
       setState(() {
         _checkImageBytes = bytes;
         selectedCheckImage = picked.name;

@@ -879,7 +879,7 @@ class _HeaderCell extends StatelessWidget {
 /// Popup for order details (matching Orders_stock_out_previous_popup.dart)
 class _OrderDetailsPopup extends StatefulWidget {
   final String orderId;
-  const _OrderDetailsPopup({Key? key, required this.orderId}) : super(key: key);
+  const _OrderDetailsPopup({super.key, required this.orderId});
 
   @override
   State<_OrderDetailsPopup> createState() => _OrderDetailsPopupState();

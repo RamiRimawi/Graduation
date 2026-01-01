@@ -390,7 +390,7 @@ class _PartCard extends StatelessWidget {
               Expanded(
                 flex: 4,
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 24),
+                  padding: EdgeInsets.only(left: 24),
                   child: Text(
                     'Batch',
                     style: TextStyle(
@@ -404,7 +404,7 @@ class _PartCard extends StatelessWidget {
               Expanded(
                 flex: 2,
                 child: Padding(
-                  padding: const EdgeInsets.only(left: 8),
+                  padding: EdgeInsets.only(left: 8),
                   child: Text(
                     'Qty',
                     textAlign: TextAlign.center,
@@ -487,7 +487,7 @@ class _PartCard extends StatelessWidget {
                 ],
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

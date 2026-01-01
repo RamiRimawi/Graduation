@@ -562,8 +562,9 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                                                   );
                                                 },
                                             loadingBuilder: (context, child, loadingProgress) {
-                                              if (loadingProgress == null)
+                                              if (loadingProgress == null) {
                                                 return child;
+                                              }
                                               return CircularProgressIndicator(
                                                 value:
                                                     loadingProgress
@@ -854,10 +855,11 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                                                     value: '$qty pcs',
                                                   ),
                                                 );
-                                                if (i != data.length - 1)
+                                                if (i != data.length - 1) {
                                                   children.add(
                                                     const SizedBox(height: 12),
                                                   );
+                                                }
                                               }
                                             }
 
@@ -947,10 +949,11 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                                                   );
                                                 }
 
-                                                if (i != data.length - 1)
+                                                if (i != data.length - 1) {
                                                   children.add(
                                                     const SizedBox(height: 12),
                                                   );
+                                                }
                                               }
                                             }
 
@@ -1067,7 +1070,7 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
         const SizedBox(height: 6),
 
         DropdownButtonFormField<int>(
-          value: value,
+          initialValue: value,
           items: items.map((item) {
             return DropdownMenuItem<int>(
               value: item.value,

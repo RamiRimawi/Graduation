@@ -691,7 +691,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(height: 8),
-                  ...insufficientProducts.map((msg) => Text('• $msg')).toList(),
+                  ...insufficientProducts.map((msg) => Text('• $msg')),
                 ],
               ),
               backgroundColor: Colors.red.shade700,
@@ -2157,19 +2157,24 @@ class _ReadOnlyOrderDetailDialog extends StatelessWidget {
     if (statusLower == 'sended to manager' && manager != null) {
       children.add(_actorTile('Manager', manager!['name'] ?? '-'));
     } else if ((statusLower == 'preparing' || statusLower == 'prepared')) {
-      if (manager != null)
+      if (manager != null) {
         children.add(_actorTile('Manager', manager!['name'] ?? '-'));
-      if (storageStaff != null)
+      }
+      if (storageStaff != null) {
         children.add(_actorTile('Storage Staff', storageStaff!['name'] ?? '-'));
+      }
     } else if (statusLower == 'delivery' || statusLower == 'delivered') {
-      if (manager != null)
+      if (manager != null) {
         children.add(_actorTile('Manager', manager!['name'] ?? '-'));
-      if (storageStaff != null)
+      }
+      if (storageStaff != null) {
         children.add(_actorTile('Storage Staff', storageStaff!['name'] ?? '-'));
-      if (deliveryDriver != null)
+      }
+      if (deliveryDriver != null) {
         children.add(
           _actorTile('Delivery Driver', deliveryDriver!['name'] ?? '-'),
         );
+      }
     }
     if (children.isEmpty) return SizedBox.shrink();
     return Padding(
@@ -2300,8 +2305,8 @@ class _ReadOnlyOrderDetailDialog extends StatelessWidget {
                           flex: 3,
                           child: Text(
                             orderType == "in"
-                                ? "Supplier Name: " + (partyName ?? '-')
-                                : "Customer: " + (partyName ?? '-'),
+                                ? "Supplier Name: ${partyName ?? '-'}"
+                                : "Customer: ${partyName ?? '-'}",
                             style: const TextStyle(fontSize: 15),
                           ),
                         ),
@@ -2312,19 +2317,17 @@ class _ReadOnlyOrderDetailDialog extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "City : " +
-                                      ((location?.split(' - ').isNotEmpty ??
+                                  "City : ${(location?.split(' - ').isNotEmpty ??
                                               false)
                                           ? location!.split(' - ')[0]
-                                          : '-'),
+                                          : '-'}",
                                   style: const TextStyle(fontSize: 15),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  "Quarter : " +
-                                      ((location?.split(' - ').length ?? 0) > 1
+                                  "Quarter : ${(location?.split(' - ').length ?? 0) > 1
                                           ? location!.split(' - ')[1]
-                                          : '-'),
+                                          : '-'}",
                                   style: const TextStyle(fontSize: 15),
                                 ),
                               ],

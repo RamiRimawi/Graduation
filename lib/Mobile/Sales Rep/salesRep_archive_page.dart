@@ -8,7 +8,7 @@ import 'salesRep_customers_page.dart';
 import '../account_page.dart';
 
 class SalesRepArchivePage extends StatefulWidget {
-  const SalesRepArchivePage({Key? key}) : super(key: key);
+  const SalesRepArchivePage({super.key});
 
   @override
   State<SalesRepArchivePage> createState() => _SalesRepArchivePageState();
@@ -286,7 +286,7 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
                           const SizedBox(height: 10),
                         ],
                       );
-                    }).toList(),
+                    }),
                   ]
                 else
                   ...

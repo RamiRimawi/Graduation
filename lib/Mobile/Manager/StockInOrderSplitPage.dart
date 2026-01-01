@@ -363,7 +363,7 @@ class _StockInOrderSplitPageState extends State<StockInOrderSplitPage> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),
@@ -793,7 +793,7 @@ class _StockInSplitPartTable extends StatelessWidget {
                   } else {
                     return _buildRow(item, qty, itemIndex, partIndex, split);
                   }
-                }).toList(),
+                }),
             ],
           ),
         );

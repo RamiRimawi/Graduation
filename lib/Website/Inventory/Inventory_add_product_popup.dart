@@ -370,10 +370,12 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Value',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true)
+                                        if (v?.isEmpty ?? true) {
                                           return 'Required';
-                                        if (double.tryParse(v!) == null)
+                                        }
+                                        if (double.tryParse(v!) == null) {
                                           return 'Invalid number';
+                                        }
                                         return null;
                                       },
                                     ),
@@ -388,10 +390,12 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Value',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true)
+                                        if (v?.isEmpty ?? true) {
                                           return 'Required';
-                                        if (double.tryParse(v!) == null)
+                                        }
+                                        if (double.tryParse(v!) == null) {
                                           return 'Invalid number';
+                                        }
                                         return null;
                                       },
                                     ),
@@ -406,10 +410,12 @@ class _AddProductPopupState extends State<AddProductPopup> {
                                       hint: 'Enter Percent',
                                       type: TextInputType.number,
                                       validator: (v) {
-                                        if (v?.isEmpty ?? true)
+                                        if (v?.isEmpty ?? true) {
                                           return 'Required';
-                                        if (double.tryParse(v!) == null)
+                                        }
+                                        if (double.tryParse(v!) == null) {
                                           return 'Invalid number';
+                                        }
                                         return null;
                                       },
                                     ),
@@ -623,7 +629,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: DropdownButtonFormField<int>(
-        value: value,
+        initialValue: value,
         isExpanded: true,
         style: const TextStyle(color: Colors.white, fontSize: 16),
         dropdownColor: const Color(0xFF1E1E1E),

@@ -22,7 +22,7 @@ class _AddProductPopupState extends State<AddProductPopup> {
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _filteredProducts = [];
-  List<Map<String, dynamic>> _selectedProducts = [];
+  final List<Map<String, dynamic>> _selectedProducts = [];
   bool _isLoading = true;
 
   @override

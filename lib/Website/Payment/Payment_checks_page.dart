@@ -22,7 +22,7 @@ class _CheckPageState extends State<CheckPage> {
   final TextEditingController _searchController = TextEditingController();
 
   // Filter state
-  Set<String> _selectedStatuses = {};
+  final Set<String> _selectedStatuses = {};
   final GlobalKey _filterButtonKey = GlobalKey();
   OverlayEntry? _filterOverlay;
 
@@ -690,8 +690,9 @@ class _CheckPageState extends State<CheckPage> {
                                         fit: BoxFit.contain,
                                         loadingBuilder:
                                             (context, child, progress) {
-                                              if (progress == null)
+                                              if (progress == null) {
                                                 return child;
+                                              }
                                               return const Center(
                                                 child:
                                                     CircularProgressIndicator(

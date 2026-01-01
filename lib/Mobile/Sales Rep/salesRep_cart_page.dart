@@ -9,7 +9,7 @@ import 'salesRep_customers_page.dart';
 import '../account_page.dart';
 
 class SalesRepCartPage extends StatefulWidget {
-  const SalesRepCartPage({Key? key}) : super(key: key);
+  const SalesRepCartPage({super.key});
 
   @override
   State<SalesRepCartPage> createState() => _SalesRepCartPageState();
@@ -316,7 +316,7 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
             content: SizedBox(
               width: double.maxFinite,
               child: DropdownButtonFormField<int>(
-                value: selectedId,
+                initialValue: selectedId,
                 dropdownColor: _card,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(

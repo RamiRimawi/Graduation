@@ -774,7 +774,7 @@ class _OrdersCardState extends State<_OrdersCard> {
             final orderDetails = await supabase
                 .from('customer_order')
                 .select(
-                  'order_date, tax_percent, total_balance, customer:customer_id(name, address, customer_city:customer_city(name))',
+                  'order_date, tax_percent, total_balance, discount_value, update_description, customer:customer_id(name, address, customer_city:customer_city(name))',
                 )
                 .eq('customer_order_id', int.parse(order['id']))
                 .maybeSingle();
@@ -783,7 +783,7 @@ class _OrdersCardState extends State<_OrdersCard> {
               final items = await supabase
                   .from('customer_order_description')
                   .select(
-                    'product_id, quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
+                    'product_id, quantity, updated_quantity, total_price, product:product_id(name, selling_price, brand:brand_id(name), unit:unit_id(unit_name))',
                   )
                   .eq('customer_order_id', int.parse(order['id']));
 
@@ -792,16 +792,24 @@ class _OrdersCardState extends State<_OrdersCard> {
                 final brand = product?['brand'] as Map<String, dynamic>?;
                 final unit = product?['unit'] as Map<String, dynamic>?;
                 final quantity = (item['quantity'] ?? 0) as num;
+                final updatedQuantity = item['updated_quantity'] as num?;
                 final total = (item['total_price'] ?? 0) as num;
                 final price = (product?['selling_price'] ?? 0) as num;
+
+                // For UPDATE status, use updated_quantity if available, otherwise use original quantity
+                final effectiveQuantity = updatedQuantity ?? quantity;
 
                 products.add({
                   'id': item['product_id']?.toString() ?? '-',
                   'name': product?['name'] ?? 'Unknown',
                   'brand': brand?['name'] ?? '-',
                   'price': price == 0 ? '-' : '${price.toStringAsFixed(2)}\$',
-                  'quantity': quantity,
-                  'total': total == 0 ? '-' : '${total.toStringAsFixed(2)}\$',
+                  'quantity': effectiveQuantity,
+                  'updated_quantity': updatedQuantity,
+                  'original_quantity': quantity,
+                  'total': price * effectiveQuantity == 0
+                      ? '-'
+                      : '${(price * effectiveQuantity).toStringAsFixed(2)}\$',
                   'unit_name': unit?['unit_name'] ?? 'pcs',
                 });
               }
@@ -821,6 +829,9 @@ class _OrdersCardState extends State<_OrdersCard> {
                 orderDate: DateTime.parse(orderDetails['order_date']),
                 taxPercent: orderDetails['tax_percent'] as num?,
                 totalPrice: orderDetails['total_balance'] as num?,
+                discountValue: (orderDetails['discount_value'] ?? 0) as num,
+                updateDescription:
+                    orderDetails['update_description'] as String?,
                 orderId: int.parse(order['id']),
               );
             }

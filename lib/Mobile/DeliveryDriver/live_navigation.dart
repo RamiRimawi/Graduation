@@ -584,7 +584,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                           children: [
                             Text(
                               _remainingTime > 0 
-                                  ? '${_remainingTime.toStringAsFixed(0)}'
+                                  ? _remainingTime.toStringAsFixed(0)
                                   : '--',
                               style: const TextStyle(
                                 color: Color(0xFF2196F3),
@@ -610,7 +610,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                           children: [
                             Text(
                               _remainingDistance > 0
-                                  ? '${_remainingDistance.toStringAsFixed(1)}'
+                                  ? _remainingDistance.toStringAsFixed(1)
                                   : '--',
                               style: const TextStyle(
                                 color: Color(0xFF2196F3),

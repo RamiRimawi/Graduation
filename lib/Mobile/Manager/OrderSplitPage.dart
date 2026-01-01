@@ -373,7 +373,7 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),
@@ -738,7 +738,7 @@ class _SplitPartTable extends StatelessWidget {
                     // Parts 2+ are not draggable
                     return _buildRow(item, qty, itemIndex, partIndex, split);
                   }
-                }).toList(),
+                }),
             ],
           ),
         );
@@ -1189,8 +1189,9 @@ class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
               itemCount: widget.splits.length,
               itemBuilder: (_, splitIdx) {
                 final split = widget.splits[splitIdx];
-                if (split.quantitiesByItem.isEmpty)
+                if (split.quantitiesByItem.isEmpty) {
                   return const SizedBox.shrink();
+                }
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1331,7 +1332,7 @@ class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                     const SizedBox(height: 12),
                   ],
                 );

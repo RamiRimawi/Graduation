@@ -134,16 +134,18 @@ class _SupplierDetailPopupState extends State<SupplierDetailPopup> {
         isSaving = false;
       });
       if (widget.onUpdate != null) widget.onUpdate!();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Supplier updated successfully')),
         );
+      }
     } catch (e) {
       setState(() => isSaving = false);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
+      }
     }
   }
 

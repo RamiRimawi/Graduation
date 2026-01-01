@@ -8,7 +8,7 @@ import 'salesRep_archive_page.dart';
 import '../account_page.dart';
 
 class SalesRepCustomersPage extends StatefulWidget {
-  const SalesRepCustomersPage({Key? key}) : super(key: key);
+  const SalesRepCustomersPage({super.key});
 
   @override
   State<SalesRepCustomersPage> createState() => _SalesRepCustomersPageState();

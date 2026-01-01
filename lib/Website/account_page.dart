@@ -131,8 +131,9 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
   Future<String?> _uploadImageToStorage() async {
     if (_selectedImageBytes == null ||
         _selectedImageName == null ||
-        accountantId == null)
+        accountantId == null) {
       return null;
+    }
 
     try {
       final extension = _selectedImageName!.toLowerCase().split('.').last;

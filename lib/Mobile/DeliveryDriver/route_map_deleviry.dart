@@ -581,7 +581,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                           Column(
                             children: [
                               Text(
-                                '${duration.toStringAsFixed(0)}',
+                                duration.toStringAsFixed(0),
                                 style: const TextStyle(
                                   color: Color(0xFFB7A447),
                                   fontSize: 24,
@@ -605,7 +605,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                           Column(
                             children: [
                               Text(
-                                '${distance.toStringAsFixed(1)}',
+                                distance.toStringAsFixed(1),
                                 style: const TextStyle(
                                   color: Color(0xFFB7A447),
                                   fontSize: 24,

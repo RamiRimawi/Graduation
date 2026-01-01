@@ -9,7 +9,7 @@ import 'salesRep_archive_page.dart';
 import 'salesRep_customers_page.dart';
 
 class SalesRepHomePage extends StatefulWidget {
-  const SalesRepHomePage({Key? key}) : super(key: key);
+  const SalesRepHomePage({super.key});
 
   @override
   State<SalesRepHomePage> createState() => _SalesRepHomePageState();

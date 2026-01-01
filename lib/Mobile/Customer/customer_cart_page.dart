@@ -8,7 +8,7 @@ import 'customer_archive_page.dart';
 import '../account_page.dart';
 
 class CustomerCartPage extends StatefulWidget {
-  const CustomerCartPage({Key? key}) : super(key: key);
+  const CustomerCartPage({super.key});
 
   @override
   State<CustomerCartPage> createState() => _CustomerCartPageState();

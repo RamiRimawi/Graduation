@@ -42,6 +42,9 @@ dependencies:
   # Image picker for uploading product images
   image_picker: ^1.1.1
   
+  # Image cropper for cropping images after picking
+  image_cropper: ^11.0.0
+  
   # Shared preferences for storing user session
   shared_preferences: ^2.2.2
   

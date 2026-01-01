@@ -14,8 +14,7 @@ class AppColors {
 
 class OrdersStockInPreviousPopup extends StatefulWidget {
   final String orderId;
-  const OrdersStockInPreviousPopup({Key? key, required this.orderId})
-    : super(key: key);
+  const OrdersStockInPreviousPopup({super.key, required this.orderId});
 
   @override
   State<OrdersStockInPreviousPopup> createState() =>

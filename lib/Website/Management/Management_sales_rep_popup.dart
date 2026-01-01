@@ -31,7 +31,7 @@ class _SalesRepFormPopupState extends State<SalesRepFormPopup> {
 
   // Customers data
   List<Map<String, dynamic>> _customers = [];
-  List<Map<String, dynamic>> _selectedCustomers = [];
+  final List<Map<String, dynamic>> _selectedCustomers = [];
   String? _selectedAddCustomerId; // holds customer_id as String
   bool _loadingCustomers = true;
 

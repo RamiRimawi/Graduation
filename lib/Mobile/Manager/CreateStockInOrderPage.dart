@@ -783,7 +783,7 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
                   Expanded(
                     flex: 3,
                     child: Padding(
-                      padding: const EdgeInsets.only(right: 30),
+                      padding: EdgeInsets.only(right: 30),
                       child: Text(
                         "Quantity",
                         textAlign: TextAlign.center,
