@@ -306,6 +306,7 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
           'owner': check['customer']?['name'] ?? 'Unknown',
           'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
           'date': _formatDate(check['exchange_date']),
+          'dateRaw': check['exchange_date'],
           'status': _capitalizeStatus(check['status']),
           'type': 'customer',
         });
@@ -317,6 +318,7 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
           'owner': check['supplier']?['name'] ?? 'Unknown',
           'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
           'date': _formatDate(check['exchange_date']),
+          'dateRaw': check['exchange_date'],
           'status': _capitalizeStatus(check['status']),
           'type': 'supplier',
         });
@@ -324,8 +326,8 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
 
       // Sort by date
       combinedChecks.sort((a, b) {
-        final dateA = DateTime.tryParse(a['date'] ?? '') ?? DateTime.now();
-        final dateB = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
+        final dateA = DateTime.tryParse(a['dateRaw']?.toString() ?? '') ?? DateTime.now();
+        final dateB = DateTime.tryParse(b['dateRaw']?.toString() ?? '') ?? DateTime.now();
         return dateA.compareTo(dateB);
       });
 
@@ -583,13 +585,13 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/doller.png',
-              width: 40,
-              height: 40,
+              width: 65,
+              height: 65,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.autorenew_rounded,
                 color: AppColors.blue,
-                size: 28,
+                size: 40,
               ),
             ),
             number: isLoading ? '-' : endorsedCount.toString(),
@@ -602,13 +604,13 @@ class _TopStatsCardsState extends State<_TopStatsCards> {
           child: _SingleStatCard(
             icon: Image.asset(
               'assets/icons/dontcheck.png',
-              width: 36,
-              height: 36,
+              width: 50,
+              height: 50,
               fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.block_rounded,
                 color: AppColors.blue,
-                size: 28,
+                size: 40,
               ),
             ),
             number: isLoading ? '-' : returnedCount.toString(),
@@ -649,7 +651,7 @@ class _SingleStatCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // 🔹 الأيقونة الزرقاء في الأعلى
-          SizedBox(width: 44, height: 44, child: Center(child: icon)),
+          SizedBox(width: 65, height: 65, child: Center(child: icon)),
           const SizedBox(height: 4),
 
           // 🔹 الرقم الكبير
