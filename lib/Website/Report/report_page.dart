@@ -155,7 +155,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.cardAlt,
+                          color: AppColors.card,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
@@ -233,6 +233,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                                             product['category'];
 
                                         return _ProductRow(
+                                          index: index,
                                           id: product['product_id'].toString(),
                                           name:
                                               product['name']?.toString() ??
@@ -525,8 +526,10 @@ class _SellingProductsCardState extends State<_SellingProductsCard> {
 
 // 🔹 Product Row
 class _ProductRow extends StatefulWidget {
+  final int index;
   final String id, name, brand, category, price, qty;
   const _ProductRow({
+    required this.index,
     required this.id,
     required this.name,
     required this.brand,
@@ -544,9 +547,9 @@ class _ProductRowState extends State<_ProductRow> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = int.parse(widget.id) % 2 == 0
-        ? AppColors.dark
-        : AppColors.cardAlt;
+    final bg = widget.index.isEven
+        ? AppColors.cardAlt
+        : AppColors.dark;
 
     return MouseRegion(
       onEnter: (_) => setState(() => isHovered = true),
