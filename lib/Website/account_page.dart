@@ -272,7 +272,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
     return Scaffold(
       body: Row(
         children: [
-          const Sidebar(activeIndex: 0),
+          const Sidebar(activeIndex: -1),
           Expanded(
             child: isLoading
                 ? const Center(

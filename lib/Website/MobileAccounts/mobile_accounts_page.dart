@@ -106,20 +106,24 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
           )
           .eq('user_account_supplier.is_active', 'yes');
 
-      setState(() {
-        accountGroups["Storage Manager"] = _extractItems(storageManagers);
-        accountGroups["Storage Staff"] = _extractItems(storageStaff);
-        accountGroups["Delivery Driver"] = _extractItems(deliveryDrivers);
-        accountGroups["Customer"] = _extractItems(customers);
-        accountGroups["Sales Rep"] = _extractItems(salesReps);
-        accountGroups["Supplier"] = _extractItems(suppliers);
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          accountGroups["Storage Manager"] = _extractItems(storageManagers);
+          accountGroups["Storage Staff"] = _extractItems(storageStaff);
+          accountGroups["Delivery Driver"] = _extractItems(deliveryDrivers);
+          accountGroups["Customer"] = _extractItems(customers);
+          accountGroups["Sales Rep"] = _extractItems(salesReps);
+          accountGroups["Supplier"] = _extractItems(suppliers);
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 

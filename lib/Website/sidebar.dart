@@ -125,6 +125,9 @@ class Sidebar extends StatelessWidget {
       case 7:
         routeName = '/usersManagement';
         break;
+      case 8:
+        routeName = '/account';
+        break;
       // باقي الأزرار ما عليهم صفحات لسه
       default:
         return;

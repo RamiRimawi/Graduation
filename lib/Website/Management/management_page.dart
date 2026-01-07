@@ -75,20 +75,22 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         .select('customer_id, name, customer_city(name)')
         .order('customer_id', ascending: true);
 
-    setState(() {
-      customers
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {
-              'id': row['customer_id'],
-              'name': row['name'],
-              'location': row['customer_city']?['name'] ?? '—',
-            },
-          ),
-        );
-      filteredCustomers = List.from(customers);
-    });
+    if (mounted) {
+      setState(() {
+        customers
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {
+                'id': row['customer_id'],
+                'name': row['name'],
+                'location': row['customer_city']?['name'] ?? '—',
+              },
+            ),
+          );
+        filteredCustomers = List.from(customers);
+      });
+    }
   }
 
   Future<void> loadSalesReps() async {
@@ -97,20 +99,22 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         .select('sales_rep_id, name, sales_rep_city(name)')
         .order('sales_rep_id', ascending: true);
 
-    setState(() {
-      salesReps
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {
-              'id': row['sales_rep_id'],
-              'name': row['name'],
-              'location': row['sales_rep_city']?['name'] ?? '—',
-            },
-          ),
-        );
-      filteredSalesReps = List.from(salesReps);
-    });
+    if (mounted) {
+      setState(() {
+        salesReps
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {
+                'id': row['sales_rep_id'],
+                'name': row['name'],
+                'location': row['sales_rep_city']?['name'] ?? '—',
+              },
+            ),
+          );
+        filteredSalesReps = List.from(salesReps);
+      });
+    }
   }
 
   Future<void> loadSuppliers() async {
@@ -119,20 +123,22 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         .select('supplier_id, name, supplier_category(name)')
         .order('supplier_id', ascending: true);
 
-    setState(() {
-      suppliers
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {
-              'id': row['supplier_id'],
-              'name': row['name'],
-              'category': row['supplier_category']?['name'] ?? '—',
-            },
-          ),
-        );
-      filteredSuppliers = List.from(suppliers);
-    });
+    if (mounted) {
+      setState(() {
+        suppliers
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {
+                'id': row['supplier_id'],
+                'name': row['name'],
+                'category': row['supplier_category']?['name'] ?? '—',
+              },
+            ),
+          );
+        filteredSuppliers = List.from(suppliers);
+      });
+    }
   }
 
   Future<void> loadBrands() async {
@@ -141,14 +147,16 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         .select()
         .order('brand_id', ascending: true);
 
-    setState(() {
-      brands
-        ..clear()
-        ..addAll(
-          res.map((row) => {'id': row['brand_id'], 'name': row['name']}),
-        );
-      filteredBrands = List.from(brands);
-    });
+    if (mounted) {
+      setState(() {
+        brands
+          ..clear()
+          ..addAll(
+            res.map((row) => {'id': row['brand_id'], 'name': row['name']}),
+          );
+        filteredBrands = List.from(brands);
+      });
+    }
   }
 
   Future<void> loadCategories() async {
@@ -157,16 +165,18 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         .select()
         .order('product_category_id', ascending: true);
 
-    setState(() {
-      categories
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {'id': row['product_category_id'], 'name': row['name']},
-          ),
-        );
-      filteredCategories = List.from(categories);
-    });
+    if (mounted) {
+      setState(() {
+        categories
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {'id': row['product_category_id'], 'name': row['name']},
+            ),
+          );
+        filteredCategories = List.from(categories);
+      });
+    }
   }
 
   Future<void> loadLocations() async {
@@ -182,21 +192,23 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         ''')
         .order('quarter_id', ascending: true);
 
-    setState(() {
-      locations
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {
-              'id': row['customer_city']?['customer_city_id'],
-              'name': row['customer_city']?['name'] ?? '—',
-              'quarter': row['name'] ?? '—',
-              'quarter_id': row['quarter_id'],
-            },
-          ),
-        );
-      filteredLocations = List.from(locations);
-    });
+    if (mounted) {
+      setState(() {
+        locations
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {
+                'id': row['customer_city']?['customer_city_id'],
+                'name': row['customer_city']?['name'] ?? '—',
+                'quarter': row['name'] ?? '—',
+                'quarter_id': row['quarter_id'],
+              },
+            ),
+          );
+        filteredLocations = List.from(locations);
+      });
+    }
   }
 
   Future<void> loadBanks() async {
@@ -212,21 +224,23 @@ class _UsersManagementPageState extends State<UsersManagementPage>
         ''')
         .order('branch_id', ascending: true);
 
-    setState(() {
-      banks
-        ..clear()
-        ..addAll(
-          res.map(
-            (row) => {
-              'id': row['bank']?['bank_id'],
-              'name': row['bank']?['bank_name'] ?? '—',
-              'branch': row['address'] ?? '—',
-              'branch_id': row['branch_id'],
-            },
-          ),
-        );
-      filteredBanks = List.from(banks);
-    });
+    if (mounted) {
+      setState(() {
+        banks
+          ..clear()
+          ..addAll(
+            res.map(
+              (row) => {
+                'id': row['bank']?['bank_id'],
+                'name': row['bank']?['bank_name'] ?? '—',
+                'branch': row['address'] ?? '—',
+                'branch_id': row['branch_id'],
+              },
+            ),
+          );
+        filteredBanks = List.from(banks);
+      });
+    }
   }
 
   // =============== SEARCH FILTER ===============
@@ -308,10 +322,16 @@ class _UsersManagementPageState extends State<UsersManagementPage>
     _primary = TabController(length: 4, vsync: this);
     _usersTabs = TabController(length: 3, vsync: this);
     _productTabs = TabController(length: 2, vsync: this);
-    _primary.addListener(() => setState(() {}));
+    _primary.addListener(() {
+      if (mounted) setState(() {});
+    });
     // Rebuild when inner tab selection changes so button text/icon updates
-    _usersTabs.addListener(() => setState(() {}));
-    _productTabs.addListener(() => setState(() {}));
+    _usersTabs.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _productTabs.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     // 🔥 Load data
     loadCustomers();
