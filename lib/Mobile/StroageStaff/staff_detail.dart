@@ -4,7 +4,8 @@ import '../account_page.dart';
 import '../bottom_navbar.dart';
 // ignore: unused_import
 import 'staff_home.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../supabase_config.dart';
+import 'staff_sync_manager.dart';
 
 class CustomerDetail extends StatefulWidget {
   final String customerName;
@@ -41,18 +42,7 @@ class _CustomerDetailState extends State<CustomerDetail> {
       final String? userIdStr = prefs.getString('current_user_id');
       final int? staffId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
-      // Fetch customer_order_inventory items assigned to this staff (no FK joins)
-      final List<dynamic> inventoryItems = await Supabase.instance.client
-          .from('customer_order_inventory')
-          .select(
-            'product_id, quantity, prepared_quantity, batch_id, inventory_id',
-          )
-          .eq('customer_order_id', widget.customerId)
-          .eq('prepared_by', staffId ?? 0)
-          .order('product_id');
-
-      // Early exit
-      if (inventoryItems.isEmpty) {
+      if (staffId == null) {
         if (mounted) {
           setState(() {
             products = [];
@@ -62,92 +52,13 @@ class _CustomerDetailState extends State<CustomerDetail> {
         return;
       }
 
-      // Fetch product details separately
-      final productIds = inventoryItems
-          .map((row) => row['product_id'] as int?)
-          .where((id) => id != null)
-          .cast<int>()
-          .toSet()
-          .toList();
-
-      final productsResponse = await Supabase.instance.client
-          .from('product')
-          .select(
-            'product_id, name, brand:brand_id(name), unit:unit_id(unit_name)',
-          )
-          .inFilter('product_id', productIds);
-
-      final productMap = {
-        for (final p in productsResponse) p['product_id'] as int: p,
-      };
-
-      // Fetch batch details for the allocations
-      final batchIds = inventoryItems
-          .map((row) => row['batch_id'] as int?)
-          .where((id) => id != null)
-          .cast<int>()
-          .toSet()
-          .toList();
-
-      Map<int, Map<String, dynamic>> batchMap = {};
-      if (batchIds.isNotEmpty) {
-        final batchesResponse = await Supabase.instance.client
-            .from('batch')
-            .select(
-              'batch_id, quantity, storage_location_descrption, inventory_id',
-            )
-            .inFilter('batch_id', batchIds);
-
-        batchMap = {
-          for (final b in batchesResponse)
-            b['batch_id'] as int: Map<String, dynamic>.from(b),
-        };
-      }
-
-      final Map<int, Map<String, dynamic>> grouped = {};
-
-      for (final row in inventoryItems) {
-        final int? productId = row['product_id'] as int?;
-        if (productId == null) continue;
-
-        final productDetails = productMap[productId];
-        final brandMap = productDetails?['brand'] as Map?;
-        final unitMap = productDetails?['unit'] as Map?;
-        final batchId = row['batch_id'] as int?;
-        final batch = batchId != null ? batchMap[batchId] : null;
-
-        grouped.putIfAbsent(productId, () {
-          return {
-            'product_id': productId,
-            'name': productDetails?['name']?.toString() ?? 'Unknown',
-            'brand': brandMap?['name']?.toString() ?? 'Unknown',
-            'unit': unitMap?['unit_name']?.toString() ?? 'Unit',
-            'quantity': 0,
-            'inventory_id': row['inventory_id'] as int?,
-            'allocations': <Map<String, dynamic>>[],
-          };
-        });
-
-        final requiredQty = (row['quantity'] as num?)?.toInt() ?? 0;
-        final preparedQty =
-            (row['prepared_quantity'] as num?)?.toInt() ?? requiredQty;
-
-        grouped[productId]!['quantity'] =
-            (grouped[productId]!['quantity'] as int? ?? 0) + requiredQty;
-
-        (grouped[productId]!['allocations'] as List<Map<String, dynamic>>).add({
-          'batch_id': batchId,
-          'inventory_id': row['inventory_id'] as int?,
-          'storage_location':
-              batch?['storage_location_descrption']?.toString() ?? 'N/A',
-          'available_qty': (batch?['quantity'] as num?)?.toInt() ?? 0,
-          'prepared_qty': preparedQty,
-        });
-      }
+      // Use sync manager's cache-first strategy
+      final fetchedProducts = await StaffSyncManager.instance
+          .fetchProductsWithCache(widget.customerId, staffId);
 
       if (mounted) {
         setState(() {
-          products = grouped.values.toList();
+          products = fetchedProducts;
           _loading = false;
         });
       }
@@ -220,18 +131,11 @@ class _CustomerDetailState extends State<CustomerDetail> {
     required int productId,
     int? inventoryId,
   }) async {
-    var query = Supabase.instance.client
-        .from('batch')
-        .select('batch_id, quantity, storage_location_descrption, inventory_id')
-        .eq('product_id', productId)
-        .gt('quantity', 0);
-
-    if (inventoryId != null) {
-      query = query.eq('inventory_id', inventoryId);
-    }
-
-    final response = await query.order('batch_id');
-    return List<Map<String, dynamic>>.from(response);
+    // Use sync manager's cache-first strategy
+    return await StaffSyncManager.instance.fetchBatchesWithCache(
+      productId: productId,
+      inventoryId: inventoryId,
+    );
   }
 
   Future<Map<String, dynamic>?> _showBatchPicker({
@@ -556,7 +460,8 @@ class _CustomerDetailState extends State<CustomerDetail> {
 
                             final selected = await _showBatchPicker(
                               productId: productId,
-                              inventoryId: inventoryId,
+                              inventoryId:
+                                  null, // Don't filter by inventory - show all available batches
                               excludeBatchIds: exclude,
                             );
 
@@ -641,31 +546,23 @@ class _CustomerDetailState extends State<CustomerDetail> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? userIdStr = prefs.getString('current_user_id');
-      final String? staffName = prefs.getString('current_user_name');
       final int? staffId = userIdStr != null ? int.tryParse(userIdStr) : null;
-      final now = DateTime.now();
 
+      // Validate all products are properly allocated
       for (final product in products) {
-        final pid = product['product_id'] as int?;
-        if (pid == null) continue;
-
         final requiredQty = product['quantity'] as int? ?? 0;
         final allocations = List<Map<String, dynamic>>.from(
           product['allocations'] ?? [],
         );
 
-        // Check if allocations are already properly distributed (manual adjustments)
         final currentTotal = allocations.fold<int>(
           0,
           (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
         );
 
         final normalized = currentTotal == requiredQty
-            ? allocations // Use manual allocations if they sum correctly
-            : _normalizeAllocations(
-                allocations,
-                requiredQty,
-              ); // Otherwise normalize
+            ? allocations
+            : _normalizeAllocations(allocations, requiredQty);
 
         products[products.indexOf(product)]['allocations'] = normalized;
         final totalAllocated = normalized.fold<int>(
@@ -680,70 +577,21 @@ class _CustomerDetailState extends State<CustomerDetail> {
           setState(() => _saving = false);
           return;
         }
-
-        // Remove previous allocations for this staff/product and recreate
-        await Supabase.instance.client
-            .from('customer_order_inventory')
-            .delete()
-            .eq('customer_order_id', widget.customerId)
-            .eq('product_id', pid)
-            .eq('prepared_by', staffId ?? 0);
-
-        for (final alloc in normalized) {
-          final picked = alloc['prepared_qty'] as int? ?? 0;
-          if (picked <= 0) continue;
-
-          await Supabase.instance.client
-              .from('customer_order_inventory')
-              .insert({
-                'customer_order_id': widget.customerId,
-                'product_id': pid,
-                'inventory_id': alloc['inventory_id'],
-                'quantity': picked,
-                'prepared_by': staffId,
-                'batch_id': alloc['batch_id'],
-                'prepared_quantity': picked,
-                'last_action_by': staffName ?? 'Unknown',
-                'last_action_time': now.toIso8601String(),
-              });
-        }
-
-        // Update quantity in customer_order_description
-        await Supabase.instance.client
-            .from('customer_order_description')
-            .update({
-              'last_action_by': staffName ?? 'Unknown',
-              'last_action_time': now.toIso8601String(),
-            })
-            .eq('customer_order_id', widget.customerId)
-            .eq('product_id', pid);
       }
 
-      // Check if all items in this order are prepared by their respective staff
-      final List<dynamic> allInventoryItems = await Supabase.instance.client
-          .from('customer_order_inventory')
-          .select('prepared_quantity')
-          .eq('customer_order_id', widget.customerId);
-
-      // Check if all items have prepared_quantity set
-      bool allItemsPrepared = allInventoryItems.every(
-        (item) => item['prepared_quantity'] != null,
-      );
-
-      // Only mark order as Prepared if ALL items are prepared
-      if (allItemsPrepared) {
-        await Supabase.instance.client
-            .from('customer_order')
-            .update({
-              'order_status': 'Prepared',
-              'last_action_by': staffName ?? 'Unknown',
-              'last_action_time': now.toIso8601String(),
-            })
-            .eq('customer_order_id', widget.customerId);
+      // Check if online
+      if (StaffSyncManager.instance.isOnline) {
+        // Process immediately
+        await _processSaveUpdates(staffId);
+      } else {
+        // Queue for later sync
+        await StaffSyncManager.instance.queueOrderPreparation(
+          customerId: widget.customerId,
+          products: products,
+        );
       }
 
       if (mounted) {
-        // Return true to signal successful completion
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -758,6 +606,109 @@ class _CustomerDetailState extends State<CustomerDetail> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _processSaveUpdates(int? staffId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final staffName = prefs.getString('current_user_name') ?? 'Unknown';
+    final now = DateTime.now();
+
+    for (final product in products) {
+      final pid = product['product_id'] as int?;
+      if (pid == null) continue;
+
+      final requiredQty = product['quantity'] as int? ?? 0;
+      final allocations = List<Map<String, dynamic>>.from(
+        product['allocations'] ?? [],
+      );
+
+      // Check if allocations are already properly distributed (manual adjustments)
+      final currentTotal = allocations.fold<int>(
+        0,
+        (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+      );
+
+      final normalized = currentTotal == requiredQty
+          ? allocations // Use manual allocations if they sum correctly
+          : _normalizeAllocations(
+              allocations,
+              requiredQty,
+            ); // Otherwise normalize
+
+      products[products.indexOf(product)]['allocations'] = normalized;
+      final totalAllocated = normalized.fold<int>(
+        0,
+        (sum, alloc) => sum + (alloc['prepared_qty'] as int? ?? 0),
+      );
+
+      if (totalAllocated != requiredQty) {
+        if (mounted) {
+          _showErrorSnack(
+            'Allocate full quantity for ${product['name']} ($totalAllocated/$requiredQty).',
+          );
+          setState(() => _saving = false);
+        }
+        return;
+      }
+
+      // Remove previous allocations for this staff/product and recreate
+      await supabase
+          .from('customer_order_inventory')
+          .delete()
+          .eq('customer_order_id', widget.customerId)
+          .eq('product_id', pid)
+          .eq('prepared_by', staffId ?? 0);
+
+      for (final alloc in normalized) {
+        final picked = alloc['prepared_qty'] as int? ?? 0;
+        if (picked <= 0) continue;
+
+        await supabase.from('customer_order_inventory').insert({
+          'customer_order_id': widget.customerId,
+          'product_id': pid,
+          'inventory_id': alloc['inventory_id'],
+          'quantity': picked,
+          'prepared_by': staffId,
+          'batch_id': alloc['batch_id'],
+          'prepared_quantity': picked,
+          'last_action_by': staffName ?? 'Unknown',
+          'last_action_time': now.toIso8601String(),
+        });
+      }
+
+      // Update quantity in customer_order_description
+      await supabase
+          .from('customer_order_description')
+          .update({
+            'last_action_by': staffName ?? 'Unknown',
+            'last_action_time': now.toIso8601String(),
+          })
+          .eq('customer_order_id', widget.customerId)
+          .eq('product_id', pid);
+    }
+
+    // Check if all items in this order are prepared by their respective staff
+    final List<dynamic> allInventoryItems = await supabase
+        .from('customer_order_inventory')
+        .select('prepared_quantity')
+        .eq('customer_order_id', widget.customerId);
+
+    // Check if all items have prepared_quantity set
+    bool allItemsPrepared = allInventoryItems.every(
+      (item) => item['prepared_quantity'] != null,
+    );
+
+    // Only mark order as Prepared if ALL items are prepared
+    if (allItemsPrepared) {
+      await supabase
+          .from('customer_order')
+          .update({
+            'order_status': 'Prepared',
+            'last_action_by': staffName ?? 'Unknown',
+            'last_action_time': now.toIso8601String(),
+          })
+          .eq('customer_order_id', widget.customerId);
     }
   }
 

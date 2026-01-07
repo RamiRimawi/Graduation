@@ -50,6 +50,14 @@ dependencies:
   
   # Calendar picker with action buttons
   calendar_date_picker2: ^0.5.6
+  
+  # Local database for offline sync
+  sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
+  path: ^1.8.3
+  
+  # Network connectivity monitoring
+  connectivity_plus: ^5.0.2
 
 dev_dependencies:
   flutter_test:

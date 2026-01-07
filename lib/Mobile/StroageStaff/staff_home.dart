@@ -4,6 +4,7 @@ import '../account_page.dart';
 import '../bottom_navbar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'staff_sync_manager.dart';
 
 class HomeStaff extends StatefulWidget {
   const HomeStaff({super.key});
@@ -20,71 +21,35 @@ class _HomeStaffState extends State<HomeStaff> {
   @override
   void initState() {
     super.initState();
+    _initializeSyncManager();
     _fetchCustomers();
+  }
+
+  Future<void> _initializeSyncManager() async {
+    await StaffSyncManager.instance.initialize();
+  }
+
+  @override
+  void dispose() {
+    StaffSyncManager.instance.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchCustomers() async {
     try {
-      setState(() => _loading = true);
+      if (mounted) setState(() => _loading = true);
       final prefs = await SharedPreferences.getInstance();
       final String? userIdStr = prefs.getString('current_user_id');
       final int? staffId = userIdStr != null ? int.tryParse(userIdStr) : null;
       if (staffId == null) {
-        setState(() => _loading = false);
+        if (mounted) setState(() => _loading = false);
         return;
       }
 
-      // Fetch customer_order_inventory items assigned to this staff
-      final List<dynamic> inventoryItems = await Supabase.instance.client
-          .from('customer_order_inventory')
-          .select('customer_order_id, product_id')
-          .eq('prepared_by', staffId)
-          .order('customer_order_id');
-
-      if (inventoryItems.isEmpty) {
-        setState(() => _loading = false);
-        return;
-      }
-
-      // Get unique order IDs
-      final Set<int> orderIds = {};
-      for (final item in inventoryItems) {
-        final orderId = item['customer_order_id'] as int?;
-        if (orderId != null) {
-          orderIds.add(orderId);
-        }
-      }
-
-      if (orderIds.isEmpty) {
-        setState(() => _loading = false);
-        return;
-      }
-
-      // Fetch customer names for these orders (only Preparing status)
-      final List<dynamic> orders = await Supabase.instance.client
-          .from('customer_order')
-          .select('customer_order_id, order_status, customer:customer_id(name)')
-          .filter('customer_order_id', 'in', orderIds.toList())
-          .eq('order_status', 'Preparing')
-          .order('customer_order_id');
-
-      // Count products assigned to this staff per order
-      Map<int, int> productCounts = {};
-      for (final item in inventoryItems) {
-        final id = item['customer_order_id'] as int?;
-        if (id == null) continue;
-        productCounts[id] = (productCounts[id] ?? 0) + 1;
-      }
-
-      final List<Map<String, dynamic>> mapped = orders
-          .map<Map<String, dynamic>>((o) {
-            final id = o['customer_order_id'] as int? ?? 0;
-            final customer =
-                (o['customer'] as Map?)?['name']?.toString() ?? 'Unknown';
-            final products = productCounts[id] ?? 0;
-            return {'id': id, 'name': customer, 'products': products};
-          })
-          .toList();
+      // Use sync manager's cache-first strategy
+      final mapped = await StaffSyncManager.instance.fetchOrdersWithCache(
+        staffId,
+      );
 
       if (mounted) {
         setState(() {
