@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
 import 'dart:typed_data';
+import 'dart:convert';
 import '../../supabase_config.dart';
 
 class SignatureConfirmation extends StatefulWidget {
@@ -221,15 +222,42 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                             return;
                           }
 
+                          // Convert signature to base64 string for database storage
+                          final signatureBase64 = base64Encode(signatureBytes);
+
                           // Save signature to database and update status to Delivered
+                          debugPrint('⏳ Updating order status to Delivered for order ${widget.orderId}');
                           await supabase.from('customer_order').update({
-                            'customer_signature': signatureBytes,
+                            'customer_signature': signatureBase64,
                             'order_status': 'Delivered',
                             'last_action_time': DateTime.now().toIso8601String(),
                           }).eq('customer_order_id', widget.orderId);
 
-                          debugPrint('Signature saved and order status updated to Delivered for order ${widget.orderId}');
-
+                          debugPrint('✅ Signature saved and order status updated to Delivered for order ${widget.orderId}');
+                          try {
+                              // Get delivery driver ID from order
+                              final orderRes = await supabase
+                                  .from('customer_order')
+                                  .select('delivered_by_id')
+                                  .eq('customer_order_id', widget.orderId)
+                                  .limit(1);
+                              
+                              if (orderRes.isNotEmpty) {
+                                final orderData = (orderRes as List<dynamic>).first as Map<String, dynamic>;
+                                final driverId = orderData['delivered_by_id'] as int?;
+                                
+                                if (driverId != null) {
+                                  await supabase
+                                      .from('delivery_driver')
+                                      .update({'current_order_id': null})
+                                      .eq('delivery_driver_id', driverId);
+                                  
+                                  debugPrint('✅ Cleared current_order_id for driver $driverId');
+                                }
+                              }
+                            } catch (e) {
+                              debugPrint('❌ Error clearing current_order_id: $e');
+                            }
                           // Update order descriptions using edited quantities if provided,
                           // otherwise fall back to DB values.
                           try {
@@ -253,12 +281,13 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                               final descRes = await supabase
                                   .from('customer_order_description')
                                   .select('product_id,quantity')
-                                  .eq('customer_order_id', widget.orderId) as List<dynamic>?;
+                                  .eq('customer_order_id', widget.orderId);
 
-                              if (descRes != null && descRes.isNotEmpty) {
-                                for (final desc in descRes) {
-                                  final productId = desc['product_id'] as int?;
-                                  final qty = desc['quantity'] as int? ?? 0;
+                              if ((descRes as List<dynamic>).isNotEmpty) {
+                                for (final desc in descRes as List<dynamic>) {
+                                  final descMap = desc as Map<String, dynamic>;
+                                  final productId = descMap['product_id'] as int?;
+                                  final qty = descMap['quantity'] as int? ?? 0;
                                   if (productId != null) {
                                     await supabase
                                         .from('customer_order_description')
