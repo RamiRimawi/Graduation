@@ -32,17 +32,20 @@ class _LoginPageState extends State<LoginPage> {
     final pass = passController.text.trim();
 
     try {
+      print("Attempting login with ID: $id");
+
       // Query unified accounts table for accountant
       final response = await supabase
           .from('accounts')
           .select('user_id, password, type, is_active')
-          .eq('user_id', id)
+          .eq('user_id', int.parse(id)) // Parse to int for BIGINT match
           .eq('type', 'Accountant')
           .maybeSingle();
 
       print("LOGIN RESPONSE: $response");
 
       if (response == null) {
+        print("No accountant found with ID: $id");
         setState(() {
           usernameError = true;
           loading = false;
@@ -52,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // Check if account is active
       if (response['is_active'] != true) {
+        print("Account is not active");
         setState(() {
           passwordError = true;
           loading = false;
@@ -60,8 +64,10 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       final savedPass = response['password'];
+      print("Comparing passwords - entered: $pass, saved: $savedPass");
 
       if (savedPass != pass) {
+        print("Password mismatch");
         setState(() {
           passwordError = true;
           loading = false;
