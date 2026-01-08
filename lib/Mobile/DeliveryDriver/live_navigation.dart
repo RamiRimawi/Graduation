@@ -48,6 +48,13 @@ class _LiveNavigationState extends State<LiveNavigation> {
   bool _arrivedAtDestination = false;
   bool _isFollowingDriver = true;
 
+  // Arrival detection tuning: show dialog only when truly arrived
+  int _arrivalHitCount = 0; // consecutive confirmations inside threshold
+  static const int _requiredArrivalHits = 3; // require 3 consecutive hits
+  static const double _arrivalThresholdMeters = 8.0; // within 8m of destination
+  static const double _maxArrivalSpeedMps = 0.8; // ~2.9 km/h (almost stopped)
+  static const double _maxGpsAccuracyMeters = 25.0; // ignore checks if GPS very noisy
+
   @override
   void initState() {
     super.initState();
@@ -179,31 +186,45 @@ class _LiveNavigationState extends State<LiveNavigation> {
       _followDriver();
     }
 
-    // ✅ فحص الوصول بدقة عالية
-    _checkArrival(newLocation, position.accuracy);
+    // ✅ فحص الوصول بدقة عالية (مع الأخذ بالسرعة بعين الاعتبار)
+    _checkArrival(newLocation, position.accuracy, position.speed);
   }
 
-  // ✅ دالة جديدة للفحص الدقيق للوصول
-  void _checkArrival(LatLng currentLocation, double gpsAccuracy) {
+  // ✅ دالة مُحكمة للفحص الدقيق للوصول (تحد من الإيجابيات الكاذبة)
+  void _checkArrival(LatLng currentLocation, double gpsAccuracy, double speedMps) {
     if (_arrivedAtDestination) return;
 
     final destinationPoint = LatLng(
-      widget.customerLatitude, 
-      widget.customerLongitude
+      widget.customerLatitude,
+      widget.customerLongitude,
     );
-    
+
+    // تجاهل التحقق إذا كانت دقة GPS سيئة جداً
+    if (gpsAccuracy > _maxGpsAccuracyMeters) {
+      _arrivalHitCount = 0;
+      debugPrint('⏳ Skipping arrival check due to poor GPS accuracy: ${gpsAccuracy.toStringAsFixed(1)}m');
+      return;
+    }
+
     // حساب المسافة بالأمتار
     final distanceInMeters = _calculateDistance(currentLocation, destinationPoint) * 1000;
-    
-    // ✅ الحد الأدنى للوصول: 3 متر أو دقة GPS (أيهما أكبر)
-    final arrivalThreshold = math.max(3.0, gpsAccuracy);
-    
-    debugPrint('🎯 Distance to destination: ${distanceInMeters.toStringAsFixed(1)}m | GPS Accuracy: ${gpsAccuracy.toStringAsFixed(1)}m | Threshold: ${arrivalThreshold.toStringAsFixed(1)}m');
 
-    if (distanceInMeters <= arrivalThreshold) {
-      setState(() => _arrivedAtDestination = true);
-      _showArrivalDialog();
-      debugPrint('✅ ARRIVED! Distance: ${distanceInMeters.toStringAsFixed(1)}m within ${arrivalThreshold.toStringAsFixed(1)}m threshold');
+    // شروط الوصول الصارمة: مسافة صغيرة وسرعة منخفضة
+    final inside = distanceInMeters <= _arrivalThresholdMeters && speedMps <= _maxArrivalSpeedMps;
+    if (inside) {
+      _arrivalHitCount++;
+      debugPrint('🎯 Inside arrival zone: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s, hit #$_arrivalHitCount/$_requiredArrivalHits');
+      if (_arrivalHitCount >= _requiredArrivalHits) {
+        setState(() => _arrivedAtDestination = true);
+        _showArrivalDialog();
+        debugPrint('✅ ARRIVED! Distance: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s');
+      }
+    } else {
+      // خرجنا من النطاق، أعد الضبط
+      if (_arrivalHitCount != 0) {
+        debugPrint('↩️ Left arrival zone, resetting counter (d=${distanceInMeters.toStringAsFixed(1)}m, v=${speedMps.toStringAsFixed(2)} m/s)');
+      }
+      _arrivalHitCount = 0;
     }
   }
 

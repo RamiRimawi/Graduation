@@ -132,18 +132,32 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DeleviryDetail(
-                        customerName: customer['name'],
-                        customerId: customer['customerId'],
-                        orderId: customer['orderId'],
-                        deliveryDriverId: widget.deliveryDriverId,
+               onTap: () async {
+                  try {
+                    await supabase
+                        .from('delivery_driver')
+                        .update({'current_order_id': customer['orderId']})
+                        .eq('delivery_driver_id', widget.deliveryDriverId);
+                    
+                    debugPrint('✅ Updated current_order_id to: ${customer['orderId']}');
+                  } catch (e) {
+                    debugPrint('❌ Error updating current order: $e');
+                  }
+                  
+                  // ثم الانتقال لصفحة التفاصيل
+                  if (mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DeleviryDetail(
+                          customerName: customer['name'],
+                          customerId: customer['customerId'],
+                          orderId: customer['orderId'],
+                          deliveryDriverId: widget.deliveryDriverId,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
                 child: Container(
                   decoration: BoxDecoration(

@@ -122,8 +122,8 @@ class _MapPickerPopupState extends State<MapPickerPopup> {
               child: FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
-                  center: _currentPosition,
-                  zoom: 14,
+                  initialCenter: _currentPosition,
+                  initialZoom: 14,
                   maxZoom: 18,
                   onTap: (tapPosition, latLng) {
                     // Place marker at the tapped location

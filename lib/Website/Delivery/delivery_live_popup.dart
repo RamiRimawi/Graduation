@@ -34,6 +34,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   List<LatLng> _routePoints = const [];
   bool _isRouting = false;
   RealtimeChannel? _driverChannel;
+  RealtimeChannel? _orderChannel;
+  Timer? _pollingTimer;
 
   // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
   double _getZoomForDistance(double distanceMeters) {
@@ -50,123 +52,241 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _fetchLocations();
-    // اشتراك realtime على جدول السائق
-    _driverChannel = supabase.channel('driver_location_${widget.driverId}')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        table: 'delivery_driver',
-        callback: (payload) {
-          // عند تحديث الموقع في قاعدة البيانات
-          _fetchLocations(updateOnly: true);
-        },
-      )
-      ..subscribe();
-  }
+void initState() {
+  super.initState();
+  _fetchLocations();
+  
+  // ✅ الاستماع للتغييرات في جدول delivery_driver
+  _driverChannel = supabase.channel('driver_location_${widget.driverId}')
+    .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      table: 'delivery_driver',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'delivery_driver_id',
+        value: widget.driverId,
+      ),
+      callback: (payload) {
+        debugPrint('🔄 Driver data updated: ${payload.newRecord}');
+        // عند تحديث current_order_id أو الموقع
+        _fetchLocations(updateOnly: true);
+      },
+    )
+    ..subscribe();
+
+  // ✅ الاستماع للتغييرات في جدول customer_order (لاكتشاف عند تغيير الحالة إلى Delivered)
+  _orderChannel = supabase.channel('order_status_${widget.driverId}')
+    .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      table: 'customer_order',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'delivered_by_id',
+        value: widget.driverId,
+      ),
+      callback: (payload) {
+        final newRecord = payload.newRecord as Map<String, dynamic>;
+        final status = newRecord['order_status'] as String?;
+        final orderId = newRecord['customer_order_id'] as int?;
+        debugPrint('🔄 Order status changed to: $status for order $orderId (driver ${widget.driverId})');
+        
+        // إذا تم تحديث الحالة إلى Delivered
+        if (status == 'Delivered' && mounted) {
+          debugPrint('⚡ Detected Delivered status for order $orderId - removing from UI');
+          
+          // إذا كانت هذه هي الأوردر الحالية
+          if (_orderId == orderId) {
+            debugPrint('🗑️ Clearing current order $orderId');
+            setState(() {
+              _customerLocation = null;
+              _customerName = null;
+              _orderId = null;
+              _routePoints = [];
+            });
+          }
+          
+          // إزالة من قائمة الأوردرات الأخرى
+          if (mounted) {
+            setState(() {
+              _otherOrders.removeWhere((order) => order['order_id'] == orderId);
+              debugPrint('📋 Removed order $orderId from other orders list');
+            });
+          }
+          
+          // اجلب البيانات الكاملة والزوم حسب المسافة الجديدة
+          _fetchLocations(updateOnly: false);
+        }
+      },
+    )
+    ..subscribe();
+
+  // ✅ بدء polling لتحديث الأوردرات كل 5 ثوان (backup للـ realtime)
+  _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    if (mounted) {
+      debugPrint('🔄 Polling for order status changes...');
+      _fetchLocations(updateOnly: true);
+    }
+  });
+}
 
   @override
   void dispose() {
     if (_driverChannel != null) {
       supabase.removeChannel(_driverChannel!);
     }
+    if (_orderChannel != null) {
+      supabase.removeChannel(_orderChannel!);
+    }
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _fetchLocations({bool updateOnly = false}) async {
-    try {
-      // Fetch driver location
-      final response = await supabase
-          .from('delivery_driver')
-          .select('latitude_location, longitude_location')
-          .eq('delivery_driver_id', widget.driverId)
+ Future<void> _fetchLocations({bool updateOnly = false}) async {
+  try {
+    // ✅ جلب موقع السائق + الأوردر النشط
+    final driverData = await supabase
+        .from('delivery_driver')
+        .select('delivery_driver_id, latitude_location, longitude_location, current_order_id')
+        .eq('delivery_driver_id', widget.driverId)
+        .single();
+
+    final lat = driverData['latitude_location'] as num?;
+    final lng = driverData['longitude_location'] as num?;
+    final currentOrderId = driverData['current_order_id'] as int?;
+
+    // تحديث موقع السائق
+    if (mounted && lat != null && lng != null) {
+      final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
+      setState(() {
+        _driverLocation = newDriverLoc;
+      });
+
+      if (!updateOnly) {
+        if (_customerLocation != null) {
+          final center = LatLng(
+            (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
+            (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
+          );
+            _mapController.move(center, _mapController.camera.zoom);
+        } else {
+            _mapController.move(newDriverLoc, _mapController.camera.zoom);
+        }
+      }
+    }
+
+    // ✅ إذا كان في أوردر نشط، اجلب تفاصيله
+    if (currentOrderId != null) {
+      final orderData = await supabase
+          .from('customer_order')
+          .select('''
+            customer_order_id,
+            customer:customer_id(
+              customer_id,
+              name,
+              latitude_location,
+              longitude_location
+            )
+          ''')
+          .eq('customer_order_id', currentOrderId)
           .single();
 
-      final lat = response['latitude_location'] as num?;
-      final lng = response['longitude_location'] as num?;
+      final customer = orderData['customer'] as Map<String, dynamic>?;
+      final custLat = customer?['latitude_location'] as num?;
+      final custLng = customer?['longitude_location'] as num?;
 
-      if (mounted && lat != null && lng != null) {
-        final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
+      if (custLat != null && custLng != null && mounted) {
+        final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
+        
         setState(() {
-          _driverLocation = newDriverLoc;
+          _customerLocation = newCustomerLoc;
+          _customerName = customer?['name'];
+          _orderId = currentOrderId;
         });
-        // لا تحرك الخريطة عند التحديث الفوري
-        if (!updateOnly) {
-          // إذا كان لدينا موقع العميل، احسب المسافة واضبط الزوم
-          if (_customerLocation != null) {
-            // ignore: unused_local_variable
-            final dist = Distance().as(LengthUnit.Meter, newDriverLoc, _customerLocation!);
-            final center = LatLng(
-              (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
-              (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
-            );
-            // احتفظ بالزوم الحالي
-            _mapController.move(center, _mapController.zoom);
-          } else {
-            _mapController.move(newDriverLoc, _mapController.zoom);
-          }
-        }
-      } else if (!updateOnly) {
-      }
 
-      // If customer not yet loaded, fetch active deliveries for this driver
-      if (_customerLocation == null) {
-        final orders = await supabase
-            .from('customer_order')
-            .select('customer_order_id, order_date, customer:customer_id(customer_id, name, latitude_location, longitude_location)')
-            .eq('delivered_by_id', widget.driverId)
-            .eq('order_status', 'Delivery')
-            .order('order_date', ascending: false) as List<dynamic>;
+        // ضبط الخريطة
+        final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
+        final center = LatLng(
+          (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
+          (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
+        );
+        final zoom = _getZoomForDistance(dist);
+        _mapController.move(center, zoom);
 
-        if (orders.isNotEmpty) {
-          final primary = orders.first as Map<String, dynamic>;
-          final customer = primary['customer'] as Map<String, dynamic>?;
-          final custLat = customer?['latitude_location'] as num?;
-          final custLng = customer?['longitude_location'] as num?;
-          final custName = customer?['name'] as String?;
-          final orderId = primary['customer_order_id'] as int?;
-
-          if (custLat != null && custLng != null && mounted) {
-            final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
-            setState(() {
-              _customerLocation = newCustomerLoc;
-              _customerName = custName;
-              _orderId = orderId;
-              _otherOrders = orders
-                  .skip(1)
-                  .map((o) {
-                    final c = (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
-                    return {
-                      'order_id': o['customer_order_id'],
-                      'name': c?['name'],
-                    };
-                  })
-                  .toList();
-            });
-            // إذا كان لدينا موقع السائق، احسب المسافة واضبط الزوم
-            // ignore: unnecessary_null_comparison
-            if (_driverLocation != null) {
-              final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
-              final center = LatLng(
-                (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
-                (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
-              );
-              final zoom = _getZoomForDistance(dist);
-              _mapController.move(center, zoom);
-            }
-          }
-        }
-      }
-
-      // Fetch driving route when both points are available
-      if (_customerLocation != null && mounted) {
+        // جلب المسار
         _fetchRoute();
       }
-    } catch (e) {
-      debugPrint('Error fetching locations: $e');
+
+      // ✅ جلب باقي الأوردرات (Other orders)
+      final otherOrders = await supabase
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(name)')
+          .eq('delivered_by_id', widget.driverId)
+          .eq('order_status', 'Delivery')
+          .neq('customer_order_id', currentOrderId)
+          .order('order_date', ascending: false) as List<dynamic>;
+
+      if (mounted) {
+        setState(() {
+          _otherOrders = otherOrders.map((o) {
+            final c = (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
+            return {
+              'order_id': o['customer_order_id'],
+              'name': c?['name'],
+            };
+          }).toList();
+        });
+      }
+    } else {
+      // ✅ إذا ما في أوردر نشط، اعرض أول أوردر
+      final orders = await supabase
+          .from('customer_order')
+          .select('customer_order_id, customer:customer_id(customer_id, name, latitude_location, longitude_location)')
+          .eq('delivered_by_id', widget.driverId)
+          .eq('order_status', 'Delivery')
+          .order('order_date', ascending: false)
+          .limit(1) as List<dynamic>;
+
+      if (orders.isNotEmpty && mounted) {
+        final primary = orders.first as Map<String, dynamic>;
+        final customer = primary['customer'] as Map<String, dynamic>?;
+        final custLat = customer?['latitude_location'] as num?;
+        final custLng = customer?['longitude_location'] as num?;
+
+        if (custLat != null && custLng != null) {
+          final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
+          
+          setState(() {
+            _customerLocation = newCustomerLoc;
+            _customerName = customer?['name'];
+            _orderId = primary['customer_order_id'] as int?;
+          });
+
+          final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
+          final center = LatLng(
+            (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
+            (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
+          );
+          final zoom = _getZoomForDistance(dist);
+          _mapController.move(center, zoom);
+
+          _fetchRoute();
+        }
+      } else if (mounted) {
+        // لا يوجد أوردرات نشطة - امسح الحالة الحالية
+        setState(() {
+          _customerLocation = null;
+          _customerName = null;
+          _orderId = null;
+          _otherOrders = [];
+          _routePoints = [];
+        });
+        debugPrint('✅ No active orders, cleared UI state');
+      }
     }
+  } catch (e) {
+    debugPrint('❌ Error fetching locations: $e');
   }
+}
 
   Future<void> _fetchRoute() async {
     if (_customerLocation == null || _isRouting) return;
@@ -215,7 +335,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 ),
@@ -413,8 +533,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                         FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            center: _driverLocation,
-                            zoom: 14,
+                            initialCenter: _driverLocation,
+                            initialZoom: 14,
                             maxZoom: 18,
                           ),
                           children: [
@@ -467,12 +587,18 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                               const SizedBox(height: 8),
                               _MapIconButton(
                                 icon: Icons.zoom_in,
-                                onTap: () => _mapController.move(_mapController.center, _mapController.zoom + 1),
+                                onTap: () => _mapController.move(
+                                  _mapController.camera.center,
+                                  _mapController.camera.zoom + 1,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               _MapIconButton(
                                 icon: Icons.zoom_out,
-                                onTap: () => _mapController.move(_mapController.center, _mapController.zoom - 1),
+                                onTap: () => _mapController.move(
+                                  _mapController.camera.center,
+                                  _mapController.camera.zoom - 1,
+                                ),
                               ),
                             ],
                           ),
@@ -499,7 +625,7 @@ class _MapIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.6),
+      color: Colors.black.withValues(alpha: 0.6),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -525,7 +651,7 @@ class _DriverMarker extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -548,7 +674,7 @@ class _CustomerMarker extends StatelessWidget {
         border: Border.all(color: Colors.blueAccent, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
