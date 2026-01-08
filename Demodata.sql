@@ -1,83 +1,74 @@
--- Reset sequences (using IF EXISTS to avoid errors)
-ALTER SEQUENCE IF EXISTS banks_bank_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS branches_branch_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS batch_batch_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS brand_brand_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS customer_city_customer_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS customer_checks_check_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS customer_order_customer_order_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS customer_quarters_quarter_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS incoming_payment_payment_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS inventory_inventory_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS outgoing_payment_payment_voucher_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS product_product_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS product_category_product_category_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS sales_rep_city_sales_rep_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS supplier_category_supplier_category_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS supplier_checks_check_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS supplier_city_supplier_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS supplier_order_order_id_seq RESTART WITH 1;
-ALTER SEQUENCE IF EXISTS unit_unit_id_seq RESTART WITH 1;
+-- Reset sequences to 1
+-- This must be done AFTER inserts when using OVERRIDING SYSTEM VALUE
+DO $$
+BEGIN
+  PERFORM setval('customer_city_customer_city_id_seq', 1, false);
+  PERFORM setval('customer_quarters_quarter_id_seq', 1, false);
+  PERFORM setval('supplier_city_supplier_city_id_seq', 1, false);
+  PERFORM setval('sales_rep_city_sales_rep_city_id_seq', 1, false);
+  PERFORM setval('supplier_category_supplier_category_id_seq', 1, false);
+  PERFORM setval('inventory_inventory_id_seq', 1, false);
+  PERFORM setval('unit_unit_id_seq', 1, false);
+  PERFORM setval('product_category_product_category_id_seq', 1, false);
+  PERFORM setval('brand_brand_id_seq', 1, false);
+  PERFORM setval('product_product_id_seq', 1, false);
+  PERFORM setval('batch_batch_id_seq', 1, false);
+  
+  -- Only set sequences if they exist
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'banks_bank_id_seq') THEN
+    PERFORM setval('banks_bank_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'branches_branch_id_seq') THEN
+    PERFORM setval('branches_branch_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'customer_order_customer_order_id_seq') THEN
+    PERFORM setval('customer_order_customer_order_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'supplier_order_order_id_seq') THEN
+    PERFORM setval('supplier_order_order_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'incoming_payment_payment_id_seq') THEN
+    PERFORM setval('incoming_payment_payment_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'outgoing_payment_payment_voucher_id_seq') THEN
+    PERFORM setval('outgoing_payment_payment_voucher_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'customer_checks_check_id_seq') THEN
+    PERFORM setval('customer_checks_check_id_seq', 1, false);
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'supplier_checks_check_id_seq') THEN
+    PERFORM setval('supplier_checks_check_id_seq', 1, false);
+  END IF;
+END $$;
 
--- Demo data for actors
--- Simple approach: Delete from all tables in reverse dependency order
+
+-- Delete from all tables in reverse dependency order
 -- Supabase PostgreSQL will handle the cascading
 
-DELETE FROM user_account_accountant;
-DELETE FROM user_account_customer;
-DELETE FROM user_account_delivery_driver;
-DELETE FROM user_account_sales_rep;
-DELETE FROM user_account_storage_manager;
-DELETE FROM user_account_storage_staff;
-DELETE FROM user_account_supplier;
-
-DELETE FROM customer_order_inventory;
-DELETE FROM customer_order_description;
-DELETE FROM customer_order;
-
-DELETE FROM supplier_order_inventory;
-DELETE FROM supplier_order_description;
-DELETE FROM supplier_order;
-
-DELETE FROM incoming_payment;
-DELETE FROM outgoing_payment;
-DELETE FROM customer_checks;
-DELETE FROM supplier_checks;
-
-DELETE FROM batch;
-DELETE FROM product;
-DELETE FROM customer;
-DELETE FROM supplier;
-DELETE FROM sales_representative;
-DELETE FROM delivery_driver;
-DELETE FROM storage_staff;
-DELETE FROM storage_manager;
-DELETE FROM accountant;
-
-DELETE FROM inventory;
-DELETE FROM branches;
-DELETE FROM banks;
-DELETE FROM customer_quarters;
-DELETE FROM customer_city;
-DELETE FROM supplier_city;
-DELETE FROM sales_rep_city;
-DELETE FROM supplier_category;
-DELETE FROM product_category;
-DELETE FROM brand;
-DELETE FROM unit;
 -- Inventories
-INSERT INTO inventory (inventory_name, last_action_by, last_action_time) VALUES
-('Main inventory', 'system', NOW()),
-('ein senya inventory', 'system', NOW()),
-('kufr qasem inventory', 'system', NOW());
+INSERT INTO inventory (inventory_id, inventory_name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Main inventory', 'system', NOW()),
+(2, 'ein senya inventory', 'system', NOW()),
+(3, 'kufr qasem inventory', 'system', NOW());
 
 -- Customer cities
-INSERT INTO customer_city (name, last_action_by, last_action_time) VALUES
-('Ramallah', 'system', NOW()),
-('Gaza', 'system', NOW()),
-('Hebron', 'system', NOW()),
-('Nablus', 'system', NOW()),
-('Bethlehem', 'system', NOW());
+INSERT INTO customer_city (customer_city_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Ramallah', 'system', NOW()),
+(2, 'Gaza', 'system', NOW()),
+(3, 'Hebron', 'system', NOW()),
+(4, 'Nablus', 'system', NOW()),
+(5, 'Bethlehem', 'system', NOW());
 
 -- Customer quarters
 INSERT INTO customer_quarters (name, customer_city, last_action_by, last_action_time) VALUES
@@ -98,372 +89,454 @@ INSERT INTO customer_quarters (name, customer_city, last_action_by, last_action_
 ('Beit Jala', 5, 'system', NOW());
 
 -- Supplier cities
-INSERT INTO supplier_city (name, last_action_by, last_action_time) VALUES
-('Ramallah', 'system', NOW()),
-('Gaza', 'system', NOW()),
-('Hebron', 'system', NOW()),
-('Nablus', 'system', NOW()),
-('Bethlehem', 'system', NOW());
+INSERT INTO supplier_city (supplier_city_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Ramallah', 'system', NOW()),
+(2, 'Gaza', 'system', NOW()),
+(3, 'Hebron', 'system', NOW()),
+(4, 'Nablus', 'system', NOW()),
+(5, 'Bethlehem', 'system', NOW());
 
 -- Sales rep cities
-INSERT INTO sales_rep_city (name, last_action_by, last_action_time) VALUES
-('Ramallah', 'system', NOW()),
-('Gaza', 'system', NOW()),
-('Hebron', 'system', NOW()),
-('Nablus', 'system', NOW()),
-('Bethlehem', 'system', NOW());
+INSERT INTO sales_rep_city (sales_rep_city_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Ramallah', 'system', NOW()),
+(2, 'Gaza', 'system', NOW()),
+(3, 'Hebron', 'system', NOW()),
+(4, 'Nablus', 'system', NOW()),
+(5, 'Bethlehem', 'system', NOW());
 
 -- Supplier categories
-INSERT INTO supplier_category (name, last_action_by, last_action_time) VALUES
-('Toilets', 'system', NOW()),
-('Sinks', 'system', NOW()),
-('Faucets', 'system', NOW()),
-('Showers', 'system', NOW()),
-('Bathtubs', 'system', NOW()),
-('Accessories', 'system', NOW());
+INSERT INTO supplier_category (supplier_category_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Toilets', 'system', NOW()),
+(2, 'Sinks', 'system', NOW()),
+(3, 'Faucets', 'system', NOW()),
+(4, 'Showers', 'system', NOW()),
+(5, 'Bathtubs', 'system', NOW()),
+(6, 'Accessories', 'system', NOW());
+
+-- User accounts - Unified accounts table
+INSERT INTO accounts (user_id, password, type, is_active, profile_image, last_action_by, last_action_time) VALUES
+-- Accountant
+(111111111, '1234', 'Accountant', true, '', 'system', NOW()),
+
+-- Storage Manager
+(211111111, '1234', 'Storage Manager', true, '', 'system', NOW()),
+
+-- Storage Staff
+(311111111, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(322222222, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(333333333, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(344444444, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(355555555, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(366666666, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(377777777, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(388888888, '1234', 'Storage Staff', true, '', 'system', NOW()),
+(399999999, '1234', 'Storage Staff', true, '', 'system', NOW()),
+
+-- Delivery Drivers
+(411111111, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+(422222222, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+(433333333, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+(444444444, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+
+-- Sales Representatives
+(511111111, '1234', 'Sales Rep', true, '', 'system', NOW()),
+(522222222, '1234', 'Sales Rep', true, '', 'system', NOW()),
+(533333333, '1234', 'Sales Rep', true, '', 'system', NOW()),
+(544444444, '1234', 'Sales Rep', true, '', 'system', NOW()),
+(555555555, '1234', 'Sales Rep', true, '', 'system', NOW()),
+
+-- Customers (all customers need accounts due to FK constraint)
+-- Active customers (every 5th customer - can use mobile app)
+(100000005, '1234', 'Customer', true, '', 'system', NOW()),
+(100000010, '1234', 'Customer', true, '', 'system', NOW()),
+(100000015, '1234', 'Customer', true, '', 'system', NOW()),
+(100000020, '1234', 'Customer', true, '', 'system', NOW()),
+(100000025, '1234', 'Customer', true, '', 'system', NOW()),
+(100000030, '1234', 'Customer', true, '', 'system', NOW()),
+(100000035, '1234', 'Customer', true, '', 'system', NOW()),
+(100000040, '1234', 'Customer', true, '', 'system', NOW()),
+(100000045, '1234', 'Customer', true, '', 'system', NOW()),
+(100000050, '1234', 'Customer', true, '', 'system', NOW()),
+(100000055, '1234', 'Customer', true, '', 'system', NOW()),
+(100000060, '1234', 'Customer', true, '', 'system', NOW()),
+(100000065, '1234', 'Customer', true, '', 'system', NOW()),
+(100000070, '1234', 'Customer', true, '', 'system', NOW()),
+(100000075, '1234', 'Customer', true, '', 'system', NOW()),
+(100000080, '1234', 'Customer', true, '', 'system', NOW()),
+
+-- Inactive customers (cannot login but required by FK constraint)
+(100000001, '1234', 'Customer', false, '', 'system', NOW()),
+(100000002, '1234', 'Customer', false, '', 'system', NOW()),
+(100000003, '1234', 'Customer', false, '', 'system', NOW()),
+(100000004, '1234', 'Customer', false, '', 'system', NOW()),
+(100000006, '1234', 'Customer', false, '', 'system', NOW()),
+(100000007, '1234', 'Customer', false, '', 'system', NOW()),
+(100000008, '1234', 'Customer', false, '', 'system', NOW()),
+(100000009, '1234', 'Customer', false, '', 'system', NOW()),
+(100000011, '1234', 'Customer', false, '', 'system', NOW()),
+(100000012, '1234', 'Customer', false, '', 'system', NOW()),
+(100000013, '1234', 'Customer', false, '', 'system', NOW()),
+(100000014, '1234', 'Customer', false, '', 'system', NOW()),
+(100000016, '1234', 'Customer', false, '', 'system', NOW()),
+(100000017, '1234', 'Customer', false, '', 'system', NOW()),
+(100000018, '1234', 'Customer', false, '', 'system', NOW()),
+(100000019, '1234', 'Customer', false, '', 'system', NOW()),
+(100000021, '1234', 'Customer', false, '', 'system', NOW()),
+(100000022, '1234', 'Customer', false, '', 'system', NOW()),
+(100000023, '1234', 'Customer', false, '', 'system', NOW()),
+(100000024, '1234', 'Customer', false, '', 'system', NOW()),
+(100000026, '1234', 'Customer', false, '', 'system', NOW()),
+(100000027, '1234', 'Customer', false, '', 'system', NOW()),
+(100000028, '1234', 'Customer', false, '', 'system', NOW()),
+(100000029, '1234', 'Customer', false, '', 'system', NOW()),
+(100000031, '1234', 'Customer', false, '', 'system', NOW()),
+(100000032, '1234', 'Customer', false, '', 'system', NOW()),
+(100000033, '1234', 'Customer', false, '', 'system', NOW()),
+(100000034, '1234', 'Customer', false, '', 'system', NOW()),
+(100000036, '1234', 'Customer', false, '', 'system', NOW()),
+(100000037, '1234', 'Customer', false, '', 'system', NOW()),
+(100000038, '1234', 'Customer', false, '', 'system', NOW()),
+(100000039, '1234', 'Customer', false, '', 'system', NOW()),
+(100000041, '1234', 'Customer', false, '', 'system', NOW()),
+(100000042, '1234', 'Customer', false, '', 'system', NOW()),
+(100000043, '1234', 'Customer', false, '', 'system', NOW()),
+(100000044, '1234', 'Customer', false, '', 'system', NOW()),
+(100000046, '1234', 'Customer', false, '', 'system', NOW()),
+(100000047, '1234', 'Customer', false, '', 'system', NOW()),
+(100000048, '1234', 'Customer', false, '', 'system', NOW()),
+(100000049, '1234', 'Customer', false, '', 'system', NOW()),
+(100000051, '1234', 'Customer', false, '', 'system', NOW()),
+(100000052, '1234', 'Customer', false, '', 'system', NOW()),
+(100000053, '1234', 'Customer', false, '', 'system', NOW()),
+(100000054, '1234', 'Customer', false, '', 'system', NOW()),
+(100000056, '1234', 'Customer', false, '', 'system', NOW()),
+(100000057, '1234', 'Customer', false, '', 'system', NOW()),
+(100000058, '1234', 'Customer', false, '', 'system', NOW()),
+(100000059, '1234', 'Customer', false, '', 'system', NOW()),
+(100000061, '1234', 'Customer', false, '', 'system', NOW()),
+(100000062, '1234', 'Customer', false, '', 'system', NOW()),
+(100000063, '1234', 'Customer', false, '', 'system', NOW()),
+(100000064, '1234', 'Customer', false, '', 'system', NOW()),
+(100000066, '1234', 'Customer', false, '', 'system', NOW()),
+(100000067, '1234', 'Customer', false, '', 'system', NOW()),
+(100000068, '1234', 'Customer', false, '', 'system', NOW()),
+(100000069, '1234', 'Customer', false, '', 'system', NOW()),
+(100000071, '1234', 'Customer', false, '', 'system', NOW()),
+(100000072, '1234', 'Customer', false, '', 'system', NOW()),
+(100000073, '1234', 'Customer', false, '', 'system', NOW()),
+(100000074, '1234', 'Customer', false, '', 'system', NOW()),
+(100000076, '1234', 'Customer', false, '', 'system', NOW()),
+(100000077, '1234', 'Customer', false, '', 'system', NOW()),
+(100000078, '1234', 'Customer', false, '', 'system', NOW()),
+(100000079, '1234', 'Customer', false, '', 'system', NOW()),
+
+-- Suppliers (all active)
+(200000001, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000002, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000003, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000004, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000005, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000006, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000007, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000008, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000009, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000010, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000011, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000012, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000013, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000014, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000015, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000016, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000017, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000018, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000019, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000020, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000021, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000022, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000023, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000024, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000025, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000026, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000027, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000028, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000029, '1234', 'Supplier', true, '', 'system', NOW()),
+(200000030, '1234', 'Supplier', true, '', 'system', NOW());
+
 
 -- Accountant
 INSERT INTO accountant (accountant_id, name, mobile_number, telephone_number, address, last_action_by, last_action_time) VALUES
-(111111111, 'Accountant One', '0591234567', '022345678', 'Ramallah', 'system', NOW());
+(111111111, 'Yasser Mansour', '0591234567', '022345678', 'Ramallah', 'system', NOW());
 
 -- Storage manager
 INSERT INTO storage_manager (storage_manager_id, name, mobile_number, telephone_number, address, last_action_by, last_action_time) VALUES
-(211111111, 'Manager One', '0591234568', '022345679', 'Ramallah', 'system', NOW());
+(211111111, 'Ibrahim Khalil', '0591234568', '022345679', 'Ramallah', 'system', NOW());
 
 -- Storage staff (9 total, 3 per inventory)
 INSERT INTO storage_staff (storage_staff_id, name, mobile_number, telephone_number, address, last_action_by, last_action_time, inventory_id) VALUES
-(311111111, 'Staff 1', '0591234569', '022345680', 'Ramallah', 'system', NOW(), 1),
-(322222222, 'Staff 2', '0591234570', '022345681', 'Ramallah', 'system', NOW(), 1),
-(333333333, 'Staff 3', '0591234571', '022345682', 'Ramallah', 'system', NOW(), 1),
-(344444444, 'Staff 4', '0591234572', '022345683', 'Gaza', 'system', NOW(), 2),
-(355555555, 'Staff 5', '0591234573', '022345684', 'Gaza', 'system', NOW(), 2),
-(366666666, 'Staff 6', '0591234574', '022345685', 'Gaza', 'system', NOW(), 2),
-(377777777, 'Staff 7', '0591234575', '022345686', 'Hebron', 'system', NOW(), 3),
-(388888888, 'Staff 8', '0591234576', '022345687', 'Hebron', 'system', NOW(), 3),
-(399999999, 'Staff 9', '0591234577', '022345688', 'Hebron', 'system', NOW(), 3);
+(311111111, 'Nabil Yousef', '0591234569', '022345680', 'Ramallah', 'system', NOW(), 1),
+(322222222, 'Saleh Ahmad', '0591234570', '022345681', 'Ramallah', 'system', NOW(), 1),
+(333333333, 'Fadi Hassan', '0591234571', '022345682', 'Ramallah', 'system', NOW(), 1),
+(344444444, 'Tariq Said', '0591234572', '022345683', 'Gaza', 'system', NOW(), 2),
+(355555555, 'Rami Nasser', '0591234573', '022345684', 'Gaza', 'system', NOW(), 2),
+(366666666, 'Adel Mahmoud', '0591234574', '022345685', 'Gaza', 'system', NOW(), 2),
+(377777777, 'Walid Habib', '0591234575', '022345686', 'Hebron', 'system', NOW(), 3),
+(388888888, 'Karim Farah', '0591234576', '022345687', 'Hebron', 'system', NOW(), 3),
+(399999999, 'Samir Aziz', '0591234577', '022345688', 'Hebron', 'system', NOW(), 3);
 
 -- Delivery drivers
 INSERT INTO delivery_driver (delivery_driver_id, name, mobile_number, telephone_number, address, last_action_by, last_action_time, latitude_location, longitude_location) VALUES
-(411111111, 'Driver 1', '0591234578', '022345689', 'Ramallah', 'system', NOW(), 31.9038, 35.2034),
-(422222222, 'Driver 2', '0591234579', '022345690', 'Gaza', 'system', NOW(), 31.5017, 34.4668),
-(433333333, 'Driver 3', '0591234580', '022345691', 'Hebron', 'system', NOW(), 31.5326, 35.0998),
-(444444444, 'Driver 4', '0591234581', '022345692', 'Nablus', 'system', NOW(), 32.2211, 35.2544);
+(411111111, 'Mahmoud Shehab', '0591234578', '022345689', 'Ramallah', 'system', NOW(), 31.9038, 35.2034),
+(422222222, 'Jamal Ramadan', '0591234579', '022345690', 'Gaza', 'system', NOW(), 31.5017, 34.4668),
+(433333333, 'Omar Khoury', '0591234580', '022345691', 'Hebron', 'system', NOW(), 31.5326, 35.0998),
+(444444444, 'Ziad Jabr', '0591234581', '022345692', 'Nablus', 'system', NOW(), 32.2211, 35.2544);
 
 -- Sales representatives
 INSERT INTO sales_representative (sales_rep_id, sales_rep_city, name, mobile_number, telephone_number, email, last_action_by, last_action_time) VALUES
-(511111111, 1, 'Sales Rep 1', '0591234582', '022345693', 'rep1@example.com', 'system', NOW()),
-(522222222, 2, 'Sales Rep 2', '0591234583', '022345694', 'rep2@example.com', 'system', NOW()),
-(533333333, 3, 'Sales Rep 3', '0591234584', '022345695', 'rep3@example.com', 'system', NOW()),
-(544444444, 4, 'Sales Rep 4', '0591234585', '022345696', 'rep4@example.com', 'system', NOW()),
-(555555555, 5, 'Sales Rep 5', '0591234586', '022345697', 'rep5@example.com', 'system', NOW());
+(511111111, 1, 'Hani Qasem', '0591234582', '022345693', 'hani.qasem@company.com', 'system', NOW()),
+(522222222, 2, 'Marwan Shammas', '0591234583', '022345694', 'marwan.shammas@company.com', 'system', NOW()),
+(533333333, 3, 'Bilal Haddad', '0591234584', '022345695', 'bilal.haddad@company.com', 'system', NOW()),
+(544444444, 4, 'Tamer Azzam', '0591234585', '022345696', 'tamer.azzam@company.com', 'system', NOW()),
+(555555555, 5, 'Samer Daher', '0591234586', '022345697', 'samer.daher@company.com', 'system', NOW());
 
 -- Customers (80 total)
 INSERT INTO customer (customer_id, name, mobile_number, telephone_number, customer_city, address, latitude_location, longitude_location, email, balance_debit, sales_rep_id, last_action_by, last_action_time) VALUES
-(100000001, 'Customer 1', '0590000001', '022000001', 1, 'Beside Al-Manara Square', 31.9038, 35.2034, 'cust1@example.com', 0.00, 511111111, 'system', NOW()),
-(100000002, 'Customer 2', '0590000002', '022000002', 2, 'Beside the sea', 31.5017, 34.4668, 'cust2@example.com', 0.00, 522222222, 'system', NOW()),
-(100000003, 'Customer 3', '0590000003', '022000003', 3, 'Beside the old city', 31.5326, 35.0998, 'cust3@example.com', 0.00, 533333333, 'system', NOW()),
-(100000004, 'Customer 4', '0590000004', '022000004', 4, 'Beside the old market', 32.2211, 35.2544, 'cust4@example.com', 0.00, 544444444, 'system', NOW()),
-(100000005, 'Customer 5', '0590000005', '022000005', 5, 'Beside the church', 31.7054, 35.2024, 'cust5@example.com', 0.00, NULL, 'system', NOW()),
--- Continue for 6 to 80, similar pattern, cycling cities and sales_rep, some NULL
-(100000006, 'Customer 6', '0590000006', '022000006', 1, 'Above the pharmacy on Main Street', 31.9038, 35.2034, 'cust6@example.com', 0.00, 511111111, 'system', NOW()),
-(100000007, 'Customer 7', '0590000007', '022000007', 2, 'Above the market', 31.5017, 34.4668, 'cust7@example.com', 0.00, 522222222, 'system', NOW()),
-(100000008, 'Customer 8', '0590000008', '022000008', 3, 'Above the market', 31.5326, 35.0998, 'cust8@example.com', 0.00, 533333333, 'system', NOW()),
-(100000009, 'Customer 9', '0590000009', '022000009', 4, 'Above the soap factory', 32.2211, 35.2544, 'cust9@example.com', 0.00, 544444444, 'system', NOW()),
-(100000010, 'Customer 10', '0590000010', '022000010', 5, 'Above the market', 31.7054, 35.2024, 'cust10@example.com', 0.00, NULL, 'system', NOW()),
-(100000011, 'Customer 11', '0590000011', '022000011', 1, 'Near the school', 31.9038, 35.2034, 'cust11@example.com', 0.00, 511111111, 'system', NOW()),
-(100000012, 'Customer 12', '0590000012', '022000012', 2, 'Near the port', 31.5017, 34.4668, 'cust12@example.com', 0.00, 522222222, 'system', NOW()),
-(100000013, 'Customer 13', '0590000013', '022000013', 3, 'Near the mosque', 31.5326, 35.0998, 'cust13@example.com', 0.00, 533333333, 'system', NOW()),
-(100000014, 'Customer 14', '0590000014', '022000014', 4, 'Near the university', 32.2211, 35.2544, 'cust14@example.com', 0.00, 544444444, 'system', NOW()),
-(100000015, 'Customer 15', '0590000015', '022000015', 5, 'Near the university', 31.7054, 35.2024, 'cust15@example.com', 0.00, NULL, 'system', NOW()),
-(100000016, 'Customer 16', '0590000016', '022000016', 1, 'Opposite the bank', 31.9038, 35.2034, 'cust16@example.com', 0.00, 511111111, 'system', NOW()),
-(100000017, 'Customer 17', '0590000017', '022000017', 2, 'Opposite the hospital', 31.5017, 34.4668, 'cust17@example.com', 0.00, 522222222, 'system', NOW()),
-(100000018, 'Customer 18', '0590000018', '022000018', 3, 'Opposite the school', 31.5326, 35.0998, 'cust18@example.com', 0.00, 533333333, 'system', NOW()),
-(100000019, 'Customer 19', '0590000019', '022000019', 4, 'Opposite the mosque', 32.2211, 35.2544, 'cust19@example.com', 0.00, 544444444, 'system', NOW()),
-(100000020, 'Customer 20', '0590000020', '022000020', 5, 'Opposite the mosque', 31.7054, 35.2024, 'cust20@example.com', 0.00, NULL, 'system', NOW()),
-(100000021, 'Customer 21', '0590000021', '022000021', 1, 'Next to the supermarket', 31.9038, 35.2034, 'cust21@example.com', 0.00, 511111111, 'system', NOW()),
-(100000022, 'Customer 22', '0590000022', '022000022', 2, 'Next to the school', 31.5017, 34.4668, 'cust22@example.com', 0.00, 522222222, 'system', NOW()),
-(100000023, 'Customer 23', '0590000023', '022000023', 3, 'Next to the hospital', 31.5326, 35.0998, 'cust23@example.com', 0.00, 533333333, 'system', NOW()),
-(100000024, 'Customer 24', '0590000024', '022000024', 4, 'Next to the school', 32.2211, 35.2544, 'cust24@example.com', 0.00, 544444444, 'system', NOW()),
-(100000025, 'Customer 25', '0590000025', '022000025', 5, 'Next to the school', 31.7054, 35.2024, 'cust25@example.com', 0.00, NULL, 'system', NOW()),
-(100000026, 'Customer 26', '0590000026', '022000026', 1, 'Behind the hospital', 31.9038, 35.2034, 'cust26@example.com', 0.00, 511111111, 'system', NOW()),
-(100000027, 'Customer 27', '0590000027', '022000027', 2, 'Behind the mosque', 31.5017, 34.4668, 'cust27@example.com', 0.00, 522222222, 'system', NOW()),
-(100000028, 'Customer 28', '0590000028', '022000028', 3, 'Behind the university', 31.5326, 35.0998, 'cust28@example.com', 0.00, 533333333, 'system', NOW()),
-(100000029, 'Customer 29', '0590000029', '022000029', 4, 'Behind the hospital', 32.2211, 35.2544, 'cust29@example.com', 0.00, 544444444, 'system', NOW()),
-(100000030, 'Customer 30', '0590000030', '022000030', 5, 'Behind the hospital', 31.7054, 35.2024, 'cust30@example.com', 0.00, NULL, 'system', NOW()),
-(100000031, 'Customer 31', '0590000031', '022000031', 1, 'In front of the park', 31.9038, 35.2034, 'cust31@example.com', 0.00, 511111111, 'system', NOW()),
-(100000032, 'Customer 32', '0590000032', '022000032', 2, 'In front of the beach', 31.5017, 34.4668, 'cust32@example.com', 0.00, 522222222, 'system', NOW()),
-(100000033, 'Customer 33', '0590000033', '022000033', 3, 'In front of the park', 31.5326, 35.0998, 'cust33@example.com', 0.00, 533333333, 'system', NOW()),
-(100000034, 'Customer 34', '0590000034', '022000034', 4, 'In front of the park', 32.2211, 35.2544, 'cust34@example.com', 0.00, 544444444, 'system', NOW()),
-(100000035, 'Customer 35', '0590000035', '022000035', 5, 'In front of the park', 31.7054, 35.2024, 'cust35@example.com', 0.00, NULL, 'system', NOW()),
-(100000036, 'Customer 36', '0590000036', '022000036', 1, 'Near the university', 31.9038, 35.2034, 'cust36@example.com', 0.00, 511111111, 'system', NOW()),
-(100000037, 'Customer 37', '0590000037', '022000037', 2, 'Near the university', 31.5017, 34.4668, 'cust37@example.com', 0.00, 522222222, 'system', NOW()),
-(100000038, 'Customer 38', '0590000038', '022000038', 3, 'Near the pharmacy', 31.5326, 35.0998, 'cust38@example.com', 0.00, 533333333, 'system', NOW()),
-(100000039, 'Customer 39', '0590000039', '022000039', 4, 'Near the pharmacy', 32.2211, 35.2544, 'cust39@example.com', 0.00, 544444444, 'system', NOW()),
-(100000040, 'Customer 40', '0590000040', '022000040', 5, 'Near the pharmacy', 31.7054, 35.2024, 'cust40@example.com', 0.00, NULL, 'system', NOW()),
-(100000041, 'Customer 41', '0590000041', '022000041', 1, 'Above the restaurant', 31.9038, 35.2034, 'cust41@example.com', 0.00, 511111111, 'system', NOW()),
-(100000042, 'Customer 42', '0590000042', '022000042', 2, 'Above the pharmacy', 31.5017, 34.4668, 'cust42@example.com', 0.00, 522222222, 'system', NOW()),
-(100000043, 'Customer 43', '0590000043', '022000043', 3, 'Above the restaurant', 31.5326, 35.0998, 'cust43@example.com', 0.00, 533333333, 'system', NOW()),
-(100000044, 'Customer 44', '0590000044', '022000044', 4, 'Above the restaurant', 32.2211, 35.2544, 'cust44@example.com', 0.00, 544444444, 'system', NOW()),
-(100000045, 'Customer 45', '0590000045', '022000045', 5, 'Above the restaurant', 31.7054, 35.2024, 'cust45@example.com', 0.00, NULL, 'system', NOW()),
-(100000046, 'Customer 46', '0590000046', '022000046', 1, 'Beside the mosque', 31.9038, 35.2034, 'cust46@example.com', 0.00, 511111111, 'system', NOW()),
-(100000047, 'Customer 47', '0590000047', '022000047', 2, 'Beside the supermarket', 31.5017, 34.4668, 'cust47@example.com', 0.00, 522222222, 'system', NOW()),
-(100000048, 'Customer 48', '0590000048', '022000048', 3, 'Beside the bank', 31.5326, 35.0998, 'cust48@example.com', 0.00, 533333333, 'system', NOW()),
-(100000049, 'Customer 49', '0590000049', '022000049', 4, 'Beside the bank', 32.2211, 35.2544, 'cust49@example.com', 0.00, 544444444, 'system', NOW()),
-(100000050, 'Customer 50', '0590000050', '022000050', 5, 'Beside the bank', 31.7054, 35.2024, 'cust50@example.com', 0.00, NULL, 'system', NOW()),
-(100000051, 'Customer 51', '0590000051', '022000051', 1, 'Beside Al-Manara Square', 31.9038, 35.2034, 'cust51@example.com', 0.00, 511111111, 'system', NOW()),
-(100000052, 'Customer 52', '0590000052', '022000052', 2, 'Beside the sea', 31.5017, 34.4668, 'cust52@example.com', 0.00, 522222222, 'system', NOW()),
-(100000053, 'Customer 53', '0590000053', '022000053', 3, 'Beside the old city', 31.5326, 35.0998, 'cust53@example.com', 0.00, 533333333, 'system', NOW()),
-(100000054, 'Customer 54', '0590000054', '022000054', 4, 'Beside the old market', 32.2211, 35.2544, 'cust54@example.com', 0.00, 544444444, 'system', NOW()),
-(100000055, 'Customer 55', '0590000055', '022000055', 5, 'Beside the church', 31.7054, 35.2024, 'cust55@example.com', 0.00, NULL, 'system', NOW()),
-(100000056, 'Customer 56', '0590000056', '022000056', 1, 'Above the pharmacy on Main Street', 31.9038, 35.2034, 'cust56@example.com', 0.00, 511111111, 'system', NOW()),
-(100000057, 'Customer 57', '0590000057', '022000057', 2, 'Above the market', 31.5017, 34.4668, 'cust57@example.com', 0.00, 522222222, 'system', NOW()),
-(100000058, 'Customer 58', '0590000058', '022000058', 3, 'Above the market', 31.5326, 35.0998, 'cust58@example.com', 0.00, 533333333, 'system', NOW()),
-(100000059, 'Customer 59', '0590000059', '022000059', 4, 'Above the soap factory', 32.2211, 35.2544, 'cust59@example.com', 0.00, 544444444, 'system', NOW()),
-(100000060, 'Customer 60', '0590000060', '022000060', 5, 'Above the market', 31.7054, 35.2024, 'cust60@example.com', 0.00, NULL, 'system', NOW()),
-(100000061, 'Customer 61', '0590000061', '022000061', 1, 'Near the school', 31.9038, 35.2034, 'cust61@example.com', 0.00, 511111111, 'system', NOW()),
-(100000062, 'Customer 62', '0590000062', '022000062', 2, 'Near the port', 31.5017, 34.4668, 'cust62@example.com', 0.00, 522222222, 'system', NOW()),
-(100000063, 'Customer 63', '0590000063', '022000063', 3, 'Near the mosque', 31.5326, 35.0998, 'cust63@example.com', 0.00, 533333333, 'system', NOW()),
-(100000064, 'Customer 64', '0590000064', '022000064', 4, 'Near the university', 32.2211, 35.2544, 'cust64@example.com', 0.00, 544444444, 'system', NOW()),
-(100000065, 'Customer 65', '0590000065', '022000065', 5, 'Near the university', 31.7054, 35.2024, 'cust65@example.com', 0.00, NULL, 'system', NOW()),
-(100000066, 'Customer 66', '0590000066', '022000066', 1, 'Opposite the bank', 31.9038, 35.2034, 'cust66@example.com', 0.00, 511111111, 'system', NOW()),
-(100000067, 'Customer 67', '0590000067', '022000067', 2, 'Opposite the hospital', 31.5017, 34.4668, 'cust67@example.com', 0.00, 522222222, 'system', NOW()),
-(100000068, 'Customer 68', '0590000068', '022000068', 3, 'Opposite the school', 31.5326, 35.0998, 'cust68@example.com', 0.00, 533333333, 'system', NOW()),
-(100000069, 'Customer 69', '0590000069', '022000069', 4, 'Opposite the mosque', 32.2211, 35.2544, 'cust69@example.com', 0.00, 544444444, 'system', NOW()),
-(100000070, 'Customer 70', '0590000070', '022000070', 5, 'Opposite the mosque', 31.7054, 35.2024, 'cust70@example.com', 0.00, NULL, 'system', NOW()),
-(100000071, 'Customer 71', '0590000071', '022000071', 1, 'Next to the supermarket', 31.9038, 35.2034, 'cust71@example.com', 0.00, 511111111, 'system', NOW()),
-(100000072, 'Customer 72', '0590000072', '022000072', 2, 'Next to the school', 31.5017, 34.4668, 'cust72@example.com', 0.00, 522222222, 'system', NOW()),
-(100000073, 'Customer 73', '0590000073', '022000073', 3, 'Next to the hospital', 31.5326, 35.0998, 'cust73@example.com', 0.00, 533333333, 'system', NOW()),
-(100000074, 'Customer 74', '0590000074', '022000074', 4, 'Next to the school', 32.2211, 35.2544, 'cust74@example.com', 0.00, 544444444, 'system', NOW()),
-(100000075, 'Customer 75', '0590000075', '022000075', 5, 'Next to the school', 31.7054, 35.2024, 'cust75@example.com', 0.00, NULL, 'system', NOW()),
-(100000076, 'Customer 76', '0590000076', '022000076', 1, 'Behind the hospital', 31.9038, 35.2034, 'cust76@example.com', 0.00, 511111111, 'system', NOW()),
-(100000077, 'Customer 77', '0590000077', '022000077', 2, 'Behind the mosque', 31.5017, 34.4668, 'cust77@example.com', 0.00, 522222222, 'system', NOW()),
-(100000078, 'Customer 78', '0590000078', '022000078', 3, 'Behind the university', 31.5326, 35.0998, 'cust78@example.com', 0.00, 533333333, 'system', NOW()),
-(100000079, 'Customer 79', '0590000079', '022000079', 4, 'Behind the hospital', 32.2211, 35.2544, 'cust79@example.com', 0.00, 544444444, 'system', NOW()),
-(100000080, 'Customer 80', '0590000080', '022000080', 5, 'Behind the hospital', 31.7054, 35.2024, 'cust80@example.com', 0.00, NULL, 'system', NOW());
+(100000001, 'Ahmad Hassan', '0590000001', '022000001', 1, 'Beside Al-Manara Square', 31.9038, 35.2034, 'ahmad.hassan@example.com', 0.00, 511111111, 'system', NOW()),
+(100000002, 'Fatima Ali', '0590000002', '022000002', 2, 'Beside the sea', 31.5017, 34.4668, 'fatima.ali@example.com', 0.00, 522222222, 'system', NOW()),
+(100000003, 'Omar Khalil', '0590000003', '022000003', 3, 'Beside the old city', 31.5326, 35.0998, 'omar.khalil@example.com', 0.00, 533333333, 'system', NOW()),
+(100000004, 'Layla Ibrahim', '0590000004', '022000004', 4, 'Beside the old market', 32.2211, 35.2544, 'layla.ibrahim@example.com', 0.00, 544444444, 'system', NOW()),
+(100000005, 'Yousef Mansour', '0590000005', '022000005', 5, 'Beside the church', 31.7054, 35.2024, 'yousef.mansour@example.com', 0.00, NULL, 'system', NOW()),
+(100000006, 'Nadia Saleh', '0590000006', '022000006', 1, 'Above the pharmacy on Main Street', 31.9038, 35.2034, 'nadia.saleh@example.com', 0.00, 511111111, 'system', NOW()),
+(100000007, 'Tariq Mahmoud', '0590000007', '022000007', 2, 'Above the market', 31.5017, 34.4668, 'tariq.mahmoud@example.com', 0.00, 522222222, 'system', NOW()),
+(100000008, 'Rania Nasser', '0590000008', '022000008', 3, 'Above the market', 31.5326, 35.0998, 'rania.nasser@example.com', 0.00, 533333333, 'system', NOW()),
+(100000009, 'Khalid Abdullah', '0590000009', '022000009', 4, 'Above the soap factory', 32.2211, 35.2544, 'khalid.abdullah@example.com', 0.00, 544444444, 'system', NOW()),
+(100000010, 'Amira Said', '0590000010', '022000010', 5, 'Above the market', 31.7054, 35.2024, 'amira.said@example.com', 0.00, NULL, 'system', NOW()),
+(100000011, 'Mahmoud Habib', '0590000011', '022000011', 1, 'Near the school', 31.9038, 35.2034, 'mahmoud.habib@example.com', 0.00, 511111111, 'system', NOW()),
+(100000012, 'Hiba Ramadan', '0590000012', '022000012', 2, 'Near the port', 31.5017, 34.4668, 'hiba.ramadan@example.com', 0.00, 522222222, 'system', NOW()),
+(100000013, 'Samir Farah', '0590000013', '022000013', 3, 'Near the mosque', 31.5326, 35.0998, 'samir.farah@example.com', 0.00, 533333333, 'system', NOW()),
+(100000014, 'Dina Khoury', '0590000014', '022000014', 4, 'Near the university', 32.2211, 35.2544, 'dina.khoury@example.com', 0.00, 544444444, 'system', NOW()),
+(100000015, 'Walid Jabr', '0590000015', '022000015', 5, 'Near the university', 31.7054, 35.2024, 'walid.jabr@example.com', 0.00, NULL, 'system', NOW()),
+(100000016, 'Sara Qasem', '0590000016', '022000016', 1, 'Opposite the bank', 31.9038, 35.2034, 'sara.qasem@example.com', 0.00, 511111111, 'system', NOW()),
+(100000017, 'Fadi Shammas', '0590000017', '022000017', 2, 'Opposite the hospital', 31.5017, 34.4668, 'fadi.shammas@example.com', 0.00, 522222222, 'system', NOW()),
+(100000018, 'Lina Haddad', '0590000018', '022000018', 3, 'Opposite the school', 31.5326, 35.0998, 'lina.haddad@example.com', 0.00, 533333333, 'system', NOW()),
+(100000019, 'Jamal Azzam', '0590000019', '022000019', 4, 'Opposite the mosque', 32.2211, 35.2544, 'jamal.azzam@example.com', 0.00, 544444444, 'system', NOW()),
+(100000020, 'Maya Daher', '0590000020', '022000020', 5, 'Opposite the mosque', 31.7054, 35.2024, 'maya.daher@example.com', 0.00, NULL, 'system', NOW()),
+(100000021, 'Adel Shehab', '0590000021', '022000021', 1, 'Next to the supermarket', 31.9038, 35.2034, 'adel.shehab@example.com', 0.00, 511111111, 'system', NOW()),
+(100000022, 'Reem Zaki', '0590000022', '022000022', 2, 'Next to the school', 31.5017, 34.4668, 'reem.zaki@example.com', 0.00, 522222222, 'system', NOW()),
+(100000023, 'Marwan Bakir', '0590000023', '022000023', 3, 'Next to the hospital', 31.5326, 35.0998, 'marwan.bakir@example.com', 0.00, 533333333, 'system', NOW()),
+(100000024, 'Nisreen Halabi', '0590000024', '022000024', 4, 'Next to the school', 32.2211, 35.2544, 'nisreen.halabi@example.com', 0.00, 544444444, 'system', NOW()),
+(100000025, 'Basel Abed', '0590000025', '022000025', 5, 'Next to the school', 31.7054, 35.2024, 'basel.abed@example.com', 0.00, NULL, 'system', NOW()),
+(100000026, 'Hala Mustafa', '0590000026', '022000026', 1, 'Behind the hospital', 31.9038, 35.2034, 'hala.mustafa@example.com', 0.00, 511111111, 'system', NOW()),
+(100000027, 'Imad Youssef', '0590000027', '022000027', 2, 'Behind the mosque', 31.5017, 34.4668, 'imad.youssef@example.com', 0.00, 522222222, 'system', NOW()),
+(100000028, 'Mona Sabri', '0590000028', '022000028', 3, 'Behind the university', 31.5326, 35.0998, 'mona.sabri@example.com', 0.00, 533333333, 'system', NOW()),
+(100000029, 'Rami Tawfiq', '0590000029', '022000029', 4, 'Behind the hospital', 32.2211, 35.2544, 'rami.tawfiq@example.com', 0.00, 544444444, 'system', NOW()),
+(100000030, 'Samira Ayyad', '0590000030', '022000030', 5, 'Behind the hospital', 31.7054, 35.2024, 'samira.ayyad@example.com', 0.00, NULL, 'system', NOW()),
+(100000031, 'Karim Najjar', '0590000031', '022000031', 1, 'In front of the park', 31.9038, 35.2034, 'karim.najjar@example.com', 0.00, 511111111, 'system', NOW()),
+(100000032, 'Hanin Sawaf', '0590000032', '022000032', 2, 'In front of the beach', 31.5017, 34.4668, 'hanin.sawaf@example.com', 0.00, 522222222, 'system', NOW()),
+(100000033, 'Ziad Hourani', '0590000033', '022000033', 3, 'In front of the park', 31.5326, 35.0998, 'ziad.hourani@example.com', 0.00, 533333333, 'system', NOW()),
+(100000034, 'Nour Fares', '0590000034', '022000034', 4, 'In front of the park', 32.2211, 35.2544, 'nour.fares@example.com', 0.00, 544444444, 'system', NOW()),
+(100000035, 'Samer Darwish', '0590000035', '022000035', 5, 'In front of the park', 31.7054, 35.2024, 'samer.darwish@example.com', 0.00, NULL, 'system', NOW()),
+(100000036, 'Rana Salah', '0590000036', '022000036', 1, 'Near the university', 31.9038, 35.2034, 'rana.salah@example.com', 0.00, 511111111, 'system', NOW()),
+(100000037, 'Bilal Hamdan', '0590000037', '022000037', 2, 'Near the university', 31.5017, 34.4668, 'bilal.hamdan@example.com', 0.00, 522222222, 'system', NOW()),
+(100000038, 'Sana Ghazi', '0590000038', '022000038', 3, 'Near the pharmacy', 31.5326, 35.0998, 'sana.ghazi@example.com', 0.00, 533333333, 'system', NOW()),
+(100000039, 'Nabil Suleiman', '0590000039', '022000039', 4, 'Near the pharmacy', 32.2211, 35.2544, 'nabil.suleiman@example.com', 0.00, 544444444, 'system', NOW()),
+(100000040, 'Laila Jaber', '0590000040', '022000040', 5, 'Near the pharmacy', 31.7054, 35.2024, 'laila.jaber@example.com', 0.00, NULL, 'system', NOW()),
+(100000041, 'Firas Tamimi', '0590000041', '022000041', 1, 'Above the restaurant', 31.9038, 35.2034, 'firas.tamimi@example.com', 0.00, 511111111, 'system', NOW()),
+(100000042, 'Yasmin Awad', '0590000042', '022000042', 2, 'Above the pharmacy', 31.5017, 34.4668, 'yasmin.awad@example.com', 0.00, 522222222, 'system', NOW()),
+(100000043, 'Tamer Qadi', '0590000043', '022000043', 3, 'Above the restaurant', 31.5326, 35.0998, 'tamer.qadi@example.com', 0.00, 533333333, 'system', NOW()),
+(100000044, 'Salma Rifai', '0590000044', '022000044', 4, 'Above the restaurant', 32.2211, 35.2544, 'salma.rifai@example.com', 0.00, 544444444, 'system', NOW()),
+(100000045, 'Hani Barakat', '0590000045', '022000045', 5, 'Above the restaurant', 31.7054, 35.2024, 'hani.barakat@example.com', 0.00, NULL, 'system', NOW()),
+(100000046, 'Jana Nassar', '0590000046', '022000046', 1, 'Beside the mosque', 31.9038, 35.2034, 'jana.nassar@example.com', 0.00, 511111111, 'system', NOW()),
+(100000047, 'Mazen Khaled', '0590000047', '022000047', 2, 'Beside the supermarket', 31.5017, 34.4668, 'mazen.khaled@example.com', 0.00, 522222222, 'system', NOW()),
+(100000048, 'Dalia Samir', '0590000048', '022000048', 3, 'Beside the bank', 31.5326, 35.0998, 'dalia.samir@example.com', 0.00, 533333333, 'system', NOW()),
+(100000049, 'Munir Shawki', '0590000049', '022000049', 4, 'Beside the bank', 32.2211, 35.2544, 'munir.shawki@example.com', 0.00, 544444444, 'system', NOW()),
+(100000050, 'Ghada Fawzi', '0590000050', '022000050', 5, 'Beside the bank', 31.7054, 35.2024, 'ghada.fawzi@example.com', 0.00, NULL, 'system', NOW()),
+(100000051, 'Issam Hariri', '0590000051', '022000051', 1, 'Beside Al-Manara Square', 31.9038, 35.2034, 'issam.hariri@example.com', 0.00, 511111111, 'system', NOW()),
+(100000052, 'Nada Zahra', '0590000052', '022000052', 2, 'Beside the sea', 31.5017, 34.4668, 'nada.zahra@example.com', 0.00, 522222222, 'system', NOW()),
+(100000053, 'Hassan Badawi', '0590000053', '022000053', 3, 'Beside the old city', 31.5326, 35.0998, 'hassan.badawi@example.com', 0.00, 533333333, 'system', NOW()),
+(100000054, 'Lama Harb', '0590000054', '022000054', 4, 'Beside the old market', 32.2211, 35.2544, 'lama.harb@example.com', 0.00, 544444444, 'system', NOW()),
+(100000055, 'Rashed Sami', '0590000055', '022000055', 5, 'Beside the church', 31.7054, 35.2024, 'rashed.sami@example.com', 0.00, NULL, 'system', NOW()),
+(100000056, 'Suha Mazen', '0590000056', '022000056', 1, 'Above the pharmacy on Main Street', 31.9038, 35.2034, 'suha.mazen@example.com', 0.00, 511111111, 'system', NOW()),
+(100000057, 'Talal Amin', '0590000057', '022000057', 2, 'Above the market', 31.5017, 34.4668, 'talal.amin@example.com', 0.00, 522222222, 'system', NOW()),
+(100000058, 'Rula Jamal', '0590000058', '022000058', 3, 'Above the market', 31.5326, 35.0998, 'rula.jamal@example.com', 0.00, 533333333, 'system', NOW()),
+(100000059, 'Wael Nabil', '0590000059', '022000059', 4, 'Above the soap factory', 32.2211, 35.2544, 'wael.nabil@example.com', 0.00, 544444444, 'system', NOW()),
+(100000060, 'Lamis Hakim', '0590000060', '022000060', 5, 'Above the market', 31.7054, 35.2024, 'lamis.hakim@example.com', 0.00, NULL, 'system', NOW()),
+(100000061, 'Jihad Salem', '0590000061', '022000061', 1, 'Near the school', 31.9038, 35.2034, 'jihad.salem@example.com', 0.00, 511111111, 'system', NOW()),
+(100000062, 'Wafa Khalil', '0590000062', '022000062', 2, 'Near the port', 31.5017, 34.4668, 'wafa.khalil@example.com', 0.00, 522222222, 'system', NOW()),
+(100000063, 'Majid Fouad', '0590000063', '022000063', 3, 'Near the mosque', 31.5326, 35.0998, 'majid.fouad@example.com', 0.00, 533333333, 'system', NOW()),
+(100000064, 'Siham Othman', '0590000064', '022000064', 4, 'Near the university', 32.2211, 35.2544, 'siham.othman@example.com', 0.00, 544444444, 'system', NOW()),
+(100000065, 'Anwar Ghanem', '0590000065', '022000065', 5, 'Near the university', 31.7054, 35.2024, 'anwar.ghanem@example.com', 0.00, NULL, 'system', NOW()),
+(100000066, 'Rawan Taher', '0590000066', '022000066', 1, 'Opposite the bank', 31.9038, 35.2034, 'rawan.taher@example.com', 0.00, 511111111, 'system', NOW()),
+(100000067, 'Bassam Aziz', '0590000067', '022000067', 2, 'Opposite the hospital', 31.5017, 34.4668, 'bassam.aziz@example.com', 0.00, 522222222, 'system', NOW()),
+(100000068, 'Amal Shaker', '0590000068', '022000068', 3, 'Opposite the school', 31.5326, 35.0998, 'amal.shaker@example.com', 0.00, 533333333, 'system', NOW()),
+(100000069, 'Rashid Bassam', '0590000069', '022000069', 4, 'Opposite the mosque', 32.2211, 35.2544, 'rashid.bassam@example.com', 0.00, 544444444, 'system', NOW()),
+(100000070, 'Huda Nadir', '0590000070', '022000070', 5, 'Opposite the mosque', 31.7054, 35.2024, 'huda.nadir@example.com', 0.00, NULL, 'system', NOW()),
+(100000071, 'Salim Maher', '0590000071', '022000071', 1, 'Next to the supermarket', 31.9038, 35.2034, 'salim.maher@example.com', 0.00, 511111111, 'system', NOW()),
+(100000072, 'Rima Fahad', '0590000072', '022000072', 2, 'Next to the school', 31.5017, 34.4668, 'rima.fahad@example.com', 0.00, 522222222, 'system', NOW()),
+(100000073, 'Zaki Lutfi', '0590000073', '022000073', 3, 'Next to the hospital', 31.5326, 35.0998, 'zaki.lutfi@example.com', 0.00, 533333333, 'system', NOW()),
+(100000074, 'Maysa Reda', '0590000074', '022000074', 4, 'Next to the school', 32.2211, 35.2544, 'maysa.reda@example.com', 0.00, 544444444, 'system', NOW()),
+(100000075, 'Adnan Hilal', '0590000075', '022000075', 5, 'Next to the school', 31.7054, 35.2024, 'adnan.hilal@example.com', 0.00, NULL, 'system', NOW()),
+(100000076, 'Soraya Wasim', '0590000076', '022000076', 1, 'Behind the hospital', 31.9038, 35.2034, 'soraya.wasim@example.com', 0.00, 511111111, 'system', NOW()),
+(100000077, 'Emad Jalal', '0590000077', '022000077', 2, 'Behind the mosque', 31.5017, 34.4668, 'emad.jalal@example.com', 0.00, 522222222, 'system', NOW()),
+(100000078, 'Hind Shakir', '0590000078', '022000078', 3, 'Behind the university', 31.5326, 35.0998, 'hind.shakir@example.com', 0.00, 533333333, 'system', NOW()),
+(100000079, 'Jamil Radi', '0590000079', '022000079', 4, 'Behind the hospital', 32.2211, 35.2544, 'jamil.radi@example.com', 0.00, 544444444, 'system', NOW()),
+(100000080, 'Nadia Wahid', '0590000080', '022000080', 5, 'Behind the hospital', 31.7054, 35.2024, 'nadia.wahid@example.com', 0.00, NULL, 'system', NOW());
 
 -- Suppliers (30 total)
 INSERT INTO supplier (supplier_id, name, mobile_number, telephone_number, supplier_city, address, email, creditor_balance, supplier_category_id, last_action_by, last_action_time) VALUES
-(200000001, 'Supplier 1', '0591000001', '022100001', 1, 'Ramallah', 'sup1@example.com', 0.00, 1, 'system', NOW()),
-(200000002, 'Supplier 2', '0591000002', '022100002', 2, 'Gaza', 'sup2@example.com', 0.00, 1, 'system', NOW()),
-(200000003, 'Supplier 3', '0591000003', '022100003', 3, 'Hebron', 'sup3@example.com', 0.00, 1, 'system', NOW()),
-(200000004, 'Supplier 4', '0591000004', '022100004', 4, 'Nablus', 'sup4@example.com', 0.00, 1, 'system', NOW()),
-(200000005, 'Supplier 5', '0591000005', '022100005', 5, 'Bethlehem', 'sup5@example.com', 0.00, 1, 'system', NOW()),
-(200000006, 'Supplier 6', '0591000006', '022100006', 1, 'Ramallah', 'sup6@example.com', 0.00, 2, 'system', NOW()),
-(200000007, 'Supplier 7', '0591000007', '022100007', 2, 'Gaza', 'sup7@example.com', 0.00, 2, 'system', NOW()),
-(200000008, 'Supplier 8', '0591000008', '022100008', 3, 'Hebron', 'sup8@example.com', 0.00, 2, 'system', NOW()),
-(200000009, 'Supplier 9', '0591000009', '022100009', 4, 'Nablus', 'sup9@example.com', 0.00, 2, 'system', NOW()),
-(200000010, 'Supplier 10', '0591000010', '022100010', 5, 'Bethlehem', 'sup10@example.com', 0.00, 2, 'system', NOW()),
-(200000011, 'Supplier 11', '0591000011', '022100011', 1, 'Ramallah', 'sup11@example.com', 0.00, 3, 'system', NOW()),
-(200000012, 'Supplier 12', '0591000012', '022100012', 2, 'Gaza', 'sup12@example.com', 0.00, 3, 'system', NOW()),
-(200000013, 'Supplier 13', '0591000013', '022100013', 3, 'Hebron', 'sup13@example.com', 0.00, 3, 'system', NOW()),
-(200000014, 'Supplier 14', '0591000014', '022100014', 4, 'Nablus', 'sup14@example.com', 0.00, 3, 'system', NOW()),
-(200000015, 'Supplier 15', '0591000015', '022100015', 5, 'Bethlehem', 'sup15@example.com', 0.00, 3, 'system', NOW()),
-(200000016, 'Supplier 16', '0591000016', '022100016', 1, 'Ramallah', 'sup16@example.com', 0.00, 4, 'system', NOW()),
-(200000017, 'Supplier 17', '0591000017', '022100017', 2, 'Gaza', 'sup17@example.com', 0.00, 4, 'system', NOW()),
-(200000018, 'Supplier 18', '0591000018', '022100018', 3, 'Hebron', 'sup18@example.com', 0.00, 4, 'system', NOW()),
-(200000019, 'Supplier 19', '0591000019', '022100019', 4, 'Nablus', 'sup19@example.com', 0.00, 4, 'system', NOW()),
-(200000020, 'Supplier 20', '0591000020', '022100020', 5, 'Bethlehem', 'sup20@example.com', 0.00, 4, 'system', NOW()),
-(200000021, 'Supplier 21', '0591000021', '022100021', 1, 'Ramallah', 'sup21@example.com', 0.00, 5, 'system', NOW()),
-(200000022, 'Supplier 22', '0591000022', '022100022', 2, 'Gaza', 'sup22@example.com', 0.00, 5, 'system', NOW()),
-(200000023, 'Supplier 23', '0591000023', '022100023', 3, 'Hebron', 'sup23@example.com', 0.00, 5, 'system', NOW()),
-(200000024, 'Supplier 24', '0591000024', '022100024', 4, 'Nablus', 'sup24@example.com', 0.00, 5, 'system', NOW()),
-(200000025, 'Supplier 25', '0591000025', '022100025', 5, 'Bethlehem', 'sup25@example.com', 0.00, 5, 'system', NOW()),
-(200000026, 'Supplier 26', '0591000026', '022100026', 1, 'Ramallah', 'sup26@example.com', 0.00, 6, 'system', NOW()),
-(200000027, 'Supplier 27', '0591000027', '022100027', 2, 'Gaza', 'sup27@example.com', 0.00, 6, 'system', NOW()),
-(200000028, 'Supplier 28', '0591000028', '022100028', 3, 'Hebron', 'sup28@example.com', 0.00, 6, 'system', NOW()),
-(200000029, 'Supplier 29', '0591000029', '022100029', 4, 'Nablus', 'sup29@example.com', 0.00, 6, 'system', NOW()),
-(200000030, 'Supplier 30', '0591000030', '022100030', 5, 'Bethlehem', 'sup30@example.com', 0.00, 6, 'system', NOW());
+(200000001, 'Al-Quds Sanitary Co.', '0591000001', '022100001', 1, 'Ramallah', 'info@alquds-sanitary.com', 0.00, 1, 'system', NOW()),
+(200000002, 'Gaza Plumbing Supplies', '0591000002', '022100002', 2, 'Gaza', 'sales@gaza-plumbing.com', 0.00, 1, 'system', NOW()),
+(200000003, 'Hebron Bathroom Center', '0591000003', '022100003', 3, 'Hebron', 'contact@hebron-bathroom.com', 0.00, 1, 'system', NOW()),
+(200000004, 'Nablus Fixtures Ltd.', '0591000004', '022100004', 4, 'Nablus', 'info@nablus-fixtures.com', 0.00, 1, 'system', NOW()),
+(200000005, 'Bethlehem Ceramics', '0591000005', '022100005', 5, 'Bethlehem', 'sales@bethlehem-ceramics.com', 0.00, 1, 'system', NOW()),
+(200000006, 'Modern Bath Trading', '0591000006', '022100006', 1, 'Ramallah', 'info@modernbath.com', 0.00, 2, 'system', NOW()),
+(200000007, 'Mediterranean Sanitaryware', '0591000007', '022100007', 2, 'Gaza', 'contact@med-sanitary.com', 0.00, 2, 'system', NOW()),
+(200000008, 'Elite Bathroom Solutions', '0591000008', '022100008', 3, 'Hebron', 'sales@elite-bathroom.com', 0.00, 2, 'system', NOW()),
+(200000009, 'Premium Plumbing Co.', '0591000009', '022100009', 4, 'Nablus', 'info@premium-plumbing.com', 0.00, 2, 'system', NOW()),
+(200000010, 'Crystal Faucets Wholesale', '0591000010', '022100010', 5, 'Bethlehem', 'orders@crystal-faucets.com', 0.00, 2, 'system', NOW()),
+(200000011, 'Royal Bathroom Accessories', '0591000011', '022100011', 1, 'Ramallah', 'info@royal-bathroom.com', 0.00, 3, 'system', NOW()),
+(200000012, 'Coastal Plumbing Imports', '0591000012', '022100012', 2, 'Gaza', 'sales@coastal-imports.com', 0.00, 3, 'system', NOW()),
+(200000013, 'Heritage Sanitary Trading', '0591000013', '022100013', 3, 'Hebron', 'contact@heritage-sanitary.com', 0.00, 3, 'system', NOW()),
+(200000014, 'Northern Bathroom Depot', '0591000014', '022100014', 4, 'Nablus', 'info@northern-depot.com', 0.00, 3, 'system', NOW()),
+(200000015, 'Classic Plumbing Supplies', '0591000015', '022100015', 5, 'Bethlehem', 'orders@classic-plumbing.com', 0.00, 3, 'system', NOW()),
+(200000016, 'Universal Fixtures Group', '0591000016', '022100016', 1, 'Ramallah', 'sales@universal-fixtures.com', 0.00, 4, 'system', NOW()),
+(200000017, 'Seaport Bathroom Traders', '0591000017', '022100017', 2, 'Gaza', 'info@seaport-traders.com', 0.00, 4, 'system', NOW()),
+(200000018, 'Mountain View Sanitaryware', '0591000018', '022100018', 3, 'Hebron', 'contact@mountainview-sanitary.com', 0.00, 4, 'system', NOW()),
+(200000019, 'Central Plumbing Wholesale', '0591000019', '022100019', 4, 'Nablus', 'sales@central-wholesale.com', 0.00, 4, 'system', NOW()),
+(200000020, 'Starlight Bathroom Co.', '0591000020', '022100020', 5, 'Bethlehem', 'info@starlight-bathroom.com', 0.00, 4, 'system', NOW()),
+(200000021, 'Golden Faucet Distributors', '0591000021', '022100021', 1, 'Ramallah', 'orders@golden-faucet.com', 0.00, 5, 'system', NOW()),
+(200000022, 'Platinum Sanitary Solutions', '0591000022', '022100022', 2, 'Gaza', 'sales@platinum-solutions.com', 0.00, 5, 'system', NOW()),
+(200000023, 'Diamond Bath Imports', '0591000023', '022100023', 3, 'Hebron', 'contact@diamond-imports.com', 0.00, 5, 'system', NOW()),
+(200000024, 'Supreme Plumbing Trading', '0591000024', '022100024', 4, 'Nablus', 'info@supreme-trading.com', 0.00, 5, 'system', NOW()),
+(200000025, 'Excellence Bathroom Center', '0591000025', '022100025', 5, 'Bethlehem', 'sales@excellence-center.com', 0.00, 5, 'system', NOW()),
+(200000026, 'Prestige Sanitary Group', '0591000026', '022100026', 1, 'Ramallah', 'contact@prestige-group.com', 0.00, 6, 'system', NOW()),
+(200000027, 'Horizon Bathroom Supplies', '0591000027', '022100027', 2, 'Gaza', 'info@horizon-supplies.com', 0.00, 6, 'system', NOW()),
+(200000028, 'Legacy Plumbing Traders', '0591000028', '022100028', 3, 'Hebron', 'sales@legacy-traders.com', 0.00, 6, 'system', NOW()),
+(200000029, 'Premier Fixtures Import', '0591000029', '022100029', 4, 'Nablus', 'orders@premier-import.com', 0.00, 6, 'system', NOW()),
+(200000030, 'Crown Bathroom Wholesale', '0591000030', '022100030', 5, 'Bethlehem', 'contact@crown-wholesale.com', 0.00, 6, 'system', NOW());
 
 -- Note: supplier_category_id assumed 1, but need to insert categories first? Wait, schema has supplier_category, but not inserted yet. For demo, assume insert later or set to 1.
 
--- User accounts
-INSERT INTO user_account_accountant (accountant_id, password, added_by, added_time, is_active, profile_image) VALUES
-(111111111, '1234', 'system', NOW(), 'yes', '');
-
-INSERT INTO user_account_storage_manager (storage_manager_id, password, added_by, added_time, is_active, profile_image) VALUES
-(211111111, '1234', 'system', NOW(), 'yes', '');
-
-INSERT INTO user_account_storage_staff (storage_staff_id, password, added_by, added_time, is_active, profile_image) VALUES
-(311111111, '1234', 'system', NOW(), 'yes', ''),
-(322222222, '1234', 'system', NOW(), 'yes', ''),
-(333333333, '1234', 'system', NOW(), 'yes', ''),
-(344444444, '1234', 'system', NOW(), 'yes', ''),
-(355555555, '1234', 'system', NOW(), 'yes', ''),
-(366666666, '1234', 'system', NOW(), 'yes', ''),
-(377777777, '1234', 'system', NOW(), 'yes', ''),
-(388888888, '1234', 'system', NOW(), 'yes', ''),
-(399999999, '1234', 'system', NOW(), 'yes', '');
-
-INSERT INTO user_account_delivery_driver (delivery_driver_id, password, added_by, added_time, is_active, profile_image) VALUES
-(411111111, '1234', 'system', NOW(), 'yes', ''),
-(422222222, '1234', 'system', NOW(), 'yes', ''),
-(433333333, '1234', 'system', NOW(), 'yes', ''),
-(444444444, '1234', 'system', NOW(), 'yes', '');
-
-INSERT INTO user_account_sales_rep (sales_rep_id, password, added_by, added_time, is_active, profile_image) VALUES
-(511111111, '1234', 'system', NOW(), 'yes', ''),
-(522222222, '1234', 'system', NOW(), 'yes', ''),
-(533333333, '1234', 'system', NOW(), 'yes', ''),
-(544444444, '1234', 'system', NOW(), 'yes', ''),
-(555555555, '1234', 'system', NOW(), 'yes', '');
-
-INSERT INTO user_account_customer (customer_id, password, is_active, added_by, added_time, profile_image) VALUES
-(100000005, '1234', 'yes', 'system', NOW(), ''),
-(100000010, '1234', 'yes', 'system', NOW(), ''),
-(100000015, '1234', 'yes', 'system', NOW(), ''),
-(100000020, '1234', 'yes', 'system', NOW(), ''),
-(100000025, '1234', 'yes', 'system', NOW(), ''),
-(100000030, '1234', 'yes', 'system', NOW(), ''),
-(100000035, '1234', 'yes', 'system', NOW(), ''),
-(100000040, '1234', 'yes', 'system', NOW(), ''),
-(100000045, '1234', 'yes', 'system', NOW(), ''),
-(100000050, '1234', 'yes', 'system', NOW(), ''),
-(100000055, '1234', 'yes', 'system', NOW(), ''),
-(100000060, '1234', 'yes', 'system', NOW(), ''),
-(100000065, '1234', 'yes', 'system', NOW(), ''),
-(100000070, '1234', 'yes', 'system', NOW(), ''),
-(100000075, '1234', 'yes', 'system', NOW(), ''),
-(100000080, '1234', 'yes', 'system', NOW(), '');
-
-INSERT INTO user_account_supplier (supplier_id, password, is_active, added_by, added_time, profile_image) VALUES
-(200000001, '1234', 'yes', 'system', NOW(), ''),
-(200000002, '1234', 'yes', 'system', NOW(), ''),
-(200000003, '1234', 'yes', 'system', NOW(), ''),
-(200000004, '1234', 'yes', 'system', NOW(), ''),
-(200000005, '1234', 'yes', 'system', NOW(), ''),
-(200000006, '1234', 'yes', 'system', NOW(), ''),
-(200000007, '1234', 'yes', 'system', NOW(), ''),
-(200000008, '1234', 'yes', 'system', NOW(), ''),
-(200000009, '1234', 'yes', 'system', NOW(), ''),
-(200000010, '1234', 'yes', 'system', NOW(), ''),
-(200000011, '1234', 'yes', 'system', NOW(), ''),
-(200000012, '1234', 'yes', 'system', NOW(), ''),
-(200000013, '1234', 'yes', 'system', NOW(), ''),
-(200000014, '1234', 'yes', 'system', NOW(), ''),
-(200000015, '1234', 'yes', 'system', NOW(), ''),
-(200000016, '1234', 'yes', 'system', NOW(), ''),
-(200000017, '1234', 'yes', 'system', NOW(), ''),
-(200000018, '1234', 'yes', 'system', NOW(), ''),
-(200000019, '1234', 'yes', 'system', NOW(), ''),
-(200000020, '1234', 'yes', 'system', NOW(), ''),
-(200000021, '1234', 'yes', 'system', NOW(), ''),
-(200000022, '1234', 'yes', 'system', NOW(), ''),
-(200000023, '1234', 'yes', 'system', NOW(), ''),
-(200000024, '1234', 'yes', 'system', NOW(), ''),
-(200000025, '1234', 'yes', 'system', NOW(), ''),
-(200000026, '1234', 'yes', 'system', NOW(), ''),
-(200000027, '1234', 'yes', 'system', NOW(), ''),
-(200000028, '1234', 'yes', 'system', NOW(), ''),
-(200000029, '1234', 'yes', 'system', NOW(), ''),
-(200000030, '1234', 'yes', 'system', NOW(), '');
 
 -- Units
-INSERT INTO unit (unit_name) VALUES
-('pcs'),
-('cm'),
-('weight');
+-- Units
+INSERT INTO unit (unit_id, unit_name) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'pcs'),
+(2, 'cm'),
+(3, 'weight');
 
 -- Product categories
-INSERT INTO product_category (name, last_action_by, last_action_time) VALUES
-('Toilets', 'system', NOW()),
-('Sinks', 'system', NOW()),
-('Faucets', 'system', NOW()),
-('Showers', 'system', NOW()),
-('Bathtubs', 'system', NOW()),
-('Accessories', 'system', NOW());
+INSERT INTO product_category (product_category_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Toilets', 'system', NOW()),
+(2, 'Sinks', 'system', NOW()),
+(3, 'Faucets', 'system', NOW()),
+(4, 'Showers', 'system', NOW()),
+(5, 'Bathtubs', 'system', NOW()),
+(6, 'Accessories', 'system', NOW());
 
 -- Brands
-INSERT INTO brand (name, last_action_by, last_action_time) VALUES
-('Kohler', 'system', NOW()),
-('Toto', 'system', NOW()),
-('American Standard', 'system', NOW()),
-('Moen', 'system', NOW()),
-('Delta', 'system', NOW()),
-('Grohe', 'system', NOW()),
-('Hansgrohe', 'system', NOW()),
-('Roca', 'system', NOW()),
-('Villeroy & Boch', 'system', NOW()),
-('Duravit', 'system', NOW());
+INSERT INTO brand (brand_id, name, last_action_by, last_action_time) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Kohler', 'system', NOW()),
+(2, 'Toto', 'system', NOW()),
+(3, 'American Standard', 'system', NOW()),
+(4, 'Moen', 'system', NOW()),
+(5, 'Delta', 'system', NOW()),
+(6, 'Grohe', 'system', NOW()),
+(7, 'Hansgrohe', 'system', NOW()),
+(8, 'Roca', 'system', NOW()),
+(9, 'Villeroy & Boch', 'system', NOW()),
+(10, 'Duravit', 'system', NOW());
 
 -- Products
-INSERT INTO product (category_id, name, brand_id, wholesale_price, selling_price, minimum_profit_percent, unit_id, is_active, last_action_by, last_action_time, total_quantity, product_image, minimum_stock, description) VALUES
+INSERT INTO product (category_id, name, brand_id, wholesale_price, selling_price, minimum_profit_percent, unit_id, is_active, last_action_by, last_action_time, total_quantity, product_image, minimum_stock) VALUES
 -- Toilets (category 1) - Higher minimum stock
-(1, 'Cimarron Comfort Height Toilet', 1, 150.00, 200.00, 12.00, 1, true, 'system', NOW(), 0, '', 10, 'Comfort height two-piece toilet with elongated bowl, powerful flushing, and quiet close seat'),
-(1, 'Drake Two-Piece Toilet', 2, 160.00, 220.00, 11.50, 1, true, 'system', NOW(), 0, '', 8, 'Two-piece toilet with Tornado Flush technology and CEFIONTECT ceramic glaze'),
-(1, 'Cadet 3 Flowise Toilet', 3, 140.00, 190.00, 13.00, 1, true, 'system', NOW(), 0, '', 12, 'One-piece toilet with 3-inch flush valve and EverClean surface'),
-(1, 'One-Piece Toilet 6392', 4, 170.00, 230.00, 10.50, 1, true, 'system', NOW(), 0, '', 9, 'One-piece toilet with high-efficiency flushing and soft-close seat'),
-(1, 'Wall-Hung Toilet 75746', 5, 180.00, 250.00, 11.00, 1, true, 'system', NOW(), 0, '', 8, 'Wall-hung toilet with concealed tank and dual flush capability'),
-(1, 'Floor-Standing Toilet 38728', 6, 155.00, 210.00, 12.50, 1, true, 'system', NOW(), 0, '', 11, 'Floor-standing toilet with Grohe SilentFlush and QuickRelease seat'),
-(1, 'Compact Toilet 041001', 7, 145.00, 195.00, 13.50, 1, true, 'system', NOW(), 0, '', 10, 'Compact toilet with Hansgrohe technology and soft-close lid'),
-(1, 'Wall-Hung Toilet The Gap', 8, 175.00, 240.00, 11.50, 1, true, 'system', NOW(), 0, '', 9, 'Wall-hung toilet with Roca design and dual flush system'),
-(1, 'One-Piece Toilet Subway', 9, 165.00, 225.00, 12.00, 1, true, 'system', NOW(), 0, '', 10, 'One-piece toilet with Villeroy & Boch quality and ceramic surface'),
-(1, 'Wall-Hung Toilet Starck 3', 10, 185.00, 260.00, 10.00, 1, true, 'system', NOW(), 0, '', 8, 'Wall-hung toilet designed by Philippe Starck with Duravit engineering'),
+(1, 'Cimarron Comfort Height Toilet', 1, 150.00, 200.00, 12.00, 1, true, 'system', NOW(), 0, '', 10),
+(1, 'Drake Two-Piece Toilet', 2, 160.00, 220.00, 11.50, 1, true, 'system', NOW(), 0, '', 8),
+(1, 'Cadet 3 Flowise Toilet', 3, 140.00, 190.00, 13.00, 1, true, 'system', NOW(), 0, '', 12),
+(1, 'One-Piece Toilet 6392', 4, 170.00, 230.00, 10.50, 1, true, 'system', NOW(), 0, '', 9),
+(1, 'Wall-Hung Toilet 75746', 5, 180.00, 250.00, 11.00, 1, true, 'system', NOW(), 0, '', 8),
+(1, 'Floor-Standing Toilet 38728', 6, 155.00, 210.00, 12.50, 1, true, 'system', NOW(), 0, '', 11),
+(1, 'Compact Toilet 041001', 7, 145.00, 195.00, 13.50, 1, true, 'system', NOW(), 0, '', 10),
+(1, 'Wall-Hung Toilet The Gap', 8, 175.00, 240.00, 11.50, 1, true, 'system', NOW(), 0, '', 9),
+(1, 'One-Piece Toilet Subway', 9, 165.00, 225.00, 12.00, 1, true, 'system', NOW(), 0, '', 10),
+(1, 'Wall-Hung Toilet Starck 3', 10, 185.00, 260.00, 10.00, 1, true, 'system', NOW(), 0, '', 8),
 -- Sinks (category 2)
-(2, 'Memoirs Pedestal Sink', 1, 120.00, 160.00, 11.00, 1, true, 'system', NOW(), 0, '', 8, 'Pedestal sink with classic styling and vitreous china construction'),
-(2, 'Undermount Sink LT307', 2, 130.00, 170.00, 10.50, 1, true, 'system', NOW(), 0, '', 7, 'Undermount sink with CEFIONTECT glaze and rectangular design'),
-(2, 'Drop-In Sink Town Square', 3, 110.00, 150.00, 12.50, 1, true, 'system', NOW(), 0, '', 9, 'Drop-in sink with EverClean surface and versatile installation'),
-(2, 'Single Bowl Sink 9000', 4, 125.00, 165.00, 11.50, 1, true, 'system', NOW(), 0, '', 8, 'Single bowl sink with stainless steel construction and undermount option'),
-(2, 'Vessel Sink 75747', 5, 135.00, 180.00, 11.00, 1, true, 'system', NOW(), 0, '', 6, 'Vessel sink with above-counter installation and modern design'),
-(2, 'Wall-Mount Sink 31359', 6, 115.00, 155.00, 13.00, 1, true, 'system', NOW(), 0, '', 10, 'Wall-mount sink with Grohe technology and durable finish'),
-(2, 'Corner Sink 041002', 7, 140.00, 185.00, 10.00, 1, true, 'system', NOW(), 0, '', 7, 'Corner sink with Hansgrohe quality and space-saving design'),
-(2, 'Countertop Sink Debba', 8, 105.00, 145.00, 12.00, 1, true, 'system', NOW(), 0, '', 8, 'Countertop sink with Roca design and ceramic material'),
-(2, 'Undermount Sink Finion', 9, 150.00, 200.00, 11.00, 1, true, 'system', NOW(), 0, '', 6, 'Undermount sink with Villeroy & Boch craftsmanship'),
-(2, 'Vessel Sink Vero', 10, 125.00, 170.00, 12.50, 1, true, 'system', NOW(), 0, '', 9, 'Vessel sink with Duravit quality and contemporary styling'),
+(2, 'Memoirs Pedestal Sink', 1, 120.00, 160.00, 11.00, 1, true, 'system', NOW(), 0, '', 8),
+(2, 'Undermount Sink LT307', 2, 130.00, 170.00, 10.50, 1, true, 'system', NOW(), 0, '', 7),
+(2, 'Drop-In Sink Town Square', 3, 110.00, 150.00, 12.50, 1, true, 'system', NOW(), 0, '', 9),
+(2, 'Single Bowl Sink 9000', 4, 125.00, 165.00, 11.50, 1, true, 'system', NOW(), 0, '', 8),
+(2, 'Vessel Sink 75747', 5, 135.00, 180.00, 11.00, 1, true, 'system', NOW(), 0, '', 6),
+(2, 'Wall-Mount Sink 31359', 6, 115.00, 155.00, 13.00, 1, true, 'system', NOW(), 0, '', 10),
+(2, 'Corner Sink 041002', 7, 140.00, 185.00, 10.00, 1, true, 'system', NOW(), 0, '', 7),
+(2, 'Countertop Sink Debba', 8, 105.00, 145.00, 12.00, 1, true, 'system', NOW(), 0, '', 8),
+(2, 'Undermount Sink Finion', 9, 150.00, 200.00, 11.00, 1, true, 'system', NOW(), 0, '', 6),
+(2, 'Vessel Sink Vero', 10, 125.00, 170.00, 12.50, 1, true, 'system', NOW(), 0, '', 9),
 -- Faucets (category 3)
-(3, 'Forte Single Handle Faucet', 1, 80.00, 110.00, 12.50, 1, true, 'system', NOW(), 0, '', 6, 'Single handle faucet with KOHLER technology and ceramic disc valves'),
-(3, 'Touchless Faucet TLG01', 2, 90.00, 120.00, 11.00, 1, true, 'system', NOW(), 0, '', 5, 'Touchless faucet with TOTO sensor technology and water-saving design'),
-(3, 'Two Handle Faucet 7022', 3, 70.00, 100.00, 14.00, 1, true, 'system', NOW(), 0, '', 7, 'Two handle faucet with American Standard quality and traditional style'),
-(3, 'Pull-Out Faucet 7594', 4, 85.00, 115.00, 12.00, 1, true, 'system', NOW(), 0, '', 6, 'Pull-out faucet with Moen technology and spray function'),
-(3, 'Single Handle Faucet 9178', 5, 75.00, 105.00, 13.00, 1, true, 'system', NOW(), 0, '', 8, 'Single handle faucet with Delta design and diamond seal technology'),
-(3, 'Wall-Mount Faucet 20159', 6, 95.00, 125.00, 10.50, 1, true, 'system', NOW(), 0, '', 5, 'Wall-mount faucet with Grohe quality and solid brass construction'),
-(3, 'Deck-Mount Faucet 041003', 7, 65.00, 95.00, 14.50, 1, true, 'system', NOW(), 0, '', 7, 'Deck-mount faucet with Hansgrohe engineering and durable finish'),
-(3, 'Single Lever Faucet Gap', 8, 100.00, 130.00, 9.50, 1, true, 'system', NOW(), 0, '', 6, 'Single lever faucet with Roca design and ceramic cartridge'),
-(3, 'Two Handle Faucet Subway', 9, 85.00, 115.00, 12.50, 1, true, 'system', NOW(), 0, '', 8, 'Two handle faucet with Villeroy & Boch quality and classic styling'),
-(3, 'Sensor Faucet Starck', 10, 110.00, 140.00, 10.00, 1, true, 'system', NOW(), 0, '', 5, 'Sensor faucet designed by Philippe Starck with Duravit technology'),
+(3, 'Forte Single Handle Faucet', 1, 80.00, 110.00, 12.50, 1, true, 'system', NOW(), 0, '', 6),
+(3, 'Touchless Faucet TLG01', 2, 90.00, 120.00, 11.00, 1, true, 'system', NOW(), 0, '', 5),
+(3, 'Two Handle Faucet 7022', 3, 70.00, 100.00, 14.00, 1, true, 'system', NOW(), 0, '', 7),
+(3, 'Pull-Out Faucet 7594', 4, 85.00, 115.00, 12.00, 1, true, 'system', NOW(), 0, '', 6),
+(3, 'Single Handle Faucet 9178', 5, 75.00, 105.00, 13.00, 1, true, 'system', NOW(), 0, '', 8),
+(3, 'Wall-Mount Faucet 20159', 6, 95.00, 125.00, 10.50, 1, true, 'system', NOW(), 0, '', 5),
+(3, 'Deck-Mount Faucet 041003', 7, 65.00, 95.00, 14.50, 1, true, 'system', NOW(), 0, '', 7),
+(3, 'Single Lever Faucet Gap', 8, 100.00, 130.00, 9.50, 1, true, 'system', NOW(), 0, '', 6),
+(3, 'Two Handle Faucet Subway', 9, 85.00, 115.00, 12.50, 1, true, 'system', NOW(), 0, '', 8),
+(3, 'Sensor Faucet Starck', 10, 110.00, 140.00, 10.00, 1, true, 'system', NOW(), 0, '', 5),
 -- Showers (category 4)
-(4, 'Awaken Showerhead', 1, 60.00, 85.00, 13.50, 1, true, 'system', NOW(), 0, '', 5, 'Rainfall showerhead with KOHLER design and Katalyst air-induction spray'),
-(4, 'Rainfall Shower TS300', 2, 70.00, 95.00, 12.50, 1, true, 'system', NOW(), 0, '', 6, 'Rainfall shower with TOTO technology and wide spray pattern'),
-(4, 'Handheld Shower 1660', 3, 50.00, 75.00, 15.00, 1, true, 'system', NOW(), 0, '', 7, 'Handheld shower with American Standard quality and adjustable spray'),
-(4, 'Fixed Showerhead 26008', 4, 55.00, 80.00, 14.00, 1, true, 'system', NOW(), 0, '', 6, 'Fixed showerhead with Moen technology and self-cleaning nozzles'),
-(4, 'Adjustable Shower 52652', 5, 65.00, 90.00, 12.00, 1, true, 'system', NOW(), 0, '', 5, 'Adjustable shower with Delta design and Touch-Clean spray holes'),
-(4, 'Ceiling Mount Shower 27461', 6, 75.00, 100.00, 11.00, 1, true, 'system', NOW(), 0, '', 4, 'Ceiling mount shower with Grohe quality and DreamSpray technology'),
-(4, 'Wall Bar Shower 041004', 7, 45.00, 70.00, 15.50, 1, true, 'system', NOW(), 0, '', 7, 'Wall bar shower with Hansgrohe engineering and adjustable height'),
-(4, 'Thermostatic Shower Victoria', 8, 80.00, 105.00, 10.50, 1, true, 'system', NOW(), 0, '', 5, 'Thermostatic shower with Roca technology and temperature control'),
-(4, 'Rain Shower Subway', 9, 70.00, 95.00, 12.50, 1, true, 'system', NOW(), 0, '', 6, 'Rain shower with Villeroy & Boch design and ceramic surface'),
-(4, 'Wall-Mount Shower C.1', 10, 85.00, 110.00, 9.50, 1, true, 'system', NOW(), 0, '', 4, 'Wall-mount shower designed by Philippe Starck with Duravit quality'),
+(4, 'Awaken Showerhead', 1, 60.00, 85.00, 13.50, 1, true, 'system', NOW(), 0, '', 5),
+(4, 'Rainfall Shower TS300', 2, 70.00, 95.00, 12.50, 1, true, 'system', NOW(), 0, '', 6),
+(4, 'Handheld Shower 1660', 3, 50.00, 75.00, 15.00, 1, true, 'system', NOW(), 0, '', 7),
+(4, 'Fixed Showerhead 26008', 4, 55.00, 80.00, 14.00, 1, true, 'system', NOW(), 0, '', 6),
+(4, 'Adjustable Shower 52652', 5, 65.00, 90.00, 12.00, 1, true, 'system', NOW(), 0, '', 5),
+(4, 'Ceiling Mount Shower 27461', 6, 75.00, 100.00, 11.00, 1, true, 'system', NOW(), 0, '', 4),
+(4, 'Wall Bar Shower 041004', 7, 45.00, 70.00, 15.50, 1, true, 'system', NOW(), 0, '', 7),
+(4, 'Thermostatic Shower Victoria', 8, 80.00, 105.00, 10.50, 1, true, 'system', NOW(), 0, '', 5),
+(4, 'Rain Shower Subway', 9, 70.00, 95.00, 12.50, 1, true, 'system', NOW(), 0, '', 6),
+(4, 'Wall-Mount Shower C.1', 10, 85.00, 110.00, 9.50, 1, true, 'system', NOW(), 0, '', 4),
 -- Bathtubs (category 5) - Lower minimum stock
-(5, 'Archer Bathtub', 1, 300.00, 400.00, 11.00, 1, true, 'system', NOW(), 0, '', 4, 'Acrylic bathtub with integral apron and lumbar support'),
-(5, 'Soaking Tub A355', 2, 320.00, 420.00, 10.50, 1, true, 'system', NOW(), 0, '', 3, 'Soaking tub with TOTO quality and deep bathing well'),
-(5, 'Whirlpool Tub Evolution', 3, 350.00, 450.00, 9.00, 1, true, 'system', NOW(), 0, '', 5, 'Whirlpool tub with American Standard technology and massage jets'),
-(5, 'Freestanding Tub 1234', 4, 280.00, 380.00, 12.50, 1, true, 'system', NOW(), 0, '', 4, 'Freestanding tub with Moen design and solid construction'),
-(5, 'Corner Tub 5678', 5, 310.00, 410.00, 11.50, 1, true, 'system', NOW(), 0, '', 3, 'Corner tub with Delta quality and space-efficient design'),
-(5, 'Drop-In Tub 7890', 6, 290.00, 390.00, 13.00, 1, true, 'system', NOW(), 0, '', 4, 'Drop-in tub with Grohe technology and durable finish'),
-(5, 'Alcove Tub 041005', 7, 330.00, 430.00, 10.00, 1, true, 'system', NOW(), 0, '', 5, 'Alcove tub with Hansgrohe engineering and standard sizing'),
-(5, 'Freestanding Tub Meridian', 8, 340.00, 440.00, 9.50, 1, true, 'system', NOW(), 0, '', 3, 'Freestanding tub with Roca design and elegant curves'),
-(5, 'Undermount Tub Architectura', 9, 360.00, 460.00, 10.00, 1, true, 'system', NOW(), 0, '', 4, 'Undermount tub with Villeroy & Boch quality and seamless design'),
-(5, 'Bathtub Happy D.2', 10, 370.00, 470.00, 8.50, 1, true, 'system', NOW(), 0, '', 3, 'Bathtub designed by Philippe Starck with Duravit innovation'),
+(5, 'Archer Bathtub', 1, 300.00, 400.00, 11.00, 1, true, 'system', NOW(), 0, '', 4),
+(5, 'Soaking Tub A355', 2, 320.00, 420.00, 10.50, 1, true, 'system', NOW(), 0, '', 3),
+(5, 'Whirlpool Tub Evolution', 3, 350.00, 450.00, 9.00, 1, true, 'system', NOW(), 0, '', 5),
+(5, 'Freestanding Tub 1234', 4, 280.00, 380.00, 12.50, 1, true, 'system', NOW(), 0, '', 4),
+(5, 'Corner Tub 5678', 5, 310.00, 410.00, 11.50, 1, true, 'system', NOW(), 0, '', 3),
+(5, 'Drop-In Tub 7890', 6, 290.00, 390.00, 13.00, 1, true, 'system', NOW(), 0, '', 4),
+(5, 'Alcove Tub 041005', 7, 330.00, 430.00, 10.00, 1, true, 'system', NOW(), 0, '', 5),
+(5, 'Freestanding Tub Meridian', 8, 340.00, 440.00, 9.50, 1, true, 'system', NOW(), 0, '', 3),
+(5, 'Undermount Tub Architectura', 9, 360.00, 460.00, 10.00, 1, true, 'system', NOW(), 0, '', 4),
+(5, 'Bathtub Happy D.2', 10, 370.00, 470.00, 8.50, 1, true, 'system', NOW(), 0, '', 3),
 -- Accessories (category 6) - Higher minimum stock for small items
-(6, 'Toilet Paper Holder', 1, 20.00, 30.00, 15.00, 1, true, 'system', NOW(), 0, '', 15, 'Toilet paper holder with KOHLER design and concealed mounting'),
-(6, 'Grab Bar THU932', 2, 25.00, 35.00, 13.00, 1, true, 'system', NOW(), 0, '', 12, 'Grab bar with TOTO quality and secure installation'),
-(6, 'Towel Ring 738', 3, 15.00, 25.00, 16.50, 1, true, 'system', NOW(), 0, '', 18, 'Towel ring with American Standard finish and sturdy construction'),
-(6, 'Soap Dispenser YB2803', 4, 18.00, 28.00, 14.50, 1, true, 'system', NOW(), 0, '', 16, 'Soap dispenser with Moen technology and easy refill'),
-(6, 'Shower Curtain Rod RP50781', 5, 22.00, 32.00, 14.00, 1, true, 'system', NOW(), 0, '', 14, 'Shower curtain rod with Delta design and adjustable length'),
-(6, 'Toilet Brush 40534', 6, 12.00, 22.00, 16.00, 1, true, 'system', NOW(), 0, '', 20, 'Toilet brush with Grohe quality and holder included'),
-(6, 'Robe Hook 041006', 7, 10.00, 20.00, 17.00, 1, true, 'system', NOW(), 0, '', 22, 'Robe hook with Hansgrohe finish and secure mounting'),
-(6, 'Bathroom Mirror 1234', 8, 40.00, 50.00, 12.50, 1, true, 'system', NOW(), 0, '', 10, 'Bathroom mirror with Roca design and fog-free option'),
-(6, 'Bathroom Shelf 5678', 9, 35.00, 45.00, 12.00, 1, true, 'system', NOW(), 0, '', 12, 'Bathroom shelf with Villeroy & Boch quality and storage space'),
-(6, 'Wastebasket 7890', 10, 30.00, 40.00, 11.00, 1, true, 'system', NOW(), 0, '', 14, 'Wastebasket with Duravit design and odor control'),
+(6, 'Toilet Paper Holder', 1, 20.00, 30.00, 15.00, 1, true, 'system', NOW(), 0, '', 15),
+(6, 'Grab Bar THU932', 2, 25.00, 35.00, 13.00, 1, true, 'system', NOW(), 0, '', 12),
+(6, 'Towel Ring 738', 3, 15.00, 25.00, 16.50, 1, true, 'system', NOW(), 0, '', 18),
+(6, 'Soap Dispenser YB2803', 4, 18.00, 28.00, 14.50, 1, true, 'system', NOW(), 0, '', 16),
+(6, 'Shower Curtain Rod RP50781', 5, 22.00, 32.00, 14.00, 1, true, 'system', NOW(), 0, '', 14),
+(6, 'Toilet Brush 40534', 6, 12.00, 22.00, 16.00, 1, true, 'system', NOW(), 0, '', 20),
+(6, 'Robe Hook 041006', 7, 10.00, 20.00, 17.00, 1, true, 'system', NOW(), 0, '', 22),
+(6, 'Bathroom Mirror 1234', 8, 40.00, 50.00, 12.50, 1, true, 'system', NOW(), 0, '', 10),
+(6, 'Bathroom Shelf 5678', 9, 35.00, 45.00, 12.00, 1, true, 'system', NOW(), 0, '', 12),
+(6, 'Wastebasket 7890', 10, 30.00, 40.00, 11.00, 1, true, 'system', NOW(), 0, '', 14),
 -- Additional toilets
-(1, 'Cimarron Elongated Toilet', 1, 155.00, 205.00, 11.50, 1, true, 'system', NOW(), 0, '', 9, 'Elongated two-piece toilet with comfort height and powerful flush'),
-(1, 'One-Piece Toilet CST744', 2, 165.00, 215.00, 10.00, 1, true, 'system', NOW(), 0, '', 8, 'One-piece toilet with Tornado Flush and CEFIONTECT protection'),
-(1, 'Champion 4 Toilet', 3, 145.00, 195.00, 13.50, 1, true, 'system', NOW(), 0, '', 11, 'High-efficiency toilet with 4-inch flush valve and EverClean surface'),
-(1, 'Two-Piece Toilet 6393', 4, 175.00, 225.00, 9.50, 1, true, 'system', NOW(), 0, '', 10, 'Two-piece toilet with high-efficiency flushing and soft-close seat'),
-(1, 'Bidet Toilet 75748', 5, 185.00, 235.00, 10.50, 1, true, 'system', NOW(), 0, '', 7, 'Toilet with integrated bidet and warm water cleansing'),
-(1, 'Dual Flush Toilet 38729', 6, 160.00, 210.00, 11.50, 1, true, 'system', NOW(), 0, '', 9, 'Dual flush toilet with Grohe technology and water conservation'),
-(1, 'Rimless Toilet 041007', 7, 150.00, 200.00, 12.50, 1, true, 'system', NOW(), 0, '', 10, 'Rimless toilet with Hansgrohe design and easy cleaning'),
-(1, 'In-Tank Toilet', 8, 170.00, 220.00, 10.00, 1, true, 'system', NOW(), 0, '', 8, 'Toilet with in-tank system and Roca quality construction'),
-(1, 'Omnia Toilet', 9, 180.00, 230.00, 9.00, 1, true, 'system', NOW(), 0, '', 9, 'Universal toilet with Villeroy & Boch design and accessibility features'),
-(1, 'D-Code Toilet', 10, 190.00, 240.00, 8.00, 1, true, 'system', NOW(), 0, '', 8, 'Designer toilet with Duravit technology and minimalist design');
+(1, 'Cimarron Elongated Toilet', 1, 155.00, 205.00, 11.50, 1, true, 'system', NOW(), 0, '', 9),
+(1, 'One-Piece Toilet CST744', 2, 165.00, 215.00, 10.00, 1, true, 'system', NOW(), 0, '', 8),
+(1, 'Champion 4 Toilet', 3, 145.00, 195.00, 13.50, 1, true, 'system', NOW(), 0, '', 11),
+(1, 'Two-Piece Toilet 6393', 4, 175.00, 225.00, 9.50, 1, true, 'system', NOW(), 0, '', 10),
+(1, 'Bidet Toilet 75748', 5, 185.00, 235.00, 10.50, 1, true, 'system', NOW(), 0, '', 7),
+(1, 'Dual Flush Toilet 38729', 6, 160.00, 210.00, 11.50, 1, true, 'system', NOW(), 0, '', 9),
+(1, 'Rimless Toilet 041007', 7, 150.00, 200.00, 12.50, 1, true, 'system', NOW(), 0, '', 10),
+(1, 'In-Tank Toilet', 8, 170.00, 220.00, 10.00, 1, true, 'system', NOW(), 0, '', 8),
+(1, 'Omnia Toilet', 9, 180.00, 230.00, 9.00, 1, true, 'system', NOW(), 0, '', 9),
+(1, 'D-Code Toilet', 10, 190.00, 240.00, 8.00, 1, true, 'system', NOW(), 0, '', 8);
 
 -- Batches
 INSERT INTO batch (product_id, supplier_id, quantity, inventory_id, storage_location_descrption, last_action_by, last_action_time, expiry_date, production_date) VALUES
@@ -617,22 +690,27 @@ SET total_quantity = COALESCE((
 ), 0);
 
 -- Banks
-INSERT INTO banks (bank_name) VALUES
-('Palestine Islamic Bank'),
-('Bank of Palestine'),
-('Arab Bank');
+-- Banks
+INSERT INTO banks (bank_id, bank_name) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 'Palestine Islamic Bank'),
+(2, 'Bank of Palestine'),
+(3, 'Arab Bank');
 
 -- Branches
-INSERT INTO branches (bank_id, address) VALUES
-(1, 'Ramallah Main Branch - Al-Manara Street'),
-(1, 'Nablus Branch - Rafidia'),
-(1, 'Gaza Branch - Rimal'),
-(2, 'Ramallah Central Branch - Al-Bireh'),
-(2, 'Hebron Branch - Old City'),
-(2, 'Bethlehem Branch - Manger Square'),
-(3, 'Ramallah Commercial Branch - City Center'),
-(3, 'Jenin Branch - Downtown'),
-(3, 'Tulkarm Branch - Industrial Area');
+INSERT INTO branches (branch_id, bank_id, address) 
+OVERRIDING SYSTEM VALUE 
+VALUES
+(1, 1, 'Ramallah Main Branch - Al-Manara Street'),
+(2, 1, 'Nablus Branch - Rafidia'),
+(3, 1, 'Gaza Branch - Rimal'),
+(4, 2, 'Ramallah Central Branch - Al-Bireh'),
+(5, 2, 'Hebron Branch - Old City'),
+(6, 2, 'Bethlehem Branch - Manger Square'),
+(7, 3, 'Ramallah Commercial Branch - City Center'),
+(8, 3, 'Jenin Branch - Downtown'),
+(9, 3, 'Tulkarm Branch - Industrial Area');
 
 -- Customer checks (100 total: 60 Cashed, 40 Returned)
 INSERT INTO customer_checks (customer_id, bank_id, bank_branch, check_image, exchange_rate, exchange_date, status, description, last_action_by, last_action_time, endorsed_to, endorsed_description) VALUES
@@ -1028,66 +1106,66 @@ INSERT INTO incoming_payment (customer_id, amount, date_time, description, last_
 (100000019, 125.00, '2024-07-05 16:25:00', 'Plumbing supplies', 'system', NOW(), 'cash', NULL),
 (100000020, 200.00, '2024-07-10 13:40:00', 'Complete setup', 'system', NOW(), 'cash', NULL),
 -- Check payments (100) - referencing customer_checks
-(100000001, 150.00, '2022-01-15 10:30:00', 'Payment for toilet order', 'system', NOW(), 'check', 100000001),
-(100000002, 220.00, '2022-01-20 14:15:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 100000002),
-(100000003, 190.00, '2022-01-25 09:45:00', 'Sink and faucet purchase', 'system', NOW(), 'check', 100000003),
-(100000004, 230.00, '2022-02-01 11:20:00', 'Shower system payment', 'system', NOW(), 'check', 100000004),
-(100000005, 400.00, '2022-02-05 16:30:00', 'Bathtub delivery payment', 'system', NOW(), 'check', 100000005),
-(100000006, 30.00, '2022-02-10 13:45:00', 'Accessories order payment', 'system', NOW(), 'check', 100000006),
-(100000007, 240.00, '2022-02-15 10:15:00', 'Complete bathroom set', 'system', NOW(), 'check', 100000007),
-(100000008, 125.00, '2022-02-20 15:30:00', 'Renovation materials', 'system', NOW(), 'check', 100000008),
-(100000009, 45.00, '2022-02-25 12:00:00', 'Plumbing supplies', 'system', NOW(), 'check', 100000009),
-(100000010, 200.00, '2022-03-01 14:20:00', 'Monthly payment', 'system', NOW(), 'check', 100000010),
-(100000011, 350.00, '2022-03-05 11:45:00', 'Construction project', 'system', NOW(), 'check', 100000011),
-(100000012, 85.00, '2022-03-10 16:15:00', 'Building supplies', 'system', NOW(), 'check', 100000012),
-(100000013, 175.00, '2022-03-15 09:30:00', 'Home improvement', 'system', NOW(), 'check', 100000013),
-(100000014, 240.00, '2022-03-20 13:45:00', 'Bathroom renovation', 'system', NOW(), 'check', 100000014),
-(100000015, 155.00, '2022-03-25 10:20:00', 'Plumbing work', 'system', NOW(), 'check', 100000015),
-(100000016, 95.00, '2022-03-30 15:10:00', 'Fixture installation', 'system', NOW(), 'check', 100000016),
-(100000017, 200.00, '2022-04-05 11:30:00', 'Complete setup', 'system', NOW(), 'check', 100000017),
-(100000018, 260.00, '2022-04-10 14:45:00', 'Bathroom project', 'system', NOW(), 'check', 100000018),
-(100000019, 205.00, '2022-04-15 09:15:00', 'Renovation payment', 'system', NOW(), 'check', 100000019),
-(100000020, 160.00, '2022-04-20 16:30:00', 'Materials purchase', 'system', NOW(), 'check', 100000020),
-(100000021, 350.00, '2022-04-25 12:45:00', 'Construction supplies', 'system', NOW(), 'check', 100000021),
-(100000022, 175.00, '2022-05-01 10:20:00', 'Home renovation', 'system', NOW(), 'check', 100000022),
-(100000023, 240.00, '2022-05-05 15:35:00', 'Bathroom fixtures', 'system', NOW(), 'check', 100000023),
-(100000024, 185.00, '2022-05-10 11:50:00', 'Plumbing materials', 'system', NOW(), 'check', 100000024),
-(100000025, 400.00, '2022-05-15 14:10:00', 'Complete bathroom', 'system', NOW(), 'check', 100000025),
-(100000026, 125.00, '2022-05-20 09:25:00', 'Renovation project', 'system', NOW(), 'check', 100000026),
-(100000027, 85.00, '2022-05-25 16:40:00', 'Building supplies', 'system', NOW(), 'check', 100000027),
-(100000028, 110.00, '2022-06-01 13:15:00', 'Fixture purchase', 'system', NOW(), 'check', 100000028),
-(100000029, 225.00, '2022-06-05 10:30:00', 'Bathroom set', 'system', NOW(), 'check', 100000029),
-(100000030, 195.00, '2022-06-10 15:45:00', 'Plumbing work', 'system', NOW(), 'check', 100000030),
-(100000031, 175.00, '2022-06-15 12:20:00', 'Home improvement', 'system', NOW(), 'check', 100000031),
-(100000032, 240.00, '2022-06-20 09:35:00', 'Renovation materials', 'system', NOW(), 'check', 100000032),
-(100000033, 230.00, '2022-06-25 14:50:00', 'Construction project', 'system', NOW(), 'check', 100000033),
-(100000034, 195.00, '2022-07-01 11:05:00', 'Bathroom fixtures', 'system', NOW(), 'check', 100000034),
-(100000035, 125.00, '2022-07-05 16:20:00', 'Plumbing supplies', 'system', NOW(), 'check', 100000035),
-(100000036, 200.00, '2022-07-10 13:40:00', 'Complete setup', 'system', NOW(), 'check', 100000036),
-(100000037, 205.00, '2022-07-15 10:55:00', 'Renovation payment', 'system', NOW(), 'check', 100000037),
-(100000038, 160.00, '2022-07-20 15:10:00', 'Materials purchase', 'system', NOW(), 'check', 100000038),
-(100000039, 350.00, '2022-07-25 12:25:00', 'Construction supplies', 'system', NOW(), 'check', 100000039),
-(100000040, 175.00, '2022-08-01 09:40:00', 'Home renovation', 'system', NOW(), 'check', 100000040),
-(100000041, 240.00, '2022-08-05 14:55:00', 'Bathroom fixtures', 'system', NOW(), 'check', 100000041),
-(100000042, 185.00, '2022-08-10 11:10:00', 'Plumbing materials', 'system', NOW(), 'check', 100000042),
-(100000043, 400.00, '2022-08-15 16:25:00', 'Complete bathroom', 'system', NOW(), 'check', 100000043),
-(100000044, 125.00, '2022-08-20 13:40:00', 'Renovation project', 'system', NOW(), 'check', 100000044),
-(100000045, 85.00, '2022-08-25 10:55:00', 'Building supplies', 'system', NOW(), 'check', 100000045),
-(100000046, 110.00, '2022-09-01 15:10:00', 'Fixture purchase', 'system', NOW(), 'check', 100000046),
-(100000047, 225.00, '2022-09-05 12:25:00', 'Bathroom set', 'system', NOW(), 'check', 100000047),
-(100000048, 195.00, '2022-09-10 09:40:00', 'Plumbing work', 'system', NOW(), 'check', 100000048),
-(100000049, 175.00, '2022-09-15 14:55:00', 'Home improvement', 'system', NOW(), 'check', 100000049),
-(100000050, 240.00, '2022-09-20 11:10:00', 'Renovation materials', 'system', NOW(), 'check', 100000050),
-(100000051, 230.00, '2022-09-25 16:25:00', 'Construction project', 'system', NOW(), 'check', 100000051),
-(100000052, 195.00, '2022-10-01 13:40:00', 'Bathroom fixtures', 'system', NOW(), 'check', 100000052),
-(100000053, 125.00, '2022-10-05 10:55:00', 'Plumbing supplies', 'system', NOW(), 'check', 100000053),
-(100000054, 200.00, '2022-10-10 15:10:00', 'Complete setup', 'system', NOW(), 'check', 100000054),
-(100000055, 205.00, '2022-10-15 12:25:00', 'Renovation payment', 'system', NOW(), 'check', 100000055),
-(100000056, 160.00, '2022-10-20 09:40:00', 'Materials purchase', 'system', NOW(), 'check', 100000056),
-(100000057, 350.00, '2022-10-25 14:55:00', 'Construction supplies', 'system', NOW(), 'check', 100000057),
-(100000058, 175.00, '2022-11-01 11:10:00', 'Home renovation', 'system', NOW(), 'check', 100000058),
-(100000059, 240.00, '2022-11-05 16:25:00', 'Bathroom fixtures', 'system', NOW(), 'check', 100000059),
-(100000060, 185.00, '2022-11-10 13:40:00', 'Plumbing materials', 'system', NOW(), 'check', 100000060),
+(100000001, 150.00, '2022-01-15 10:30:00', 'Payment for toilet order', 'system', NOW(), 'check', 1),
+(100000002, 220.00, '2022-01-20 14:15:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 2),
+(100000003, 190.00, '2022-01-25 09:45:00', 'Sink and faucet purchase', 'system', NOW(), 'check', 3),
+(100000004, 230.00, '2022-02-01 11:20:00', 'Shower system payment', 'system', NOW(), 'check', 4),
+(100000005, 400.00, '2022-02-05 16:30:00', 'Bathtub delivery payment', 'system', NOW(), 'check', 5),
+(100000006, 30.00, '2022-02-10 13:45:00', 'Accessories order payment', 'system', NOW(), 'check', 6),
+(100000007, 240.00, '2022-02-15 10:15:00', 'Complete bathroom set', 'system', NOW(), 'check', 7),
+(100000008, 125.00, '2022-02-20 15:30:00', 'Renovation materials', 'system', NOW(), 'check', 8),
+(100000009, 45.00, '2022-02-25 12:00:00', 'Plumbing supplies', 'system', NOW(), 'check', 9),
+(100000010, 200.00, '2022-03-01 14:20:00', 'Monthly payment', 'system', NOW(), 'check', 10),
+(100000011, 350.00, '2022-03-05 11:45:00', 'Construction project', 'system', NOW(), 'check', 11),
+(100000012, 85.00, '2022-03-10 16:15:00', 'Building supplies', 'system', NOW(), 'check', 12),
+(100000013, 175.00, '2022-03-15 09:30:00', 'Home improvement', 'system', NOW(), 'check', 13),
+(100000014, 240.00, '2022-03-20 13:45:00', 'Bathroom renovation', 'system', NOW(), 'check', 14),
+(100000015, 155.00, '2022-03-25 10:20:00', 'Plumbing work', 'system', NOW(), 'check', 15),
+(100000016, 95.00, '2022-03-30 15:10:00', 'Fixture installation', 'system', NOW(), 'check', 16),
+(100000017, 200.00, '2022-04-05 11:30:00', 'Complete setup', 'system', NOW(), 'check', 17),
+(100000018, 260.00, '2022-04-10 14:45:00', 'Bathroom project', 'system', NOW(), 'check', 18),
+(100000019, 205.00, '2022-04-15 09:15:00', 'Renovation payment', 'system', NOW(), 'check', 19),
+(100000020, 160.00, '2022-04-20 16:30:00', 'Materials purchase', 'system', NOW(), 'check', 20),
+(100000021, 350.00, '2022-04-25 12:45:00', 'Construction supplies', 'system', NOW(), 'check', 21),
+(100000022, 175.00, '2022-05-01 10:20:00', 'Home renovation', 'system', NOW(), 'check', 22),
+(100000023, 240.00, '2022-05-05 15:35:00', 'Bathroom fixtures', 'system', NOW(), 'check', 23),
+(100000024, 185.00, '2022-05-10 11:50:00', 'Plumbing materials', 'system', NOW(), 'check', 24),
+(100000025, 400.00, '2022-05-15 14:10:00', 'Complete bathroom', 'system', NOW(), 'check', 25),
+(100000026, 125.00, '2022-05-20 09:25:00', 'Renovation project', 'system', NOW(), 'check', 26),
+(100000027, 85.00, '2022-05-25 16:40:00', 'Building supplies', 'system', NOW(), 'check', 27),
+(100000028, 110.00, '2022-06-01 13:15:00', 'Fixture purchase', 'system', NOW(), 'check', 28),
+(100000029, 225.00, '2022-06-05 10:30:00', 'Bathroom set', 'system', NOW(), 'check', 29),
+(100000030, 195.00, '2022-06-10 15:45:00', 'Plumbing work', 'system', NOW(), 'check', 30),
+(100000031, 175.00, '2022-06-15 12:20:00', 'Home improvement', 'system', NOW(), 'check', 31),
+(100000032, 240.00, '2022-06-20 09:35:00', 'Renovation materials', 'system', NOW(), 'check', 32),
+(100000033, 230.00, '2022-06-25 14:50:00', 'Construction project', 'system', NOW(), 'check', 33),
+(100000034, 195.00, '2022-07-01 11:05:00', 'Bathroom fixtures', 'system', NOW(), 'check', 34),
+(100000035, 125.00, '2022-07-05 16:20:00', 'Plumbing supplies', 'system', NOW(), 'check', 35),
+(100000036, 200.00, '2022-07-10 13:40:00', 'Complete setup', 'system', NOW(), 'check', 36),
+(100000037, 205.00, '2022-07-15 10:55:00', 'Renovation payment', 'system', NOW(), 'check', 37),
+(100000038, 160.00, '2022-07-20 15:10:00', 'Materials purchase', 'system', NOW(), 'check', 38),
+(100000039, 350.00, '2022-07-25 12:25:00', 'Construction supplies', 'system', NOW(), 'check', 39),
+(100000040, 175.00, '2022-08-01 09:40:00', 'Home renovation', 'system', NOW(), 'check', 40),
+(100000041, 240.00, '2022-08-05 14:55:00', 'Bathroom fixtures', 'system', NOW(), 'check', 41),
+(100000042, 185.00, '2022-08-10 11:10:00', 'Plumbing materials', 'system', NOW(), 'check', 42),
+(100000043, 400.00, '2022-08-15 16:25:00', 'Complete bathroom', 'system', NOW(), 'check', 43),
+(100000044, 125.00, '2022-08-20 13:40:00', 'Renovation project', 'system', NOW(), 'check', 44),
+(100000045, 85.00, '2022-08-25 10:55:00', 'Building supplies', 'system', NOW(), 'check', 45),
+(100000046, 110.00, '2022-09-01 15:10:00', 'Fixture purchase', 'system', NOW(), 'check', 46),
+(100000047, 225.00, '2022-09-05 12:25:00', 'Bathroom set', 'system', NOW(), 'check', 47),
+(100000048, 195.00, '2022-09-10 09:40:00', 'Plumbing work', 'system', NOW(), 'check', 48),
+(100000049, 175.00, '2022-09-15 14:55:00', 'Home improvement', 'system', NOW(), 'check', 49),
+(100000050, 240.00, '2022-09-20 11:10:00', 'Renovation materials', 'system', NOW(), 'check', 50),
+(100000051, 230.00, '2022-09-25 16:25:00', 'Construction project', 'system', NOW(), 'check', 51),
+(100000052, 195.00, '2022-10-01 13:40:00', 'Bathroom fixtures', 'system', NOW(), 'check', 52),
+(100000053, 125.00, '2022-10-05 10:55:00', 'Plumbing supplies', 'system', NOW(), 'check', 53),
+(100000054, 200.00, '2022-10-10 15:10:00', 'Complete setup', 'system', NOW(), 'check', 54),
+(100000055, 205.00, '2022-10-15 12:25:00', 'Renovation payment', 'system', NOW(), 'check', 55),
+(100000056, 160.00, '2022-10-20 09:40:00', 'Materials purchase', 'system', NOW(), 'check', 56),
+(100000057, 350.00, '2022-10-25 14:55:00', 'Construction supplies', 'system', NOW(), 'check', 57),
+(100000058, 175.00, '2022-11-01 11:10:00', 'Home renovation', 'system', NOW(), 'check', 58),
+(100000059, 240.00, '2022-11-05 16:25:00', 'Bathroom fixtures', 'system', NOW(), 'check', 59),
+(100000060, 185.00, '2022-11-10 13:40:00', 'Plumbing materials', 'system', NOW(), 'check', 60),
 (100000061, 400.00, '2022-11-15 10:55:00', 'Complete bathroom', 'system', NOW(), 'cash', NULL),
 (100000062, 125.00, '2022-11-20 15:10:00', 'Renovation project', 'system', NOW(), 'cash', NULL),
 (100000063, 85.00, '2022-11-25 12:25:00', 'Building supplies', 'system', NOW(), 'cash', NULL),
@@ -1313,66 +1391,66 @@ INSERT INTO outgoing_payment (supplier_id, amount, date_time, description, last_
 (200000029, 125.00, '2024-07-05 16:25:00', 'Plumbing supplies payment', 'system', NOW(), 'cash', NULL),
 (200000030, 200.00, '2024-07-10 13:40:00', 'Complete setup payment', 'system', NOW(), 'cash', NULL),
 -- Check payments (100) - referencing supplier_checks
-(200000001, 150.00, '2022-01-15 10:30:00', 'Supplier payment for materials', 'system', NOW(), 'check', 200000001),
-(200000002, 220.00, '2022-01-20 14:15:00', 'Bathroom supplies payment', 'system', NOW(), 'check', 200000002),
-(200000003, 190.00, '2022-01-25 09:45:00', 'Plumbing equipment purchase', 'system', NOW(), 'check', 200000003),
-(200000004, 230.00, '2022-02-01 11:20:00', 'Construction materials', 'system', NOW(), 'check', 200000004),
-(200000005, 400.00, '2022-02-05 16:30:00', 'Bulk order payment', 'system', NOW(), 'check', 200000005),
-(200000006, 30.00, '2022-02-10 13:45:00', 'Small parts order', 'system', NOW(), 'check', 200000006),
-(200000007, 240.00, '2022-02-15 10:15:00', 'Monthly supplier payment', 'system', NOW(), 'check', 200000007),
-(200000008, 125.00, '2022-02-20 15:30:00', 'Fixtures delivery', 'system', NOW(), 'check', 200000008),
-(200000009, 45.00, '2022-02-25 12:00:00', 'Accessories purchase', 'system', NOW(), 'check', 200000009),
-(200000010, 200.00, '2022-03-01 14:20:00', 'Regular payment', 'system', NOW(), 'check', 200000010),
-(200000011, 350.00, '2022-03-05 11:45:00', 'Large construction order', 'system', NOW(), 'check', 200000011),
-(200000012, 85.00, '2022-03-10 16:15:00', 'Building materials', 'system', NOW(), 'check', 200000012),
-(200000013, 175.00, '2022-03-15 09:30:00', 'Home renovation supplies', 'system', NOW(), 'check', 200000013),
-(200000014, 240.00, '2022-03-20 13:45:00', 'Bathroom renovation materials', 'system', NOW(), 'check', 200000014),
-(200000015, 155.00, '2022-03-25 10:20:00', 'Plumbing work supplies', 'system', NOW(), 'check', 200000015),
-(200000016, 95.00, '2022-03-30 15:10:00', 'Fixture installation parts', 'system', NOW(), 'check', 200000016),
-(200000017, 200.00, '2022-04-05 11:30:00', 'Complete setup materials', 'system', NOW(), 'check', 200000017),
-(200000018, 260.00, '2022-04-10 14:45:00', 'Bathroom project supplies', 'system', NOW(), 'check', 200000018),
-(200000019, 205.00, '2022-04-15 09:15:00', 'Renovation materials payment', 'system', NOW(), 'check', 200000019),
-(200000020, 160.00, '2022-04-20 16:30:00', 'Materials purchase payment', 'system', NOW(), 'check', 200000020),
-(200000021, 350.00, '2022-04-25 12:45:00', 'Construction supplies payment', 'system', NOW(), 'check', 200000021),
-(200000022, 175.00, '2022-05-01 10:20:00', 'Home renovation payment', 'system', NOW(), 'check', 200000022),
-(200000023, 240.00, '2022-05-05 15:35:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 200000023),
-(200000024, 185.00, '2022-05-10 11:50:00', 'Plumbing materials payment', 'system', NOW(), 'check', 200000024),
-(200000025, 400.00, '2022-05-15 14:10:00', 'Complete bathroom payment', 'system', NOW(), 'check', 200000025),
-(200000026, 125.00, '2022-05-20 09:25:00', 'Renovation project payment', 'system', NOW(), 'check', 200000026),
-(200000027, 85.00, '2022-05-25 16:40:00', 'Building supplies payment', 'system', NOW(), 'check', 200000027),
-(200000028, 110.00, '2022-06-01 13:15:00', 'Fixture purchase payment', 'system', NOW(), 'check', 200000028),
-(200000029, 225.00, '2022-06-05 10:30:00', 'Bathroom set payment', 'system', NOW(), 'check', 200000029),
-(200000030, 195.00, '2022-06-10 15:45:00', 'Plumbing work payment', 'system', NOW(), 'check', 200000030),
-(200000001, 175.00, '2022-06-15 12:20:00', 'Home improvement payment', 'system', NOW(), 'check', 200000031),
-(200000002, 240.00, '2022-06-20 09:35:00', 'Renovation materials payment', 'system', NOW(), 'check', 200000032),
-(200000003, 230.00, '2022-06-25 14:50:00', 'Construction project payment', 'system', NOW(), 'check', 200000033),
-(200000004, 195.00, '2022-07-01 11:05:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 200000034),
-(200000005, 125.00, '2022-07-05 16:20:00', 'Plumbing supplies payment', 'system', NOW(), 'check', 200000035),
-(200000006, 200.00, '2022-07-10 13:40:00', 'Complete setup payment', 'system', NOW(), 'check', 200000036),
-(200000007, 205.00, '2022-07-15 10:55:00', 'Renovation payment', 'system', NOW(), 'check', 200000037),
-(200000008, 160.00, '2022-07-20 15:10:00', 'Materials purchase payment', 'system', NOW(), 'check', 200000038),
-(200000009, 350.00, '2022-07-25 12:25:00', 'Construction supplies payment', 'system', NOW(), 'check', 200000039),
-(200000010, 175.00, '2022-08-01 09:40:00', 'Home renovation payment', 'system', NOW(), 'check', 200000040),
-(200000011, 240.00, '2022-08-05 14:55:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 200000041),
-(200000012, 185.00, '2022-08-10 11:10:00', 'Plumbing materials payment', 'system', NOW(), 'check', 200000042),
-(200000013, 400.00, '2022-08-15 16:25:00', 'Complete bathroom payment', 'system', NOW(), 'check', 200000043),
-(200000014, 125.00, '2022-08-20 13:40:00', 'Renovation project payment', 'system', NOW(), 'check', 200000044),
-(200000015, 85.00, '2022-08-25 10:55:00', 'Building supplies payment', 'system', NOW(), 'check', 200000045),
-(200000016, 110.00, '2022-09-01 15:10:00', 'Fixture purchase payment', 'system', NOW(), 'check', 200000046),
-(200000017, 225.00, '2022-09-05 12:25:00', 'Bathroom set payment', 'system', NOW(), 'check', 200000047),
-(200000018, 195.00, '2022-09-10 09:40:00', 'Plumbing work payment', 'system', NOW(), 'check', 200000048),
-(200000019, 175.00, '2022-09-15 14:55:00', 'Home improvement payment', 'system', NOW(), 'check', 200000049),
-(200000020, 240.00, '2022-09-20 11:10:00', 'Renovation materials payment', 'system', NOW(), 'check', 200000050),
-(200000021, 230.00, '2022-09-25 16:25:00', 'Construction project payment', 'system', NOW(), 'check', 200000051),
-(200000022, 195.00, '2022-10-01 13:40:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 200000052),
-(200000023, 125.00, '2022-10-05 10:55:00', 'Plumbing supplies payment', 'system', NOW(), 'check', 200000053),
-(200000024, 200.00, '2022-10-10 15:10:00', 'Complete setup payment', 'system', NOW(), 'check', 200000054),
-(200000025, 205.00, '2022-10-15 12:25:00', 'Renovation payment', 'system', NOW(), 'check', 200000055),
-(200000026, 160.00, '2022-10-20 09:40:00', 'Materials purchase payment', 'system', NOW(), 'check', 200000056),
-(200000027, 350.00, '2022-10-25 14:55:00', 'Construction supplies payment', 'system', NOW(), 'check', 200000057),
-(200000028, 175.00, '2022-11-01 11:10:00', 'Home renovation payment', 'system', NOW(), 'check', 200000058),
-(200000029, 240.00, '2022-11-05 16:25:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 200000059),
-(200000030, 185.00, '2022-11-10 13:40:00', 'Plumbing materials payment', 'system', NOW(), 'check', 200000060),
+(200000001, 150.00, '2022-01-15 10:30:00', 'Supplier payment for materials', 'system', NOW(), 'check', 1),
+(200000002, 220.00, '2022-01-20 14:15:00', 'Bathroom supplies payment', 'system', NOW(), 'check', 2),
+(200000003, 190.00, '2022-01-25 09:45:00', 'Plumbing equipment purchase', 'system', NOW(), 'check', 3),
+(200000004, 230.00, '2022-02-01 11:20:00', 'Construction materials', 'system', NOW(), 'check', 4),
+(200000005, 400.00, '2022-02-05 16:30:00', 'Bulk order payment', 'system', NOW(), 'check', 5),
+(200000006, 30.00, '2022-02-10 13:45:00', 'Small parts order', 'system', NOW(), 'check', 6),
+(200000007, 240.00, '2022-02-15 10:15:00', 'Monthly supplier payment', 'system', NOW(), 'check', 7),
+(200000008, 125.00, '2022-02-20 15:30:00', 'Fixtures delivery', 'system', NOW(), 'check', 8),
+(200000009, 45.00, '2022-02-25 12:00:00', 'Accessories purchase', 'system', NOW(), 'check', 9),
+(200000010, 200.00, '2022-03-01 14:20:00', 'Regular payment', 'system', NOW(), 'check', 10),
+(200000011, 350.00, '2022-03-05 11:45:00', 'Large construction order', 'system', NOW(), 'check', 11),
+(200000012, 85.00, '2022-03-10 16:15:00', 'Building materials', 'system', NOW(), 'check', 12),
+(200000013, 175.00, '2022-03-15 09:30:00', 'Home renovation supplies', 'system', NOW(), 'check', 13),
+(200000014, 240.00, '2022-03-20 13:45:00', 'Bathroom renovation materials', 'system', NOW(), 'check', 14),
+(200000015, 155.00, '2022-03-25 10:20:00', 'Plumbing work supplies', 'system', NOW(), 'check', 15),
+(200000016, 95.00, '2022-03-30 15:10:00', 'Fixture installation parts', 'system', NOW(), 'check', 16),
+(200000017, 200.00, '2022-04-05 11:30:00', 'Complete setup materials', 'system', NOW(), 'check', 17),
+(200000018, 260.00, '2022-04-10 14:45:00', 'Bathroom project supplies', 'system', NOW(), 'check', 18),
+(200000019, 205.00, '2022-04-15 09:15:00', 'Renovation materials payment', 'system', NOW(), 'check', 19),
+(200000020, 160.00, '2022-04-20 16:30:00', 'Materials purchase payment', 'system', NOW(), 'check', 20),
+(200000021, 350.00, '2022-04-25 12:45:00', 'Construction supplies payment', 'system', NOW(), 'check', 21),
+(200000022, 175.00, '2022-05-01 10:20:00', 'Home renovation payment', 'system', NOW(), 'check', 22),
+(200000023, 240.00, '2022-05-05 15:35:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 23),
+(200000024, 185.00, '2022-05-10 11:50:00', 'Plumbing materials payment', 'system', NOW(), 'check', 24),
+(200000025, 400.00, '2022-05-15 14:10:00', 'Complete bathroom payment', 'system', NOW(), 'check', 25),
+(200000026, 125.00, '2022-05-20 09:25:00', 'Renovation project payment', 'system', NOW(), 'check', 26),
+(200000027, 85.00, '2022-05-25 16:40:00', 'Building supplies payment', 'system', NOW(), 'check', 27),
+(200000028, 110.00, '2022-06-01 13:15:00', 'Fixture purchase payment', 'system', NOW(), 'check', 28),
+(200000029, 225.00, '2022-06-05 10:30:00', 'Bathroom set payment', 'system', NOW(), 'check', 29),
+(200000030, 195.00, '2022-06-10 15:45:00', 'Plumbing work payment', 'system', NOW(), 'check', 30),
+(200000001, 175.00, '2022-06-15 12:20:00', 'Home improvement payment', 'system', NOW(), 'check', 31),
+(200000002, 240.00, '2022-06-20 09:35:00', 'Renovation materials payment', 'system', NOW(), 'check', 32),
+(200000003, 230.00, '2022-06-25 14:50:00', 'Construction project payment', 'system', NOW(), 'check', 33),
+(200000004, 195.00, '2022-07-01 11:05:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 34),
+(200000005, 125.00, '2022-07-05 16:20:00', 'Plumbing supplies payment', 'system', NOW(), 'check', 35),
+(200000006, 200.00, '2022-07-10 13:40:00', 'Complete setup payment', 'system', NOW(), 'check', 36),
+(200000007, 205.00, '2022-07-15 10:55:00', 'Renovation payment', 'system', NOW(), 'check', 37),
+(200000008, 160.00, '2022-07-20 15:10:00', 'Materials purchase payment', 'system', NOW(), 'check', 38),
+(200000009, 350.00, '2022-07-25 12:25:00', 'Construction supplies payment', 'system', NOW(), 'check', 39),
+(200000010, 175.00, '2022-08-01 09:40:00', 'Home renovation payment', 'system', NOW(), 'check', 40),
+(200000011, 240.00, '2022-08-05 14:55:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 41),
+(200000012, 185.00, '2022-08-10 11:10:00', 'Plumbing materials payment', 'system', NOW(), 'check', 42),
+(200000013, 400.00, '2022-08-15 16:25:00', 'Complete bathroom payment', 'system', NOW(), 'check', 43),
+(200000014, 125.00, '2022-08-20 13:40:00', 'Renovation project payment', 'system', NOW(), 'check', 44),
+(200000015, 85.00, '2022-08-25 10:55:00', 'Building supplies payment', 'system', NOW(), 'check', 45),
+(200000016, 110.00, '2022-09-01 15:10:00', 'Fixture purchase payment', 'system', NOW(), 'check', 46),
+(200000017, 225.00, '2022-09-05 12:25:00', 'Bathroom set payment', 'system', NOW(), 'check', 47),
+(200000018, 195.00, '2022-09-10 09:40:00', 'Plumbing work payment', 'system', NOW(), 'check', 48),
+(200000019, 175.00, '2022-09-15 14:55:00', 'Home improvement payment', 'system', NOW(), 'check', 49),
+(200000020, 240.00, '2022-09-20 11:10:00', 'Renovation materials payment', 'system', NOW(), 'check', 50),
+(200000021, 230.00, '2022-09-25 16:25:00', 'Construction project payment', 'system', NOW(), 'check', 51),
+(200000022, 195.00, '2022-10-01 13:40:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 52),
+(200000023, 125.00, '2022-10-05 10:55:00', 'Plumbing supplies payment', 'system', NOW(), 'check', 53),
+(200000024, 200.00, '2022-10-10 15:10:00', 'Complete setup payment', 'system', NOW(), 'check', 54),
+(200000025, 205.00, '2022-10-15 12:25:00', 'Renovation payment', 'system', NOW(), 'check', 55),
+(200000026, 160.00, '2022-10-20 09:40:00', 'Materials purchase payment', 'system', NOW(), 'check', 56),
+(200000027, 350.00, '2022-10-25 14:55:00', 'Construction supplies payment', 'system', NOW(), 'check', 57),
+(200000028, 175.00, '2022-11-01 11:10:00', 'Home renovation payment', 'system', NOW(), 'check', 58),
+(200000029, 240.00, '2022-11-05 16:25:00', 'Bathroom fixtures payment', 'system', NOW(), 'check', 59),
+(200000030, 185.00, '2022-11-10 13:40:00', 'Plumbing materials payment', 'system', NOW(), 'check', 60),
 (200000001, 400.00, '2022-11-15 10:55:00', 'Complete bathroom payment', 'system', NOW(), 'cash', NULL),
 (200000002, 125.00, '2022-11-20 15:10:00', 'Renovation project payment', 'system', NOW(), 'cash', NULL),
 (200000003, 85.00, '2022-11-25 12:25:00', 'Building supplies payment', 'system', NOW(), 'cash', NULL),
