@@ -1,3 +1,4 @@
 {
-    "github.copilot.nextEditSuggestions.enabled": false
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "cmake.sourceDirectory": "C:/Graduation/linux"
 }

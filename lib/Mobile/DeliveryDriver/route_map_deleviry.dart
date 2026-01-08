@@ -212,14 +212,16 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                 initialZoom: 13.0,
                 minZoom: 8.0,
                 maxZoom: 18.0,
-                bounds: LatLngBounds(
-                  LatLng(31.45, 34.70),
-                  LatLng(32.60, 35.70),
+                initialCameraFit: CameraFit.bounds(
+                  bounds: LatLngBounds(
+                    LatLng(31.45, 34.70),
+                    LatLng(32.60, 35.70),
+                  ),
+                  padding: const EdgeInsets.all(50.0),
                 ),
-                boundsOptions: const FitBoundsOptions(
-                  padding: EdgeInsets.all(50.0),
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
-                interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 onMapReady: () {
                   // Fit route when map is ready
                   Future.delayed(const Duration(milliseconds: 300), () {
@@ -266,7 +268,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                             width: 70,
                             height: 70,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3).withOpacity(0.15),
+                              color: const Color(0xFF2196F3).withValues(alpha: 0.15),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -279,7 +281,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   blurRadius: 8,
                                   spreadRadius: 1,
                                 ),
@@ -320,7 +322,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 6,
                           ),
                         ],
@@ -349,7 +351,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -381,7 +383,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -414,7 +416,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -485,10 +487,10 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                  color: const Color(0xFF2D2D2D).withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFFB7A447).withOpacity(0.3),
+                    color: const Color(0xFFB7A447).withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -552,7 +554,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF67CD67).withOpacity(0.5),
+                                  color: const Color(0xFF67CD67).withValues(alpha: 0.5),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),

@@ -167,9 +167,9 @@ void initState() {
             (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
             (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
           );
-          _mapController.move(center, _mapController.zoom);
+            _mapController.move(center, _mapController.camera.zoom);
         } else {
-          _mapController.move(newDriverLoc, _mapController.zoom);
+            _mapController.move(newDriverLoc, _mapController.camera.zoom);
         }
       }
     }
@@ -335,7 +335,7 @@ void initState() {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   blurRadius: 16,
                   offset: const Offset(0, 8),
                 ),
@@ -533,8 +533,8 @@ void initState() {
                         FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            center: _driverLocation,
-                            zoom: 14,
+                            initialCenter: _driverLocation,
+                            initialZoom: 14,
                             maxZoom: 18,
                           ),
                           children: [
@@ -587,12 +587,18 @@ void initState() {
                               const SizedBox(height: 8),
                               _MapIconButton(
                                 icon: Icons.zoom_in,
-                                onTap: () => _mapController.move(_mapController.center, _mapController.zoom + 1),
+                                onTap: () => _mapController.move(
+                                  _mapController.camera.center,
+                                  _mapController.camera.zoom + 1,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               _MapIconButton(
                                 icon: Icons.zoom_out,
-                                onTap: () => _mapController.move(_mapController.center, _mapController.zoom - 1),
+                                onTap: () => _mapController.move(
+                                  _mapController.camera.center,
+                                  _mapController.camera.zoom - 1,
+                                ),
                               ),
                             ],
                           ),
@@ -619,7 +625,7 @@ class _MapIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.6),
+      color: Colors.black.withValues(alpha: 0.6),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -645,7 +651,7 @@ class _DriverMarker extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -668,7 +674,7 @@ class _CustomerMarker extends StatelessWidget {
         border: Border.all(color: Colors.blueAccent, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
