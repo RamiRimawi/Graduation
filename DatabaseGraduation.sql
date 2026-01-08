@@ -13,7 +13,7 @@ CREATE TABLE public.accountant (
   CONSTRAINT accountant_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.accounts (
-  user_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id bigint NOT NULL,
   password text NOT NULL,
   type USER-DEFINED,
   is_active boolean,
@@ -391,33 +391,3 @@ CREATE TABLE public.unit (
   unit_name USER-DEFINED,
   CONSTRAINT unit_pkey PRIMARY KEY (unit_id)
 );
-
-
-
-payment_method_enum :	cash, check, endorsed check	
-
-
-
-unit_name_enum :	cm, box, pcs	
-
-
-
-supplier_order_status_enum :	Sent, Accepted, Rejected, Delivered, Updated, Hold, Pending	
-
-
-
-customer_check_status_enum : 	Cashed, Returned, Company Box, Endorsed	
-
-
-
-supplier_check_status_enum : 	Cashed, Returned, Pending	
-
-
-
-customer_order_status_enum : 	Received, Pinned, Prepared, Delivery, Delivered, Updated to Accountant, Hold, Preparing, Updated to Customer, Canceled
-
-
-
-yes_no_enum : 	yes, no
-
-Type:	Accountant, Storage Manager, Storage Staff, Delivery Driver, Customer, Supplier, Sales Rep

@@ -18,6 +18,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
   List<Map<String, dynamic>> filteredIncomingPayments = [];
   List<Map<String, dynamic>> filteredOutgoingPayments = [];
   bool isLoading = false;
+  bool isFetchingMore = false;
   final TextEditingController _searchController = TextEditingController();
 
   // Date filter state
@@ -133,9 +134,11 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
   }
 
   Future<void> _fetchPayments() async {
-    setState(() => isLoading = true);
+    if (!mounted) return;
+    setState(() => isFetchingMore = true);
     await Future.wait([_fetchIncomingPayments(), _fetchOutgoingPayments()]);
-    setState(() => isLoading = false);
+    if (!mounted) return;
+    setState(() => isFetchingMore = false);
   }
 
   Future<void> _fetchIncomingPayments() async {
@@ -174,30 +177,36 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           ''')
           .order('date_time', ascending: false);
 
-        final List<Map<String, dynamic>> payments = [];
-        for (var payment in response) {
-          payments.add({
-            'payment_id': payment['payment_id'],
-            'payer': payment['customer']?['name'] ?? 'Unknown',
-            'payment_method': payment['payment_method'] ?? 'cash',
-            'price': '\$${payment['amount']?.toString() ?? '0'}',
-            'date': _formatDate(payment['date_time']),
-            'description': payment['description'] ?? '',
-            'check_details': payment['customer_checks'],
-            'customer_id': payment['customer_id'],
-            'amount': payment['amount'],
-            'date_time': payment['date_time'],
-          });
-        }
-
-        // Append returned checks as payment_method = returned_check
-        await _fetchReturnedIncomingChecks(payments);
-
-        setState(() {
-          incomingPayments = payments;
-          filteredIncomingPayments = payments;
+      final List<Map<String, dynamic>> payments = [];
+      for (int i = 0; i < response.length; i++) {
+        final payment = response[i];
+        payments.add({
+          'payment_id': payment['payment_id'],
+          'payer': payment['customer']?['name'] ?? 'Unknown',
+          'payment_method': payment['payment_method'] ?? 'cash',
+          'price': '\$${payment['amount']?.toString() ?? '0'}',
+          'date': _formatDate(payment['date_time']),
+          'description': payment['description'] ?? '',
+          'check_details': payment['customer_checks'],
+          'customer_id': payment['customer_id'],
+          'amount': payment['amount'],
+          'date_time': payment['date_time'],
         });
-      
+
+        // Update UI every 10 rows or on last row for smooth progressive loading
+        if ((i + 1) % 10 == 0 || i == response.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            incomingPayments = List.from(payments);
+            _filterPayments();
+          });
+          // Small delay to allow UI to update
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
+      }
+
+      // Fetch and append returned checks
+      await _fetchReturnedIncomingChecks(payments);
     } catch (e) {
       print('Error fetching incoming payments: $e');
     }
@@ -226,21 +235,31 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           .eq('status', 'Returned')
           .order('exchange_date', ascending: false);
 
-        for (var check in response) {
-          payments.add({
-            'payment_id': 'RC-${check['check_id']}',
-            'payer': check['customer']?['name'] ?? 'Unknown',
-            'payment_method': 'returned_check',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']?.toString()),
-            'description': check['description'] ?? '',
-            'check_details': check,
-            'customer_id': check['customer_id'],
-            'amount': check['exchange_rate'],
-            'date_time': check['exchange_date'],
+      for (int i = 0; i < response.length; i++) {
+        final check = response[i];
+        payments.add({
+          'payment_id': 'RC-${check['check_id']}',
+          'payer': check['customer']?['name'] ?? 'Unknown',
+          'payment_method': 'returned_check',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']?.toString()),
+          'description': check['description'] ?? '',
+          'check_details': check,
+          'customer_id': check['customer_id'],
+          'amount': check['exchange_rate'],
+          'date_time': check['exchange_date'],
+        });
+
+        // Update UI every 5 returned checks
+        if ((i + 1) % 5 == 0 || i == response.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            incomingPayments = List.from(payments);
+            _filterPayments();
           });
+          await Future.delayed(const Duration(milliseconds: 10));
         }
-      
+      }
     } catch (e) {
       print('Error fetching returned incoming checks: $e');
     }
@@ -267,21 +286,31 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           .eq('status', 'Returned')
           .order('exchange_date', ascending: false);
 
-        for (var check in response) {
-          payments.add({
-            'payment_voucher_id': 'RC-${check['check_id']}',
-            'payee': check['supplier']?['name'] ?? 'Unknown',
-            'payment_method': 'returned_check',
-            'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
-            'date': _formatDate(check['exchange_date']?.toString()),
-            'description': check['description'] ?? '',
-            'check_details': check,
-            'supplier_id': check['supplier_id'],
-            'amount': check['exchange_rate'],
-            'date_time': check['exchange_date'],
+      for (int i = 0; i < response.length; i++) {
+        final check = response[i];
+        payments.add({
+          'payment_voucher_id': 'RC-${check['check_id']}',
+          'payee': check['supplier']?['name'] ?? 'Unknown',
+          'payment_method': 'returned_check',
+          'price': '\$${check['exchange_rate']?.toString() ?? '0'}',
+          'date': _formatDate(check['exchange_date']?.toString()),
+          'description': check['description'] ?? '',
+          'check_details': check,
+          'supplier_id': check['supplier_id'],
+          'amount': check['exchange_rate'],
+          'date_time': check['exchange_date'],
+        });
+
+        // Update UI every 5 returned checks
+        if ((i + 1) % 5 == 0 || i == response.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            outgoingPayments = List.from(payments);
+            _filterPayments();
           });
+          await Future.delayed(const Duration(milliseconds: 10));
         }
-      
+      }
     } catch (e) {
       print('Error fetching returned outgoing checks: $e');
     }
@@ -322,7 +351,8 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           .order('date_time', ascending: false);
 
       final List<Map<String, dynamic>> payments = [];
-      for (var payment in response) {
+      for (int i = 0; i < response.length; i++) {
+        final payment = response[i];
         payments.add({
           'payment_voucher_id': payment['payment_voucher_id'],
           'payee': payment['supplier']?['name'] ?? 'Unknown',
@@ -336,14 +366,19 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           'date_time': payment['date_time'],
         });
 
-        // Append returned supplier checks as payment_method = returned_check
-        await _fetchReturnedOutgoingChecks(payments);
-
-        setState(() {
-          outgoingPayments = payments;
-          filteredOutgoingPayments = payments;
-        });
+        // Update UI every 10 rows or on last row
+        if ((i + 1) % 10 == 0 || i == response.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            outgoingPayments = List.from(payments);
+            _filterPayments();
+          });
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
       }
+
+      // Fetch and append returned supplier checks
+      await _fetchReturnedOutgoingChecks(payments);
     } catch (e) {
       print('Error fetching outgoing payments: $e');
     }
@@ -1420,6 +1455,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                         incomingPayments: filteredIncomingPayments,
                         outgoingPayments: filteredOutgoingPayments,
                         isLoading: isLoading,
+                        isFetchingMore: isFetchingMore,
                         onPaymentTap: _showPaymentDetailsDialog,
                         hoveredRow: hoveredRow,
                         onHoverChanged: (index) =>
@@ -1711,6 +1747,7 @@ class _ArchiveTable extends StatelessWidget {
   final List<Map<String, dynamic>> incomingPayments;
   final List<Map<String, dynamic>> outgoingPayments;
   final bool isLoading;
+  final bool isFetchingMore;
   final Function(Map<String, dynamic>, bool) onPaymentTap;
   final int? hoveredRow;
   final Function(int?) onHoverChanged;
@@ -1720,6 +1757,7 @@ class _ArchiveTable extends StatelessWidget {
     required this.incomingPayments,
     required this.outgoingPayments,
     required this.isLoading,
+    required this.isFetchingMore,
     required this.onPaymentTap,
     required this.hoveredRow,
     required this.onHoverChanged,
@@ -1729,18 +1767,18 @@ class _ArchiveTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = isIncoming ? incomingPayments : outgoingPayments;
 
-    if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.blue),
-      );
-    }
-
-    if (rows.isEmpty) {
+    if (rows.isEmpty && !isFetchingMore) {
       return Center(
         child: Text(
           'No payments found',
           style: TextStyle(color: AppColors.grey, fontSize: 16),
         ),
+      );
+    }
+
+    if (rows.isEmpty && isFetchingMore) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.blue),
       );
     }
 
@@ -1807,9 +1845,38 @@ class _ArchiveTable extends StatelessWidget {
         // الصفوف (zebra rows) — enlarged
         Expanded(
           child: ListView.builder(
-            itemCount: rows.length,
+            itemCount: rows.length + (isFetchingMore ? 1 : 0),
             padding: const EdgeInsets.only(top: 6),
             itemBuilder: (context, index) {
+              // Show loading indicator at bottom
+              if (index == rows.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: AppColors.blue,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Loading more payments...',
+                        style: TextStyle(
+                          color: AppColors.grey,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               final row = rows[index];
               final paymentMethodLabel = (row['payment_method'] ?? 'cash')
                   .toString()
