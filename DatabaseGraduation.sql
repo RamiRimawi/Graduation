@@ -9,7 +9,18 @@ CREATE TABLE public.accountant (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
-  CONSTRAINT accountant_pkey PRIMARY KEY (accountant_id)
+  CONSTRAINT accountant_pkey PRIMARY KEY (accountant_id),
+  CONSTRAINT accountant_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accounts(user_id)
+);
+CREATE TABLE public.accounts (
+  user_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  password text NOT NULL,
+  type USER-DEFINED,
+  is_active boolean,
+  profile_image text,
+  last_action_by text,
+  last_action_time time with time zone,
+  CONSTRAINT accounts_pkey PRIMARY KEY (user_id)
 );
 CREATE TABLE public.banks (
   bank_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -62,7 +73,8 @@ CREATE TABLE public.customer (
   last_action_time timestamp without time zone,
   CONSTRAINT customer_pkey PRIMARY KEY (customer_id),
   CONSTRAINT customer_customer_city_fkey FOREIGN KEY (customer_city) REFERENCES public.customer_city(customer_city_id),
-  CONSTRAINT customer_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id)
+  CONSTRAINT customer_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id),
+  CONSTRAINT customer_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.customer_checks (
   check_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -171,7 +183,10 @@ CREATE TABLE public.delivery_driver (
   last_action_time timestamp without time zone,
   longitude_location numeric,
   latitude_location numeric,
-  CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id)
+  current_order_id integer,
+  CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id),
+  CONSTRAINT delivery_driver_current_order_id_fkey FOREIGN KEY (current_order_id) REFERENCES public.customer_order(customer_order_id),
+  CONSTRAINT delivery_driver_delivery_driver_id_fkey FOREIGN KEY (delivery_driver_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.incoming_payment (
   payment_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -252,7 +267,8 @@ CREATE TABLE public.sales_representative (
   last_action_by text,
   last_action_time timestamp without time zone,
   CONSTRAINT sales_representative_pkey PRIMARY KEY (sales_rep_id),
-  CONSTRAINT sales_representative_sales_rep_city_fkey FOREIGN KEY (sales_rep_city) REFERENCES public.sales_rep_city(sales_rep_city_id)
+  CONSTRAINT sales_representative_sales_rep_city_fkey FOREIGN KEY (sales_rep_city) REFERENCES public.sales_rep_city(sales_rep_city_id),
+  CONSTRAINT sales_representative_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.storage_manager (
   storage_manager_id integer NOT NULL,
@@ -262,7 +278,8 @@ CREATE TABLE public.storage_manager (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
-  CONSTRAINT storage_manager_pkey PRIMARY KEY (storage_manager_id)
+  CONSTRAINT storage_manager_pkey PRIMARY KEY (storage_manager_id),
+  CONSTRAINT storage_manager_storage_manager_id_fkey FOREIGN KEY (storage_manager_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.storage_staff (
   storage_staff_id integer NOT NULL,
@@ -274,7 +291,8 @@ CREATE TABLE public.storage_staff (
   last_action_time timestamp without time zone,
   inventory_id integer NOT NULL,
   CONSTRAINT storage_staff_pkey PRIMARY KEY (storage_staff_id),
-  CONSTRAINT storage_staff_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id)
+  CONSTRAINT storage_staff_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.inventory(inventory_id),
+  CONSTRAINT storage_staff_storage_staff_id_fkey FOREIGN KEY (storage_staff_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.supplier (
   supplier_id integer NOT NULL,
@@ -290,7 +308,8 @@ CREATE TABLE public.supplier (
   last_action_time timestamp without time zone,
   CONSTRAINT supplier_pkey PRIMARY KEY (supplier_id),
   CONSTRAINT supplier_supplier_city_fkey FOREIGN KEY (supplier_city) REFERENCES public.supplier_city(supplier_city_id),
-  CONSTRAINT supplier_supplier_category_id_fkey FOREIGN KEY (supplier_category_id) REFERENCES public.supplier_category(supplier_category_id)
+  CONSTRAINT supplier_supplier_category_id_fkey FOREIGN KEY (supplier_category_id) REFERENCES public.supplier_category(supplier_category_id),
+  CONSTRAINT supplier_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.accounts(user_id)
 );
 CREATE TABLE public.supplier_category (
   supplier_category_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -372,80 +391,6 @@ CREATE TABLE public.unit (
   unit_name USER-DEFINED,
   CONSTRAINT unit_pkey PRIMARY KEY (unit_id)
 );
-CREATE TABLE public.user_account_accountant (
-  accountant_id integer NOT NULL,
-  password character varying,
-  added_by text,
-  added_time timestamp without time zone,
-  is_active USER-DEFINED NOT NULL DEFAULT 'yes'::yes_no_enum,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_accountant_pkey PRIMARY KEY (accountant_id),
-  CONSTRAINT user_account_accountant_accountant_id_fkey FOREIGN KEY (accountant_id) REFERENCES public.accountant(accountant_id)
-);
-CREATE TABLE public.user_account_customer (
-  customer_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_customer_pkey PRIMARY KEY (customer_id),
-  CONSTRAINT user_account_customer_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customer(customer_id)
-);
-CREATE TABLE public.user_account_delivery_driver (
-  delivery_driver_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_delivery_driver_pkey PRIMARY KEY (delivery_driver_id),
-  CONSTRAINT user_account_delivery_driver_delivery_driver_id_fkey FOREIGN KEY (delivery_driver_id) REFERENCES public.delivery_driver(delivery_driver_id)
-);
-CREATE TABLE public.user_account_sales_rep (
-  sales_rep_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_sales_rep_pkey PRIMARY KEY (sales_rep_id),
-  CONSTRAINT user_account_sales_rep_sales_rep_id_fkey FOREIGN KEY (sales_rep_id) REFERENCES public.sales_representative(sales_rep_id)
-);
-CREATE TABLE public.user_account_storage_manager (
-  storage_manager_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_storage_manager_pkey PRIMARY KEY (storage_manager_id),
-  CONSTRAINT user_account_storage_manager_storage_manager_id_fkey FOREIGN KEY (storage_manager_id) REFERENCES public.storage_manager(storage_manager_id)
-);
-CREATE TABLE public.user_account_storage_staff (
-  storage_staff_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_storage_staff_pkey PRIMARY KEY (storage_staff_id),
-  CONSTRAINT user_account_storage_staff_storage_staff_id_fkey FOREIGN KEY (storage_staff_id) REFERENCES public.storage_staff(storage_staff_id)
-);
-CREATE TABLE public.user_account_supplier (
-  supplier_id integer NOT NULL,
-  password character varying,
-  is_active USER-DEFINED,
-  added_by text,
-  added_time timestamp without time zone,
-  profile_image text DEFAULT 'https://xwfvdalvmxcrhevaymkm.supabase.co/storage/v1/object/public/images/logo.png'::text,
-  CONSTRAINT user_account_supplier_pkey PRIMARY KEY (supplier_id),
-  CONSTRAINT user_account_supplier_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id)
-);
-
-
-
-
 
 
 
@@ -474,3 +419,5 @@ customer_order_status_enum : 	Received, Pinned, Prepared, Delivery, Delivered, U
 
 
 yes_no_enum : 	yes, no
+
+Type:	Accountant, Storage Manager, Storage Staff, Delivery Driver, Customer, Supplier, Sales Rep

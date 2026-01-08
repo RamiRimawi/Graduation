@@ -51,49 +51,38 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
         return;
       }
 
+      // Query accounts table first using type column for quick access
       final response = await supabase
           .from('customer')
-          .select('customer_id, name, latitude_location, longitude_location, address, mobile_number, telephone_number')
+          .select(
+            'customer_id, name, latitude_location, longitude_location, address, mobile_number, telephone_number, accounts!customer_customer_id_fkey(profile_image)',
+          )
           .eq('sales_rep_id', salesRepId)
           .order('name');
 
-      final customers = (response as List<dynamic>)
-          .map<Map<String, dynamic>>((e) => {
-                'id': e['customer_id'] as int?,
-                'name': (e['name'] as String?) ?? 'Unknown',
-                'latitude': e['latitude_location'],
-                'longitude': e['longitude_location'],
-            'address': e['address'],
-            'mobile': e['mobile_number'],
-            'telephone': e['telephone_number'],
-              })
-          .toList();
-
-      // Fetch profile images from user_account_customer
-      final accountIds = customers.where((c) => c['id'] != null).map((c) => c['id']).toList();
-      Map<int, String?> imageMap = {};
-
-      if (accountIds.isNotEmpty) {
-        final accounts = await supabase
-            .from('user_account_customer')
-            .select('customer_id, profile_image')
-            .filter('customer_id', 'in', accountIds);
-
-        for (final acc in accounts) {
-          final custId = acc['customer_id'] as int?;
-          final img = acc['profile_image'] as String?;
-          if (custId != null) {
-            imageMap[custId] = img;
-          }
+      final customers = (response as List<dynamic>).map<Map<String, dynamic>>((
+        e,
+      ) {
+        // Extract profile image from accounts
+        String? profileImage;
+        final account = e['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
         }
-      }
 
-      // Merge images into customer data
-      for (var customer in customers) {
-        if (customer['id'] != null) {
-          customer['image'] = imageMap[customer['id'] as int];
-        }
-      }
+        return {
+          'id': e['customer_id'] as int?,
+          'name': (e['name'] as String?) ?? 'Unknown',
+          'latitude': e['latitude_location'],
+          'longitude': e['longitude_location'],
+          'address': e['address'],
+          'mobile': e['mobile_number'],
+          'telephone': e['telephone_number'],
+          'image': profileImage,
+        };
+      }).toList();
 
       setState(() {
         _customers = customers;
@@ -112,7 +101,10 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     });
   }
 
-  List<Map<String, dynamic>> _applySearch(String query, List<Map<String, dynamic>> source) {
+  List<Map<String, dynamic>> _applySearch(
+    String query,
+    List<Map<String, dynamic>> source,
+  ) {
     final trimmed = query.trim().toLowerCase();
     if (trimmed.isEmpty) return List<Map<String, dynamic>>.from(source);
 
@@ -157,9 +149,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFB7A447),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : Column(
                 children: [
@@ -180,12 +170,13 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
                           )
                         : GridView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 16,
-                              crossAxisSpacing: 16,
-                              childAspectRatio: 0.85,
-                            ),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 16,
+                                  crossAxisSpacing: 16,
+                                  childAspectRatio: 0.85,
+                                ),
                             itemCount: _filteredCustomers.length,
                             itemBuilder: (context, index) {
                               final customer = _filteredCustomers[index];
@@ -352,15 +343,9 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     final placeholder = Container(
       decoration: BoxDecoration(
         color: const Color(0xFF262626),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: const Icon(
-        Icons.person,
-        color: Color(0xFFB7A447),
-        size: 64,
-      ),
+      child: const Icon(Icons.person, color: Color(0xFFB7A447), size: 64),
     );
 
     if (imageUrl == null || imageUrl.isEmpty) {
@@ -368,9 +353,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     }
 
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(16),
-      ),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       child: Image.network(
         imageUrl,
         fit: BoxFit.cover,
@@ -384,7 +367,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
                 color: Color(0xFFB7A447),
                 strokeWidth: 2,
               ),
-            )
+            ),
           );
         },
       ),

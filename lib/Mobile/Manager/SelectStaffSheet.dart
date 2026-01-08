@@ -37,13 +37,14 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
     try {
       final supabase = Supabase.instance.client;
 
-      // Fetch all storage staff with their inventory_id
-      // Pull profile images from the linked user_account_storage_staff table
+      // Fetch all storage staff using type column for quick access
+      // Query accounts first, then join to storage_staff for details
       final staffResponse = await supabase
-          .from('storage_staff')
+          .from('accounts')
           .select(
-            'storage_staff_id, name, inventory_id, user_account_storage_staff(profile_image)',
-          );
+            'user_id, profile_image, storage_staff!storage_staff_storage_staff_id_fkey(name, inventory_id)',
+          )
+          .eq('type', 'Storage Staff');
 
       if (staffResponse.isEmpty) {
         return {};
@@ -73,14 +74,22 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
       // Group staff by inventory name
       final grouped = <String, List<Map<String, dynamic>>>{};
 
-      for (final staff in staffResponse) {
-        final inventoryId = staff['inventory_id'] as int?;
+      for (final account in staffResponse) {
+        final staffData =
+            (account['storage_staff'] ?? {}) as Map<String, dynamic>;
+        final inventoryId = staffData['inventory_id'] as int?;
         if (inventoryId != null && inventoryNames.containsKey(inventoryId)) {
           final inventoryName = inventoryNames[inventoryId]!;
           if (!grouped.containsKey(inventoryName)) {
             grouped[inventoryName] = [];
           }
-          grouped[inventoryName]!.add(staff);
+          // Reconstruct staff object with profile_image from accounts
+          grouped[inventoryName]!.add({
+            'storage_staff_id': account['user_id'],
+            'name': staffData['name'],
+            'inventory_id': inventoryId,
+            'profile_image': account['profile_image'],
+          });
         }
       }
 
@@ -175,19 +184,8 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
                                     children: staffList.map((staff) {
                                       final staffName =
                                           staff['name'] as String? ?? 'Unknown';
-                                      String? profileImage;
-                                      final account =
-                                          staff['user_account_storage_staff'];
-                                      if (account is List &&
-                                          account.isNotEmpty) {
-                                        profileImage =
-                                            account.first['profile_image']
-                                                as String?;
-                                      } else if (account
-                                          is Map<String, dynamic>) {
-                                        profileImage =
-                                            account['profile_image'] as String?;
-                                      }
+                                      final profileImage =
+                                          staff['profile_image'] as String?;
                                       final isSelected =
                                           selectedStaff == staffName;
 

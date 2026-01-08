@@ -27,21 +27,23 @@ class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
 
   Future<void> _loadDrivers() async {
     try {
-      // Fetch active driver accounts and join driver names
+      // Fetch active driver accounts using type column for quick access
       final rows = await supabase
-          .from('user_account_delivery_driver')
+          .from('accounts')
           .select(
-            'delivery_driver_id, profile_image, delivery_driver:delivery_driver_id(name)',
+            'user_id, profile_image, delivery_driver!delivery_driver_delivery_driver_id_fkey(name)',
           )
-          .eq('is_active', 'yes')
-          .order('delivery_driver_id');
+          .eq('type', 'Delivery Driver')
+          .eq('is_active', true)
+          .order('user_id');
+
       setState(() {
         // Normalize result to {delivery_driver_id, name, profile_image}
         _drivers = List<Map<String, dynamic>>.from(
           rows.map((r) {
             final dd = (r['delivery_driver'] ?? {}) as Map<String, dynamic>;
             return {
-              'delivery_driver_id': r['delivery_driver_id'],
+              'delivery_driver_id': r['user_id'],
               'name': dd['name'],
               'profile_image': r['profile_image'],
             };

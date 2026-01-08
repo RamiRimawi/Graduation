@@ -32,10 +32,12 @@ class _LoginPageState extends State<LoginPage> {
     final pass = passController.text.trim();
 
     try {
+      // Query unified accounts table for accountant
       final response = await supabase
-          .from('user_account_accountant')
-          .select('password')
-          .eq('accountant_id', id)
+          .from('accounts')
+          .select('user_id, password, type, is_active')
+          .eq('user_id', id)
+          .eq('type', 'Accountant')
           .maybeSingle();
 
       print("LOGIN RESPONSE: $response");
@@ -43,6 +45,15 @@ class _LoginPageState extends State<LoginPage> {
       if (response == null) {
         setState(() {
           usernameError = true;
+          loading = false;
+        });
+        return;
+      }
+
+      // Check if account is active
+      if (response['is_active'] != true) {
+        setState(() {
+          passwordError = true;
           loading = false;
         });
         return;
@@ -156,7 +167,9 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           onPressed: loading ? null : login,
                           child: loading
-                              ? const CircularProgressIndicator(color: Colors.black)
+                              ? const CircularProgressIndicator(
+                                  color: Colors.black,
+                                )
                               : const Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

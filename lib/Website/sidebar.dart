@@ -238,9 +238,9 @@ class _HoverProfileImageState extends State<_HoverProfileImage> {
       final accountantId = prefs.getInt('accountant_id');
       if (accountantId != null) {
         final response = await supabase
-            .from('user_account_accountant')
+            .from('accounts')
             .select('profile_image')
-            .eq('accountant_id', accountantId)
+            .eq('user_id', accountantId)
             .single();
 
         final imageUrl = response['profile_image'] as String?;

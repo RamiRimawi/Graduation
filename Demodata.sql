@@ -1,26 +1,70 @@
--- Reset sequences
-ALTER SEQUENCE banks_bank_id_seq RESTART WITH 1;
-ALTER SEQUENCE branches_branch_id_seq RESTART WITH 1;
-ALTER SEQUENCE batch_batch_id_seq RESTART WITH 1;
-ALTER SEQUENCE brand_brand_id_seq RESTART WITH 1;
-ALTER SEQUENCE customer_city_customer_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE customer_checks_check_id_seq RESTART WITH 1;
-ALTER SEQUENCE customer_order_customer_order_id_seq RESTART WITH 1;
-ALTER SEQUENCE customer_quarters_quarter_id_seq RESTART WITH 1;
-ALTER SEQUENCE incoming_payment_payment_id_seq RESTART WITH 1;
-ALTER SEQUENCE inventory_inventory_id_seq RESTART WITH 1;
-ALTER SEQUENCE outgoing_payment_payment_voucher_id_seq RESTART WITH 1;
-ALTER SEQUENCE product_product_id_seq RESTART WITH 1;
-ALTER SEQUENCE product_category_product_category_id_seq RESTART WITH 1;
-ALTER SEQUENCE sales_rep_city_sales_rep_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE supplier_category_supplier_category_id_seq RESTART WITH 1;
-ALTER SEQUENCE supplier_checks_check_id_seq RESTART WITH 1;
-ALTER SEQUENCE supplier_city_supplier_city_id_seq RESTART WITH 1;
-ALTER SEQUENCE supplier_order_order_id_seq RESTART WITH 1;
-ALTER SEQUENCE unit_unit_id_seq RESTART WITH 1;
+-- Reset sequences (using IF EXISTS to avoid errors)
+ALTER SEQUENCE IF EXISTS banks_bank_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS branches_branch_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS batch_batch_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS brand_brand_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS customer_city_customer_city_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS customer_checks_check_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS customer_order_customer_order_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS customer_quarters_quarter_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS incoming_payment_payment_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS inventory_inventory_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS outgoing_payment_payment_voucher_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS product_product_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS product_category_product_category_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS sales_rep_city_sales_rep_city_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS supplier_category_supplier_category_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS supplier_checks_check_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS supplier_city_supplier_city_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS supplier_order_order_id_seq RESTART WITH 1;
+ALTER SEQUENCE IF EXISTS unit_unit_id_seq RESTART WITH 1;
 
 -- Demo data for actors
+-- Simple approach: Delete from all tables in reverse dependency order
+-- Supabase PostgreSQL will handle the cascading
 
+DELETE FROM user_account_accountant;
+DELETE FROM user_account_customer;
+DELETE FROM user_account_delivery_driver;
+DELETE FROM user_account_sales_rep;
+DELETE FROM user_account_storage_manager;
+DELETE FROM user_account_storage_staff;
+DELETE FROM user_account_supplier;
+
+DELETE FROM customer_order_inventory;
+DELETE FROM customer_order_description;
+DELETE FROM customer_order;
+
+DELETE FROM supplier_order_inventory;
+DELETE FROM supplier_order_description;
+DELETE FROM supplier_order;
+
+DELETE FROM incoming_payment;
+DELETE FROM outgoing_payment;
+DELETE FROM customer_checks;
+DELETE FROM supplier_checks;
+
+DELETE FROM batch;
+DELETE FROM product;
+DELETE FROM customer;
+DELETE FROM supplier;
+DELETE FROM sales_representative;
+DELETE FROM delivery_driver;
+DELETE FROM storage_staff;
+DELETE FROM storage_manager;
+DELETE FROM accountant;
+
+DELETE FROM inventory;
+DELETE FROM branches;
+DELETE FROM banks;
+DELETE FROM customer_quarters;
+DELETE FROM customer_city;
+DELETE FROM supplier_city;
+DELETE FROM sales_rep_city;
+DELETE FROM supplier_category;
+DELETE FROM product_category;
+DELETE FROM brand;
+DELETE FROM unit;
 -- Inventories
 INSERT INTO inventory (inventory_name, last_action_by, last_action_time) VALUES
 ('Main inventory', 'system', NOW()),

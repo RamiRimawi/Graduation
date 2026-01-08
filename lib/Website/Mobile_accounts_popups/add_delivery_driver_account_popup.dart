@@ -131,13 +131,14 @@ class _AddDeliveryDriverAccountPopupState
         'last_action_time': DateTime.now().toIso8601String(),
       });
 
-      // Insert user account
-      await supabase.from('user_account_delivery_driver').insert({
-        'delivery_driver_id': driverId,
+      // Insert into unified accounts table
+      await supabase.from('accounts').insert({
+        'user_id': driverId,
         'password': passCtrl.text.trim(),
-        'is_active': 'yes',
-        'added_by': 'Admin',
-        'added_time': DateTime.now().toIso8601String(),
+        'type': 'Delivery Driver',
+        'is_active': true,
+        'last_action_by': 'Admin',
+        'last_action_time': DateTime.now().toIso8601String(),
       });
 
       if (mounted) {

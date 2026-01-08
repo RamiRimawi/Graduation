@@ -87,9 +87,9 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
     try {
       // Check if account already exists
       final existing = await supabase
-          .from('user_account_supplier')
-          .select('supplier_id')
-          .eq('supplier_id', _selectedSupplierId!)
+          .from('accounts')
+          .select('user_id')
+          .eq('user_id', _selectedSupplierId!)
           .maybeSingle();
 
       if (existing != null) {
@@ -103,13 +103,14 @@ class _AddSupplierAccountPopupState extends State<AddSupplierAccountPopup> {
         return;
       }
 
-      // Insert new account
-      await supabase.from('user_account_supplier').insert({
-        'supplier_id': _selectedSupplierId,
+      // Insert new account into unified accounts table
+      await supabase.from('accounts').insert({
+        'user_id': _selectedSupplierId,
         'password': passCtrl.text.trim(),
-        'is_active': 'yes',
-        'added_by': 'Admin', // You can replace this with actual logged-in user
-        'added_time': DateTime.now().toIso8601String(),
+        'type': 'Supplier',
+        'is_active': true,
+        'last_action_by': 'Admin',
+        'last_action_time': DateTime.now().toIso8601String(),
       });
 
       if (mounted) {

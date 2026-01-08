@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../supabase_config.dart';
-import '../sidebar.dart'; 
+import '../sidebar.dart';
 import 'delivery_live_popup.dart';
 
 class DeliveryPage extends StatefulWidget {
@@ -27,25 +27,15 @@ class _DeliveryPageState extends State<DeliveryPage> {
       _loading = true;
     });
     try {
-      // Fetch all delivery drivers
-      final driversRes = await supabase
-          .from('delivery_driver')
-          .select('delivery_driver_id, name')
-          .order('name', ascending: true) as List<dynamic>;
-
-      // Fetch profile images from user_account_delivery_driver
-      final ids = driversRes.map((d) => d['delivery_driver_id'] as int).toList();
-      Map<int, String?> profileById = {};
-      if (ids.isNotEmpty) {
-        final profiles = await supabase
-            .from('user_account_delivery_driver')
-            .select('delivery_driver_id, profile_image')
-            .filter('delivery_driver_id', 'in', ids);
-        for (final p in profiles as List<dynamic>) {
-          final pid = p['delivery_driver_id'] as int?;
-          if (pid != null) profileById[pid] = p['profile_image'] as String?;
-        }
-      }
+      // Fetch all delivery drivers with profile images from accounts table
+      final driversRes =
+          await supabase
+                  .from('delivery_driver')
+                  .select(
+                    'delivery_driver_id, name, accounts!delivery_driver_delivery_driver_id_fkey(profile_image)',
+                  )
+                  .order('name', ascending: true)
+              as List<dynamic>;
 
       List<Map<String, dynamic>> active = [];
       List<Map<String, dynamic>> idle = [];
@@ -53,15 +43,25 @@ class _DeliveryPageState extends State<DeliveryPage> {
       for (final driver in driversRes) {
         final driverId = driver['delivery_driver_id'] as int;
         final driverName = driver['name'] as String;
-        final profileImage = profileById[driverId];
+
+        // Extract profile image from accounts
+        String? profileImage;
+        final account = driver['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
 
         // Check if driver has active orders with status 'Delivery'
-        final ordersRes = await supabase
-            .from('customer_order')
-            .select('customer_order_id')
-            .eq('delivered_by_id', driverId)
-            .eq('order_status', 'Delivery')
-            .limit(1) as List<dynamic>;
+        final ordersRes =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id')
+                    .eq('delivered_by_id', driverId)
+                    .eq('order_status', 'Delivery')
+                    .limit(1)
+                as List<dynamic>;
 
         if (ordersRes.isNotEmpty) {
           // Driver is active (has orders in Delivery status)
@@ -72,10 +72,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
           });
         } else {
           // Driver is idle (no active deliveries)
-          idle.add({
-            'name': driverName,
-            'profile_image': profileImage,
-          });
+          idle.add({'name': driverName, 'profile_image': profileImage});
         }
       }
 
@@ -141,9 +138,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
 
                   if (_loading)
                     const Expanded(
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      child: Center(child: CircularProgressIndicator()),
                     )
                   else
                     Expanded(
@@ -184,9 +179,12 @@ class _DeliveryPageState extends State<DeliveryPage> {
                                                 context: context,
                                                 barrierDismissible: true,
                                                 builder: (ctx) => DeliveryLivePopup(
-                                                  driverId: d["delivery_driver_id"] ?? 0,
+                                                  driverId:
+                                                      d["delivery_driver_id"] ??
+                                                      0,
                                                   driverName: d["name"]!,
-                                                  profileImage: d["profile_image"],
+                                                  profileImage:
+                                                      d["profile_image"],
                                                 ),
                                               );
                                             },
@@ -270,7 +268,9 @@ class _DeliveryCardState extends State<_DeliveryCard> {
     final avatarScale = hoverEnabled && _hovered ? 1.08 : 1.0;
 
     return MouseRegion(
-      cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : MouseCursor.defer,
       onEnter: hoverEnabled ? (_) => setState(() => _hovered = true) : null,
       onExit: hoverEnabled ? (_) => setState(() => _hovered = false) : null,
       child: GestureDetector(
@@ -285,12 +285,17 @@ class _DeliveryCardState extends State<_DeliveryCard> {
             decoration: BoxDecoration(
               color: const Color(0xFF2D2D2D),
               borderRadius: BorderRadius.circular(16),
-                border: hoverEnabled && _hovered
-                  ? Border.all(color: const Color(0xFFDADADA).withOpacity(0.8), width: 2)
+              border: hoverEnabled && _hovered
+                  ? Border.all(
+                      color: const Color(0xFFDADADA).withOpacity(0.8),
+                      width: 2,
+                    )
                   : null,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black38.withOpacity(_hovered && hoverEnabled ? 0.6 : 0.45),
+                  color: Colors.black38.withOpacity(
+                    _hovered && hoverEnabled ? 0.6 : 0.45,
+                  ),
                   blurRadius: _hovered && hoverEnabled ? 14 : 8,
                   offset: const Offset(0, 6),
                 ),
@@ -322,11 +327,17 @@ class _DeliveryCardState extends State<_DeliveryCard> {
                         ),
                         child: CircleAvatar(
                           radius: 55,
-                          backgroundImage: widget.profileImage != null && widget.profileImage!.isNotEmpty
+                          backgroundImage:
+                              widget.profileImage != null &&
+                                  widget.profileImage!.isNotEmpty
                               ? NetworkImage(widget.profileImage!)
                               : null,
-                          backgroundColor: widget.isIdle ? Colors.grey : const Color(0xFF67CD67),
-                          child: widget.profileImage == null || widget.profileImage!.isEmpty
+                          backgroundColor: widget.isIdle
+                              ? Colors.grey
+                              : const Color(0xFF67CD67),
+                          child:
+                              widget.profileImage == null ||
+                                  widget.profileImage!.isEmpty
                               ? Text(
                                   widget.name[0].toUpperCase(),
                                   style: const TextStyle(

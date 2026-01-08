@@ -68,43 +68,49 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
       // Fetch names by role from corresponding tables
       final client = supabase;
 
-      // Only include users that have an account (and active if the column exists)
+      // Query each entity table with accounts join filtered by type and is_active
       final storageManagers = await client
           .from('storage_manager')
           .select(
-            'storage_manager_id,name,mobile_number,telephone_number,address,user_account_storage_manager!inner(is_active,profile_image,added_by,added_time,password)',
+            'storage_manager_id,name,mobile_number,telephone_number,address,accounts!storage_manager_storage_manager_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_storage_manager.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Storage Manager');
       final storageStaff = await client
           .from('storage_staff')
           .select(
-            'storage_staff_id,name,mobile_number,telephone_number,address,user_account_storage_staff!inner(is_active,profile_image,added_by,added_time,password)',
+            'storage_staff_id,name,mobile_number,telephone_number,address,accounts!storage_staff_storage_staff_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_storage_staff.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Storage Staff');
       final deliveryDrivers = await client
           .from('delivery_driver')
           .select(
-            'delivery_driver_id,name,mobile_number,telephone_number,address,user_account_delivery_driver!inner(is_active,profile_image,added_by,added_time,password)',
+            'delivery_driver_id,name,mobile_number,telephone_number,address,accounts!delivery_driver_delivery_driver_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_delivery_driver.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Delivery Driver');
       final customers = await client
           .from('customer')
           .select(
-            'customer_id,name,email,mobile_number,telephone_number,address,user_account_customer!inner(is_active,profile_image,added_by,added_time,password)',
+            'customer_id,name,email,mobile_number,telephone_number,address,accounts!customer_customer_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_customer.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Customer');
       final salesReps = await client
           .from('sales_representative')
           .select(
-            'sales_rep_id,name,email,mobile_number,telephone_number,user_account_sales_rep!inner(is_active,profile_image,added_by,added_time,password)',
+            'sales_rep_id,name,email,mobile_number,telephone_number,accounts!sales_representative_sales_rep_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_sales_rep.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Sales Rep');
       final suppliers = await client
           .from('supplier')
           .select(
-            'supplier_id,name,email,mobile_number,telephone_number,address,user_account_supplier!inner(is_active,profile_image,added_by,added_time,password)',
+            'supplier_id,name,email,mobile_number,telephone_number,address,accounts!supplier_supplier_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('user_account_supplier.is_active', 'yes');
+          .eq('accounts.is_active', true)
+          .eq('accounts.type', 'Supplier');
 
       if (mounted) {
         setState(() {
@@ -133,21 +139,11 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
           .map((raw) {
             final r = raw as Map<String, dynamic>;
             final name = (r["name"] as String?)?.trim();
-            // Retrieve profile_image from the joined user_account_* relation
+            // Retrieve profile_image from the joined accounts relation
             String? img;
-            for (final key in [
-              'user_account_storage_manager',
-              'user_account_storage_staff',
-              'user_account_delivery_driver',
-              'user_account_customer',
-              'user_account_sales_rep',
-              'user_account_supplier',
-            ]) {
-              final rel = r[key];
-              if (rel is Map<String, dynamic>) {
-                img = rel['profile_image'] as String?;
-                if (img != null && img.isNotEmpty) break;
-              }
+            final accountsData = r['accounts'];
+            if (accountsData is Map<String, dynamic>) {
+              img = accountsData['profile_image'] as String?;
             }
             return _AccountItem(name: name ?? '', imageUrl: img, rawData: r);
           })
@@ -917,20 +913,11 @@ class _EditAccountPopupState extends State<_EditAccountPopup> {
       text: data['address']?.toString() ?? '',
     );
 
-    // Get password from account data
-    final accountKeys = {
-      'Storage Manager': 'user_account_storage_manager',
-      'Storage Staff': 'user_account_storage_staff',
-      'Delivery Driver': 'user_account_delivery_driver',
-      'Customer': 'user_account_customer',
-      'Sales Rep': 'user_account_sales_rep',
-      'Supplier': 'user_account_supplier',
-    };
-    final accountKey = accountKeys[widget.role];
+    // Get password from accounts data
     String? password;
-    if (accountKey != null && data[accountKey] is Map<String, dynamic>) {
-      final accountData = data[accountKey] as Map<String, dynamic>;
-      password = accountData['password']?.toString();
+    final accountsData = data['accounts'];
+    if (accountsData is Map<String, dynamic>) {
+      password = accountsData['password']?.toString();
     }
     _passwordController = TextEditingController(text: password ?? '');
 
@@ -1008,37 +995,34 @@ class _EditAccountPopupState extends State<_EditAccountPopup> {
             })
             .eq(idKey, id);
 
-        // Update password
-        final accountTables = {
-          'Storage Manager': 'user_account_storage_manager',
-          'Storage Staff': 'user_account_storage_staff',
-          'Delivery Driver': 'user_account_delivery_driver',
-        };
+        // Update password in accounts table
         await supabase
-            .from(accountTables[widget.role]!)
-            .update({'password': _passwordController.text.trim()})
-            .eq(idKey, id);
+            .from('accounts')
+            .update({
+              'password': _passwordController.text.trim(),
+              'last_action_by': 'current_user',
+              'last_action_time': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', id);
       } else if (_canEditPasswordOnly()) {
-        // Only update password
-        final accountTables = {
-          'Customer': 'user_account_customer',
-          'Sales Rep': 'user_account_sales_rep',
-          'Supplier': 'user_account_supplier',
-        };
+        // Only update password in accounts table
         final idKeys = {
           'Customer': 'customer_id',
           'Sales Rep': 'sales_rep_id',
           'Supplier': 'supplier_id',
         };
 
-        final accountTable = accountTables[widget.role]!;
         final idKey = idKeys[widget.role]!;
         final id = data[idKey];
 
         await supabase
-            .from(accountTable)
-            .update({'password': _passwordController.text.trim()})
-            .eq(idKey, id);
+            .from('accounts')
+            .update({
+              'password': _passwordController.text.trim(),
+              'last_action_by': 'current_user',
+              'last_action_time': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', id);
       }
 
       if (mounted) {
@@ -1438,18 +1422,9 @@ class _AccountDetailsPopup extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = item.rawData;
 
-    // Extract account data from the appropriate joined table
+    // Extract account data from the joined accounts table
     Map<String, dynamic>? accountData;
     String? accountIdKey;
-
-    final accountKeys = {
-      'Storage Manager': 'user_account_storage_manager',
-      'Storage Staff': 'user_account_storage_staff',
-      'Delivery Driver': 'user_account_delivery_driver',
-      'Customer': 'user_account_customer',
-      'Sales Rep': 'user_account_sales_rep',
-      'Supplier': 'user_account_supplier',
-    };
 
     final idKeys = {
       'Storage Manager': 'storage_manager_id',
@@ -1460,11 +1435,10 @@ class _AccountDetailsPopup extends StatelessWidget {
       'Supplier': 'supplier_id',
     };
 
-    final accountKey = accountKeys[role];
     accountIdKey = idKeys[role];
 
-    if (accountKey != null && data[accountKey] is Map<String, dynamic>) {
-      accountData = data[accountKey] as Map<String, dynamic>;
+    if (data['accounts'] is Map<String, dynamic>) {
+      accountData = data['accounts'] as Map<String, dynamic>;
     }
 
     return Material(
@@ -1607,22 +1581,22 @@ class _AccountDetailsPopup extends StatelessWidget {
               const SizedBox(height: 12),
               _InfoRow(
                 label: 'Status',
-                value: accountData['is_active'] == 'yes'
-                    ? 'Active'
-                    : 'Inactive',
-                valueColor: accountData['is_active'] == 'yes'
+                value: accountData['is_active'] == true ? 'Active' : 'Inactive',
+                valueColor: accountData['is_active'] == true
                     ? Colors.greenAccent
                     : Colors.redAccent,
               ),
-              if (accountData['added_by'] != null)
+              if (accountData['last_action_by'] != null)
                 _InfoRow(
-                  label: 'Added By',
-                  value: accountData['added_by']?.toString() ?? 'N/A',
+                  label: 'Last Modified By',
+                  value: accountData['last_action_by']?.toString() ?? 'N/A',
                 ),
-              if (accountData['added_time'] != null)
+              if (accountData['last_action_time'] != null)
                 _InfoRow(
-                  label: 'Added Time',
-                  value: _formatDateTime(accountData['added_time']?.toString()),
+                  label: 'Last Modified Time',
+                  value: _formatDateTime(
+                    accountData['last_action_time']?.toString(),
+                  ),
                 ),
             ],
 

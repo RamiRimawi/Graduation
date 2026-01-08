@@ -93,49 +93,20 @@ class _AccountPageState extends State<AccountPage> {
           .from('images')
           .getPublicUrl(fileName);
 
-      // Update database based on user role
-      String? tableName;
-      String? idColumn;
+      // Update unified accounts table
+      await supabase
+          .from('accounts')
+          .update({'profile_image': imageUrl})
+          .eq('user_id', userId);
 
-      if (userRole == 'delivery' || userRole == 'delivery_driver') {
-        tableName = 'user_account_delivery_driver';
-        idColumn = 'delivery_driver_id';
-      } else if (userRole == 'supplier') {
-        tableName = 'user_account_supplier';
-        idColumn = 'supplier_id';
-      } else if (userRole == 'storage_staff') {
-        tableName = 'user_account_storage_staff';
-        idColumn = 'storage_staff_id';
-      } else if (userRole == 'sales_rep') {
-        tableName = 'user_account_sales_rep';
-        idColumn = 'sales_rep_id';
-      } else if (userRole == 'storage_manager') {
-        tableName = 'user_account_storage_manager';
-        idColumn = 'storage_manager_id';
-      } else if (userRole == 'customer') {
-        tableName = 'user_account_customer';
-        idColumn = 'customer_id';
-      }
-
-      if (tableName != null && idColumn != null) {
-        await supabase
-            .from(tableName)
-            .update({'profile_image': imageUrl})
-            .eq(idColumn, userId);
-
-        // Cache locally so we don't refetch next time
-        await prefs.setString('profile_image_url', imageUrl);
-        if (mounted) {
-          setState(() {
-            _profileImageUrl = imageUrl;
-            _loading = false;
-            _profileCached = true;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() => _loading = false);
-        }
+      // Cache locally so we don't refetch next time
+      await prefs.setString('profile_image_url', imageUrl);
+      if (mounted) {
+        setState(() {
+          _profileImageUrl = imageUrl;
+          _loading = false;
+          _profileCached = true;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -238,18 +209,23 @@ class _AccountPageState extends State<AccountPage> {
     final profile = await supabase
         .from('delivery_driver')
         .select(
-          'delivery_driver_id,name,mobile_number,telephone_number,address',
+          'delivery_driver_id,name,mobile_number,telephone_number,address,accounts!delivery_driver_delivery_driver_id_fkey(profile_image)',
         )
         .eq('delivery_driver_id', id)
         .maybeSingle();
 
-    final account = await supabase
-        .from('user_account_delivery_driver')
-        .select('profile_image')
-        .eq('delivery_driver_id', id)
-        .maybeSingle();
-
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -258,9 +234,7 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['delivery_driver_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : account?['profile_image'] as String?;
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
           _imageReady = false;
         });
       }
@@ -271,18 +245,24 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadSupplier(int id) async {
     final profile = await supabase
         .from('supplier')
-        .select('supplier_id,name,mobile_number,telephone_number,address')
-        .eq('supplier_id', id)
-        .maybeSingle();
-
-    // Get profile_image from user_account_supplier
-    final userAccount = await supabase
-        .from('user_account_supplier')
-        .select('profile_image')
+        .select(
+          'supplier_id,name,mobile_number,telephone_number,address,accounts!supplier_supplier_id_fkey(profile_image)',
+        )
         .eq('supplier_id', id)
         .maybeSingle();
 
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -291,10 +271,8 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['supplier_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : userAccount?['profile_image'] as String?;
-          // debugPrint('Failed loading profile: $e');
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
+          _imageReady = false;
         });
       }
       await _precacheProfileImage();
@@ -304,18 +282,24 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadStorageStaff(int id) async {
     final profile = await supabase
         .from('storage_staff')
-        .select('storage_staff_id,name,mobile_number,telephone_number,address')
-        .eq('storage_staff_id', id)
-        .maybeSingle();
-
-    // Get profile_image from user_account_storage_staff
-    final userAccount = await supabase
-        .from('user_account_storage_staff')
-        .select('profile_image')
+        .select(
+          'storage_staff_id,name,mobile_number,telephone_number,address,accounts!storage_staff_storage_staff_id_fkey(profile_image)',
+        )
         .eq('storage_staff_id', id)
         .maybeSingle();
 
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -324,9 +308,7 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['storage_staff_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : userAccount?['profile_image'] as String?;
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
           _imageReady = false;
         });
       }
@@ -337,18 +319,24 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadSalesRep(int id) async {
     final profile = await supabase
         .from('sales_representative')
-        .select('sales_rep_id,name,mobile_number,telephone_number,email')
-        .eq('sales_rep_id', id)
-        .maybeSingle();
-
-    // Get profile_image from user_account_sales_rep
-    final userAccount = await supabase
-        .from('user_account_sales_rep')
-        .select('profile_image')
+        .select(
+          'sales_rep_id,name,mobile_number,telephone_number,email,accounts!sales_representative_sales_rep_id_fkey(profile_image)',
+        )
         .eq('sales_rep_id', id)
         .maybeSingle();
 
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -357,9 +345,7 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['sales_rep_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : userAccount?['profile_image'] as String?;
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
           _imageReady = false;
         });
       }
@@ -371,19 +357,23 @@ class _AccountPageState extends State<AccountPage> {
     final profile = await supabase
         .from('storage_manager')
         .select(
-          'storage_manager_id,name,mobile_number,telephone_number,address',
+          'storage_manager_id,name,mobile_number,telephone_number,address,accounts!storage_manager_storage_manager_id_fkey(profile_image)',
         )
         .eq('storage_manager_id', id)
         .maybeSingle();
 
-    // Get profile_image from user_account_storage_manager
-    final userAccount = await supabase
-        .from('user_account_storage_manager')
-        .select('profile_image')
-        .eq('storage_manager_id', id)
-        .maybeSingle();
-
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -392,9 +382,7 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['storage_manager_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : userAccount?['profile_image'] as String?;
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
           _imageReady = false;
         });
       }
@@ -405,18 +393,24 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _loadCustomer(int id) async {
     final profile = await supabase
         .from('customer')
-        .select('customer_id,name,mobile_number,telephone_number,address')
-        .eq('customer_id', id)
-        .maybeSingle();
-
-    // Get profile_image from user_account_customer
-    final userAccount = await supabase
-        .from('user_account_customer')
-        .select('profile_image')
+        .select(
+          'customer_id,name,mobile_number,telephone_number,address,accounts!customer_customer_id_fkey(profile_image)',
+        )
         .eq('customer_id', id)
         .maybeSingle();
 
     if (profile != null) {
+      // Extract profile image from accounts
+      String? profileImage;
+      if (!_profileCached) {
+        final account = profile['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImage = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImage = account['profile_image'] as String?;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
@@ -425,9 +419,7 @@ class _AccountPageState extends State<AccountPage> {
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['customer_id']?.toString();
-          _profileImageUrl = _profileCached
-              ? _profileImageUrl
-              : userAccount?['profile_image'] as String?;
+          _profileImageUrl = _profileCached ? _profileImageUrl : profileImage;
           _imageReady = false;
         });
       }

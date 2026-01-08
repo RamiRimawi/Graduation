@@ -96,7 +96,7 @@ class _PreparingOrderDetailsPageState extends State<PreparingOrderDetailsPage> {
       final staffResponse = await supabase
           .from('storage_staff')
           .select(
-            'storage_staff_id, name, user_account_storage_staff(profile_image)',
+            'storage_staff_id, name, accounts!storage_staff_storage_staff_id_fkey(profile_image)',
           )
           .inFilter('storage_staff_id', staffIds);
 
@@ -160,7 +160,7 @@ class _PreparingOrderDetailsPageState extends State<PreparingOrderDetailsPage> {
         final staffName = staff['name'] as String? ?? 'Unknown';
 
         String? staffImage;
-        final account = staff['user_account_storage_staff'];
+        final account = staff['accounts'];
         if (account is List && account.isNotEmpty) {
           staffImage = account.first['profile_image'] as String?;
         } else if (account is Map<String, dynamic>) {

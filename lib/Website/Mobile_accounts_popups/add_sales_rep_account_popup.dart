@@ -87,9 +87,9 @@ class _AddSalesRepAccountPopupState extends State<AddSalesRepAccountPopup> {
     try {
       // Check if account already exists
       final existing = await supabase
-          .from('user_account_sales_rep')
-          .select('sales_rep_id')
-          .eq('sales_rep_id', _selectedSalesRepId!)
+          .from('accounts')
+          .select('user_id')
+          .eq('user_id', _selectedSalesRepId!)
           .maybeSingle();
 
       if (existing != null) {
@@ -103,13 +103,14 @@ class _AddSalesRepAccountPopupState extends State<AddSalesRepAccountPopup> {
         return;
       }
 
-      // Insert new account
-      await supabase.from('user_account_sales_rep').insert({
-        'sales_rep_id': _selectedSalesRepId,
+      // Insert new account into unified accounts table
+      await supabase.from('accounts').insert({
+        'user_id': _selectedSalesRepId,
         'password': passCtrl.text.trim(),
-        'is_active': 'yes',
-        'added_by': 'Admin', // You can replace this with actual logged-in user
-        'added_time': DateTime.now().toIso8601String(),
+        'type': 'Sales Rep',
+        'is_active': true,
+        'last_action_by': 'Admin',
+        'last_action_time': DateTime.now().toIso8601String(),
       });
 
       if (mounted) {

@@ -10,13 +10,14 @@ Future<int?> getAccountantId() async {
   final prefs = await SharedPreferences.getInstance();
   final id = prefs.getInt('accountant_id');
   if (id != null) return id;
-  // If not found in prefs, get from DB where is_active = 'yes'
+  // If not found in prefs, get from DB where is_active = true and type = 'Accountant'
   final response = await supabase
-      .from('user_account_accountant')
-      .select('accountant_id')
-      .eq('is_active', 'yes')
+      .from('accounts')
+      .select('user_id')
+      .eq('is_active', true)
+      .eq('type', 'Accountant')
       .maybeSingle();
-  return response != null ? response['accountant_id'] as int? : null;
+  return response != null ? response['user_id'] as int? : null;
 }
 
 Future<String?> getAccountantName(int accountantId) async {
@@ -2317,17 +2318,12 @@ class _ReadOnlyOrderDetailDialog extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "City : ${(location?.split(' - ').isNotEmpty ??
-                                              false)
-                                          ? location!.split(' - ')[0]
-                                          : '-'}",
+                                  "City : ${(location?.split(' - ').isNotEmpty ?? false) ? location!.split(' - ')[0] : '-'}",
                                   style: const TextStyle(fontSize: 15),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  "Quarter : ${(location?.split(' - ').length ?? 0) > 1
-                                          ? location!.split(' - ')[1]
-                                          : '-'}",
+                                  "Quarter : ${(location?.split(' - ').length ?? 0) > 1 ? location!.split(' - ')[1] : '-'}",
                                   style: const TextStyle(fontSize: 15),
                                 ),
                               ],

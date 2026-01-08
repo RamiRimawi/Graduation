@@ -318,12 +318,13 @@ class _StockOutPageState extends State<StockOutPage> {
     try {
       final supabase = Supabase.instance.client;
 
-      // Fetch all drivers with profile images
+      // Fetch all drivers using type column for quick access
       final driversResponse = await supabase
-          .from('delivery_driver')
+          .from('accounts')
           .select(
-            'delivery_driver_id, name, user_account_delivery_driver(profile_image)',
-          );
+            'user_id, profile_image, delivery_driver!delivery_driver_delivery_driver_id_fkey(name)',
+          )
+          .eq('type', 'Delivery Driver');
 
       // Fetch all orders currently in Delivery status to count per driver
       final ordersResponse = await supabase
@@ -343,18 +344,12 @@ class _StockOutPageState extends State<StockOutPage> {
       // Build drivers list
       final List<DeliveryDriver> drivers = [];
       for (final d in driversResponse) {
-        final id = d['delivery_driver_id'] as int?;
+        final id = d['user_id'] as int?;
         if (id == null) continue;
 
-        final name = d['name'] as String? ?? 'Unknown';
-
-        String? profileImage;
-        final account = d['user_account_delivery_driver'];
-        if (account is List && account.isNotEmpty) {
-          profileImage = account.first['profile_image'] as String?;
-        } else if (account is Map<String, dynamic>) {
-          profileImage = account['profile_image'] as String?;
-        }
+        final driverData = (d['delivery_driver'] ?? {}) as Map<String, dynamic>;
+        final name = driverData['name'] as String? ?? 'Unknown';
+        final profileImage = d['profile_image'] as String?;
 
         drivers.add(
           DeliveryDriver(

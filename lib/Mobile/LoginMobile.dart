@@ -81,6 +81,13 @@ class _LoginPageState extends State<LoginPage> {
       Map<String, dynamic>? userAccount;
       String? role;
 
+      // Get profile image from accounts table
+      final accountData = await supabase
+          .from('accounts')
+          .select('profile_image')
+          .eq('user_id', id)
+          .maybeSingle();
+
       switch (userType) {
         case 'supplier':
           profile = await supabase
@@ -88,13 +95,6 @@ class _LoginPageState extends State<LoginPage> {
               .select('supplier_id,name,mobile_number,telephone_number,address')
               .eq('supplier_id', id)
               .maybeSingle();
-
-          userAccount = await supabase
-              .from('user_account_supplier')
-              .select('profile_image')
-              .eq('supplier_id', id)
-              .maybeSingle();
-
           role = 'Supplier';
           break;
 
@@ -106,13 +106,6 @@ class _LoginPageState extends State<LoginPage> {
               )
               .eq('delivery_driver_id', id)
               .maybeSingle();
-
-          userAccount = await supabase
-              .from('user_account_delivery_driver')
-              .select('profile_image')
-              .eq('delivery_driver_id', id)
-              .maybeSingle();
-
           role = 'Delivery Driver';
           break;
 
@@ -124,13 +117,6 @@ class _LoginPageState extends State<LoginPage> {
               )
               .eq('storage_staff_id', id)
               .maybeSingle();
-
-          userAccount = await supabase
-              .from('user_account_storage_staff')
-              .select('profile_image')
-              .eq('storage_staff_id', id)
-              .maybeSingle();
-
           role = 'Storage Staff';
           break;
 
@@ -142,13 +128,6 @@ class _LoginPageState extends State<LoginPage> {
               )
               .eq('storage_manager_id', id)
               .maybeSingle();
-
-          userAccount = await supabase
-              .from('user_account_storage_manager')
-              .select('profile_image')
-              .eq('storage_manager_id', id)
-              .maybeSingle();
-
           role = 'Storage Manager';
           break;
 
@@ -158,16 +137,11 @@ class _LoginPageState extends State<LoginPage> {
               .select('customer_id,name,mobile_number,telephone_number,address')
               .eq('customer_id', id)
               .maybeSingle();
-
-          userAccount = await supabase
-              .from('user_account_customer')
-              .select('profile_image')
-              .eq('customer_id', id)
-              .maybeSingle();
-
           role = 'Customer';
           break;
       }
+
+      userAccount = accountData;
 
       // Cache the data in SharedPreferences
       if (profile != null) {
@@ -235,94 +209,57 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Try to find user in all user tables
-      String? userType;
-      Map<String, dynamic>? userData;
-
-      // Check Supplier
-      final supplierResult = await supabase
-          .from('user_account_supplier')
-          .select('supplier_id, password')
-          .eq('supplier_id', int.tryParse(userId) ?? 0)
+      // Query unified accounts table
+      final accountResult = await supabase
+          .from('accounts')
+          .select('user_id, password, type, is_active')
+          .eq('user_id', int.tryParse(userId) ?? 0)
           .maybeSingle();
 
-      if (supplierResult != null && supplierResult['password'] == password) {
-        userType = 'supplier';
-        userData = supplierResult;
-      }
-
-      // Check Delivery Driver
-      if (userType == null) {
-        final driverResult = await supabase
-            .from('user_account_delivery_driver')
-            .select('delivery_driver_id, password')
-            .eq('delivery_driver_id', int.tryParse(userId) ?? 0)
-            .maybeSingle();
-
-        if (driverResult != null && driverResult['password'] == password) {
-          userType = 'delivery';
-          userData = driverResult;
-        }
-      }
-
-      // Check Storage Staff
-      if (userType == null) {
-        final staffResult = await supabase
-            .from('user_account_storage_staff')
-            .select('storage_staff_id, password')
-            .eq('storage_staff_id', int.tryParse(userId) ?? 0)
-            .maybeSingle();
-
-        if (staffResult != null && staffResult['password'] == password) {
-          userType = 'storage_staff';
-          userData = staffResult;
-        }
-      }
-
-      // Check Storage Manager
-      if (userType == null) {
-        final managerResult = await supabase
-            .from('user_account_storage_manager')
-            .select('storage_manager_id, password')
-            .eq('storage_manager_id', int.tryParse(userId) ?? 0)
-            .maybeSingle();
-
-        if (managerResult != null && managerResult['password'] == password) {
-          userType = 'manager';
-          userData = managerResult;
-        }
-      }
-
-      // Check Sales Rep
-      if (userType == null) {
-        final salesRepResult = await supabase
-            .from('user_account_sales_rep')
-            .select('sales_rep_id, password')
-            .eq('sales_rep_id', int.tryParse(userId) ?? 0)
-            .maybeSingle();
-
-        if (salesRepResult != null && salesRepResult['password'] == password) {
-          userType = 'sales_rep';
-          userData = salesRepResult;
-        }
-      }
-
-      // Check Customer (NEW)
-      if (userType == null) {
-        final customerResult = await supabase
-            .from('user_account_customer')
-            .select('customer_id, password')
-            .eq('customer_id', int.tryParse(userId) ?? 0)
-            .maybeSingle();
-
-        if (customerResult != null && customerResult['password'] == password) {
-          userType = 'customer';
-          userData = customerResult;
-        }
-      }
-
-      if (userType == null || userData == null) {
+      if (accountResult == null) {
         _showError('Invalid User ID or Password');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check password
+      if (accountResult['password'] != password) {
+        _showError('Invalid User ID or Password');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Check if account is active
+      if (accountResult['is_active'] != true) {
+        _showError('Account is inactive. Contact administrator.');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Map type to internal userType
+      final accountType = accountResult['type'] as String?;
+      String? userType;
+
+      if (accountType == 'Supplier') {
+        userType = 'supplier';
+      } else if (accountType == 'Delivery Driver') {
+        userType = 'delivery';
+      } else if (accountType == 'Storage Staff') {
+        userType = 'storage_staff';
+      } else if (accountType == 'Storage Manager') {
+        userType = 'manager';
+      } else if (accountType == 'Sales Rep') {
+        userType = 'sales_rep';
+      } else if (accountType == 'Customer') {
+        userType = 'customer';
+      } else if (accountType == 'Accountant') {
+        _showError('Accountant login not supported in mobile app');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (userType == null) {
+        _showError('Unknown account type');
         setState(() => _isLoading = false);
         return;
       }

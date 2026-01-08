@@ -71,29 +71,34 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
       }
 
       final response = await supabase
-          .from('user_account_accountant')
+          .from('accountant')
           .select('''
             accountant_id,
-            profile_image,
-            accountant:accountant_id(
-              name,
-              mobile_number,
-              telephone_number,
-              address
-            )
+            name,
+            mobile_number,
+            telephone_number,
+            address,
+            accounts!accountant_accountant_id_fkey(profile_image)
           ''')
           .eq('accountant_id', accountantId!)
           .single();
 
       if (mounted) {
-        final accountantData = response['accountant'] as Map<String, dynamic>;
+        // Extract profile image from accounts
+        String? profileImg;
+        final account = response['accounts'];
+        if (account is List && account.isNotEmpty) {
+          profileImg = account.first['profile_image'] as String?;
+        } else if (account is Map<String, dynamic>) {
+          profileImg = account['profile_image'] as String?;
+        }
 
         setState(() {
-          name = accountantData['name'] ?? 'N/A';
-          mobileNumber = accountantData['mobile_number'] ?? 'N/A';
-          telephoneNumber = accountantData['telephone_number'] ?? 'N/A';
-          address = accountantData['address'] ?? 'N/A';
-          profileImage = response['profile_image'] as String?;
+          name = response['name'] ?? 'N/A';
+          mobileNumber = response['mobile_number'] ?? 'N/A';
+          telephoneNumber = response['telephone_number'] ?? 'N/A';
+          address = response['address'] ?? 'N/A';
+          profileImage = profileImg;
           isLoading = false;
         });
       }
@@ -222,9 +227,9 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
         final imageUrl = await _uploadImageToStorage();
         if (imageUrl != null) {
           await supabase
-              .from('user_account_accountant')
+              .from('accounts')
               .update({'profile_image': imageUrl})
-              .eq('accountant_id', accountantId!);
+              .eq('user_id', accountantId!);
           profileImage = imageUrl;
 
           // Update cached profile image
