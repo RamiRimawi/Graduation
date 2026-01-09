@@ -77,7 +77,10 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
             inventory_id,
             batch_id,
             quantity,
-            inventory:inventory_id(inventory_name)
+            prepared_quantity,
+            prepared_by,
+            inventory:inventory_id(inventory_name),
+            storage_staff:prepared_by(name)
           ''')
           .eq('customer_order_id', orderIdInt);
 
@@ -86,43 +89,64 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
       if (inventoryData.isEmpty) {
         final rawInventoryData = await supabase
             .from('customer_order_inventory')
-            .select('product_id, inventory_id, batch_id, quantity')
+            .select('product_id, inventory_id, batch_id, quantity, prepared_quantity, prepared_by')
             .eq('customer_order_id', orderIdInt);
 
-        // If we got data, fetch inventory locations separately
+        // If we got data, fetch inventory locations and staff separately
         if (rawInventoryData.isNotEmpty) {
           final inventoryIds = <int>{};
+          final staffIds = <int>{};
           for (final row in rawInventoryData) {
             inventoryIds.add(row['inventory_id'] as int);
+            if (row['prepared_by'] != null) {
+              staffIds.add(row['prepared_by'] as int);
+            }
           }
 
+          final locationsMap = <int, String>{};
           if (inventoryIds.isNotEmpty) {
             final inventoryLocations = await supabase
                 .from('inventory')
                 .select('inventory_id, inventory_name')
                 .inFilter('inventory_id', inventoryIds.toList());
 
-            final locationsMap = <int, String>{};
             for (final loc in inventoryLocations) {
               locationsMap[loc['inventory_id'] as int] =
                   loc['inventory_name'] as String;
             }
-
-            // Add inventory_location to each record
-            inventoryDataFinal = rawInventoryData.map((row) {
-              return {
-                ...row,
-                'inventory': {
-                  'inventory_name': locationsMap[row['inventory_id']],
-                },
-              };
-            }).toList();
           }
+
+          final staffMap = <int, String>{};
+          if (staffIds.isNotEmpty) {
+            final staffData = await supabase
+                .from('storage_staff')
+                .select('storage_staff_id, name')
+                .inFilter('storage_staff_id', staffIds.toList());
+
+            for (final staff in staffData) {
+              staffMap[staff['storage_staff_id'] as int] =
+                  staff['name'] as String;
+            }
+          }
+
+          // Add inventory_location and staff to each record
+          inventoryDataFinal = rawInventoryData.map((row) {
+            return {
+              ...row,
+              'inventory': {
+                'inventory_name': locationsMap[row['inventory_id']],
+              },
+              'storage_staff': row['prepared_by'] != null
+                  ? {'name': staffMap[row['prepared_by']]}
+                  : null,
+            };
+          }).toList();
         }
       }
 
-      // Group inventory data by product_id
+      // Group inventory data by product_id and collect unique staff names
       final Map<int, List<Map<String, dynamic>>> inventoryByProduct = {};
+      final Set<String> allPreparedByStaff = {};
 
       for (final invRow in inventoryDataFinal) {
         final productId = invRow['product_id'] as int;
@@ -131,11 +155,21 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
           inventoryByProduct[productId] = [];
         }
 
+        // Collect staff name
+        final storageStaff = invRow['storage_staff'] as Map?;
+        final staffName = storageStaff?['name'] as String?;
+        if (staffName != null && staffName.isNotEmpty) {
+          allPreparedByStaff.add(staffName);
+        }
+
         inventoryByProduct[productId]!.add({
           'inventory_id': invRow['inventory_id'],
           'batch_id': invRow['batch_id'],
           'quantity': invRow['quantity'],
+          'prepared_quantity': invRow['prepared_quantity'],
+          'prepared_by': invRow['prepared_by'],
           'inventory': invRow['inventory'],
+          'storage_staff': storageStaff,
         });
       }
 
@@ -155,8 +189,24 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
           'inventories': inventoriesForProduct,
         });
       }
+      // Format staff names list
+      final staffList = allPreparedByStaff.toList();
+      String preparedByText = 'N/A';
+      if (staffList.isNotEmpty) {
+        if (staffList.length == 1) {
+          preparedByText = staffList[0];
+        } else if (staffList.length == 2) {
+          preparedByText = '${staffList[0]} and ${staffList[1]}';
+        } else {
+          final lastStaff = staffList.last;
+          final otherStaff = staffList.sublist(0, staffList.length - 1);
+          preparedByText = '${otherStaff.join(', ')} and $lastStaff';
+        }
+      }
+
       setState(() {
         _orderData = orderResponse;
+        _orderData!['prepared_by_staff_names'] = preparedByText;
         _products = productsList;
         _loading = false;
         _error = null;
@@ -200,7 +250,7 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final customer = _orderData!['customer'] as Map?;
     final salesRep = _orderData!['sales_rep'] as Map?;
     final deliveryDriver = _orderData!['delivery_driver'] as Map?;
-    final preparedBy = _orderData!['storage_staff'] as Map?;
+    final preparedByStaffNames = _orderData!['prepared_by_staff_names'] as String?;
     final managedBy = _orderData!['storage_manager'] as Map?;
 
     final orderDate = _orderData!['order_date'] != null
@@ -356,7 +406,7 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                               ),
                               _InfoItem(
                                 'Prepared By',
-                                preparedBy?['name'] ?? 'N/A',
+                                preparedByStaffNames ?? 'N/A',
                                 icon: Icons.inventory_2,
                               ),
                               _InfoItem(
@@ -595,19 +645,26 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                 '${product['quantity'] ?? 0} ${unitInfo?['unit_name'] ?? 'units'}',
                 Icons.shopping_cart,
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               _buildProductDetail(
                 'Delivered',
                 '${product['delivered_quantity'] ?? 0} ${unitInfo?['unit_name'] ?? 'units'}',
                 Icons.check_circle_outline,
                 valueColor: AppColors.gold,
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
+              _buildProductDetail(
+                'Prepared',
+                '${_getTotalPreparedQty(product['inventories'])} ${unitInfo?['unit_name'] ?? 'units'}',
+                Icons.inventory_2,
+                valueColor: AppColors.blue,
+              ),
+              const SizedBox(width: 12),
               _buildProductDetail(
                 'Total Price',
                 '\$${product['total_price'] ?? 0}',
                 Icons.attach_money,
-                valueColor: AppColors.blue,
+                valueColor: AppColors.white,
               ),
             ],
           ),
@@ -653,7 +710,10 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final inventory = inventoryData['inventory'] as Map?;
     final inventoryLocation = inventory?['inventory_name'] ?? 'Unknown';
     final quantity = inventoryData['quantity'] ?? 0;
+    final preparedQuantity = inventoryData['prepared_quantity'] ?? 0;
     final batchId = inventoryData['batch_id'];
+    final storageStaff = inventoryData['storage_staff'] as Map?;
+    final preparedByName = storageStaff?['name'] ?? 'Unknown';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -691,7 +751,6 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
           ),
           const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (batchId != null)
                 Container(
@@ -711,6 +770,36 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                     ),
                   ),
                 ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person,
+                      size: 12,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      preparedByName,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.gold,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -721,7 +810,7 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '$quantity $unitName',
+                  '$preparedQuantity $unitName',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -776,6 +865,14 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final totalCost = _orderData!['total_cost'] ?? 0;
     final taxPercent = _orderData!['tax_percent'] ?? 0;
     return (totalCost * taxPercent / 100);
+  }
+
+  int _getTotalPreparedQty(List<dynamic>? inventories) {
+    if (inventories == null || inventories.isEmpty) return 0;
+    return inventories.fold<int>(0, (sum, inv) {
+      final preparedQty = inv['prepared_quantity'] ?? 0;
+      return sum + (preparedQty is int ? preparedQty : 0);
+    });
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'report_page.dart';
 import '../../supabase_config.dart';
+import '../Orders/Orders_stock_out_previous_popup.dart' hide AppColors;
 
 // 🔹 Archive Table
 class ArchiveTable extends StatefulWidget {
@@ -885,9 +886,21 @@ class _ArchiveTableWidget extends StatelessWidget {
             cells: row,
             isEven: index % 2 == 0,
             columnFlex: columnFlex,
+            onTap: () => _showOrderDetails(context, row),
           );
         }),
       ],
+    );
+  }
+
+  static void _showOrderDetails(BuildContext context, List<String> row) {
+    // row[0] is the Order ID
+    final orderId = row.isNotEmpty ? row[0] : '';
+    if (orderId.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => OrderDetailsPopup(orderId: orderId),
     );
   }
 }
@@ -897,12 +910,14 @@ class _ArchiveTableRow extends StatefulWidget {
   final List<String> cells;
   final bool isEven;
   final List<int>? columnFlex;
+  final VoidCallback? onTap;
 
   const _ArchiveTableRow({
     super.key,
     required this.cells,
     required this.isEven,
     this.columnFlex,
+    this.onTap,
   });
 
   @override
@@ -920,43 +935,50 @@ class _ArchiveTableRowState extends State<_ArchiveTableRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(30),
-          border: _isHovered
-              ? Border.all(color: AppColors.blue, width: 1.5)
-              : null,
-        ),
-        child: Row(
-          children: widget.cells.asMap().entries.map((entry) {
-            final index = entry.key;
-            final cell = entry.value;
-            final isLast = index == widget.cells.length - 1; // Date column
-            final flex =
-                widget.columnFlex != null && index < widget.columnFlex!.length
-                ? widget.columnFlex![index]
-                : 1;
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(30),
+        hoverColor: Colors.transparent,
+        splashColor: AppColors.blue.withOpacity(0.1),
+        highlightColor: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(30),
+            border: _isHovered
+                ? Border.all(color: AppColors.blue, width: 1.5)
+                : null,
+          ),
+          child: Row(
+            children: widget.cells.asMap().entries.map((entry) {
+              final index = entry.key;
+              final cell = entry.value;
+              final isLast = index == widget.cells.length - 1; // Date column
+              final flex =
+                  widget.columnFlex != null && index < widget.columnFlex!.length
+                  ? widget.columnFlex![index]
+                  : 1;
 
-            return Expanded(
-              flex: flex,
-              child: Align(
-                alignment: isLast
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Text(
-                  cell,
-                  style: TextStyle(
-                    color: isLast ? AppColors.blue : AppColors.white,
-                    fontSize: 13,
-                    fontWeight: isLast ? FontWeight.bold : FontWeight.w500,
+              return Expanded(
+                flex: flex,
+                child: Align(
+                  alignment: isLast
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Text(
+                    cell,
+                    style: TextStyle(
+                      color: isLast ? AppColors.blue : AppColors.white,
+                      fontSize: 13,
+                      fontWeight: isLast ? FontWeight.bold : FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
