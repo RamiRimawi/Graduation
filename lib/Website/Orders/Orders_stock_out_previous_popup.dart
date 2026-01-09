@@ -89,7 +89,9 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
       if (inventoryData.isEmpty) {
         final rawInventoryData = await supabase
             .from('customer_order_inventory')
-            .select('product_id, inventory_id, batch_id, quantity, prepared_quantity, prepared_by')
+            .select(
+              'product_id, inventory_id, batch_id, quantity, prepared_quantity, prepared_by',
+            )
             .eq('customer_order_id', orderIdInt);
 
         // If we got data, fetch inventory locations and staff separately
@@ -250,7 +252,8 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
     final customer = _orderData!['customer'] as Map?;
     final salesRep = _orderData!['sales_rep'] as Map?;
     final deliveryDriver = _orderData!['delivery_driver'] as Map?;
-    final preparedByStaffNames = _orderData!['prepared_by_staff_names'] as String?;
+    final preparedByStaffNames =
+        _orderData!['prepared_by_staff_names'] as String?;
     final managedBy = _orderData!['storage_manager'] as Map?;
 
     final orderDate = _orderData!['order_date'] != null
@@ -772,21 +775,14 @@ class _OrderDetailsPopupState extends State<OrderDetailsPopup> {
                 ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.gold.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.person,
-                      size: 12,
-                      color: AppColors.gold,
-                    ),
+                    Icon(Icons.person, size: 12, color: AppColors.gold),
                     const SizedBox(width: 4),
                     Text(
                       preparedByName,
