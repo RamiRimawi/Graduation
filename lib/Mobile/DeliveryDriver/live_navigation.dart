@@ -53,7 +53,8 @@ class _LiveNavigationState extends State<LiveNavigation> {
   static const int _requiredArrivalHits = 3; // require 3 consecutive hits
   static const double _arrivalThresholdMeters = 8.0; // within 8m of destination
   static const double _maxArrivalSpeedMps = 0.8; // ~2.9 km/h (almost stopped)
-  static const double _maxGpsAccuracyMeters = 25.0; // ignore checks if GPS very noisy
+  static const double _maxGpsAccuracyMeters =
+      25.0; // ignore checks if GPS very noisy
 
   @override
   void initState() {
@@ -99,14 +100,13 @@ class _LiveNavigationState extends State<LiveNavigation> {
   Future<void> _startLiveTracking() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || 
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         permission = await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.whileInUse || 
+      if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        
         // ✅ استخدام أفضل دقة ممكنة
         final initialPosition = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.bestForNavigation,
@@ -114,12 +114,12 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
         setState(() {
           _currentDriverLocation = LatLng(
-            initialPosition.latitude, 
-            initialPosition.longitude
+            initialPosition.latitude,
+            initialPosition.longitude,
           );
           _previousLocation = _currentDriverLocation;
           _gpsAccuracy = initialPosition.accuracy; // ✅ حفظ دقة GPS
-          
+
           _currentBearing = _calculateBearing(
             _currentDriverLocation!,
             LatLng(widget.customerLatitude, widget.customerLongitude),
@@ -134,11 +134,12 @@ class _LiveNavigationState extends State<LiveNavigation> {
           distanceFilter: 2, // ✅ تحديث كل 2 متر
         );
 
-        _positionStream = Geolocator.getPositionStream(
-          locationSettings: locationSettings,
-        ).listen((Position position) {
-          _handleNewPosition(position);
-        });
+        _positionStream =
+            Geolocator.getPositionStream(
+              locationSettings: locationSettings,
+            ).listen((Position position) {
+              _handleNewPosition(position);
+            });
 
         _routeUpdateTimer = Timer.periodic(
           const Duration(seconds: 20),
@@ -152,7 +153,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
   void _handleNewPosition(Position position) {
     final newLocation = LatLng(position.latitude, position.longitude);
-    
+
     _gpsAccuracy = position.accuracy;
 
     if (_previousLocation != null) {
@@ -191,7 +192,11 @@ class _LiveNavigationState extends State<LiveNavigation> {
   }
 
   // ✅ دالة مُحكمة للفحص الدقيق للوصول (تحد من الإيجابيات الكاذبة)
-  void _checkArrival(LatLng currentLocation, double gpsAccuracy, double speedMps) {
+  void _checkArrival(
+    LatLng currentLocation,
+    double gpsAccuracy,
+    double speedMps,
+  ) {
     if (_arrivedAtDestination) return;
 
     final destinationPoint = LatLng(
@@ -202,27 +207,38 @@ class _LiveNavigationState extends State<LiveNavigation> {
     // تجاهل التحقق إذا كانت دقة GPS سيئة جداً
     if (gpsAccuracy > _maxGpsAccuracyMeters) {
       _arrivalHitCount = 0;
-      debugPrint('⏳ Skipping arrival check due to poor GPS accuracy: ${gpsAccuracy.toStringAsFixed(1)}m');
+      debugPrint(
+        '⏳ Skipping arrival check due to poor GPS accuracy: ${gpsAccuracy.toStringAsFixed(1)}m',
+      );
       return;
     }
 
     // حساب المسافة بالأمتار
-    final distanceInMeters = _calculateDistance(currentLocation, destinationPoint) * 1000;
+    final distanceInMeters =
+        _calculateDistance(currentLocation, destinationPoint) * 1000;
 
     // شروط الوصول الصارمة: مسافة صغيرة وسرعة منخفضة
-    final inside = distanceInMeters <= _arrivalThresholdMeters && speedMps <= _maxArrivalSpeedMps;
+    final inside =
+        distanceInMeters <= _arrivalThresholdMeters &&
+        speedMps <= _maxArrivalSpeedMps;
     if (inside) {
       _arrivalHitCount++;
-      debugPrint('🎯 Inside arrival zone: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s, hit #$_arrivalHitCount/$_requiredArrivalHits');
+      debugPrint(
+        '🎯 Inside arrival zone: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s, hit #$_arrivalHitCount/$_requiredArrivalHits',
+      );
       if (_arrivalHitCount >= _requiredArrivalHits) {
         setState(() => _arrivedAtDestination = true);
         _showArrivalDialog();
-        debugPrint('✅ ARRIVED! Distance: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s');
+        debugPrint(
+          '✅ ARRIVED! Distance: ${distanceInMeters.toStringAsFixed(1)}m, speed ${speedMps.toStringAsFixed(2)} m/s',
+        );
       }
     } else {
       // خرجنا من النطاق، أعد الضبط
       if (_arrivalHitCount != 0) {
-        debugPrint('↩️ Left arrival zone, resetting counter (d=${distanceInMeters.toStringAsFixed(1)}m, v=${speedMps.toStringAsFixed(2)} m/s)');
+        debugPrint(
+          '↩️ Left arrival zone, resetting counter (d=${distanceInMeters.toStringAsFixed(1)}m, v=${speedMps.toStringAsFixed(2)} m/s)',
+        );
       }
       _arrivalHitCount = 0;
     }
@@ -234,7 +250,8 @@ class _LiveNavigationState extends State<LiveNavigation> {
     final dLon = (end.longitude - start.longitude) * math.pi / 180;
 
     final y = math.sin(dLon) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) -
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
 
     final bearing = math.atan2(y, x) * 180 / math.pi;
@@ -243,7 +260,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
   void _followDriver() {
     if (_mapController == null || _currentDriverLocation == null) return;
-    
+
     double zoom = 17.0;
     if (_currentSpeed > 60) {
       zoom = 15.5;
@@ -261,14 +278,17 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
     try {
       final startPoint = _currentDriverLocation!;
-      final endPoint = LatLng(widget.customerLatitude, widget.customerLongitude);
+      final endPoint = LatLng(
+        widget.customerLatitude,
+        widget.customerLongitude,
+      );
 
       final String url =
           'https://router.project-osrm.org/route/v1/driving/${startPoint.longitude},${startPoint.latitude};${endPoint.longitude},${endPoint.latitude}?overview=full&geometries=geojson';
 
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 8),
-      );
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -289,7 +309,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
             _remainingTime = newDuration;
           });
 
-          debugPrint('🔄 Route updated: ${newDistance.toStringAsFixed(1)} km, ${newDuration.toStringAsFixed(0)} min');
+          debugPrint(
+            '🔄 Route updated: ${newDistance.toStringAsFixed(1)} km, ${newDuration.toStringAsFixed(0)} min',
+          );
         }
       }
     } catch (e) {
@@ -303,41 +325,38 @@ class _LiveNavigationState extends State<LiveNavigation> {
   }
 
   void _showArrivalDialog() {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) => AlertDialog(
-      backgroundColor: const Color(0xFF2D2D2D),
-      title: const Text(
-        'Arrived at Destination!',
-        style: TextStyle(color: Colors.white),
-      ),
-      content: const Text(
-        'You have arrived at the customer location.',
-        style: TextStyle(color: Colors.white70),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            Navigator.pop(context);
-            Navigator.pop(context);
-          },
-          child: const Text(
-            'OK',
-            style: TextStyle(color: Color(0xFFB7A447)),
-          ),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: const Text(
+          'Arrived at Destination!',
+          style: TextStyle(color: Colors.white),
         ),
-      ],
-    ),
-  );
-}
+        content: const Text(
+          'You have arrived at the customer location.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            child: const Text('OK', style: TextStyle(color: Color(0xFFB7A447))),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final destinationLocation = LatLng(
-      widget.customerLatitude, 
-      widget.customerLongitude
+      widget.customerLatitude,
+      widget.customerLongitude,
     );
 
     return Scaffold(
@@ -370,7 +389,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                   userAgentPackageName: 'com.example.dolphin',
                   tileProvider: NetworkTileProvider(),
                 ),
-                
+
                 if (_routePoints.isNotEmpty)
                   PolylineLayer(
                     polylines: [
@@ -381,7 +400,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                       ),
                     ],
                   ),
-                
+
                 MarkerLayer(
                   markers: [
                     if (_currentDriverLocation != null)
@@ -399,7 +418,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
                                 width: 70,
                                 height: 70,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF2196F3).withOpacity(0.15),
+                                  color: const Color(
+                                    0xFF2196F3,
+                                  ).withOpacity(0.15),
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -435,7 +456,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                           ),
                         ),
                       ),
-                    
+
                     Marker(
                       point: destinationLocation,
                       width: 50.0,
@@ -445,10 +466,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF5252),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 3,
-                          ),
+                          border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.3),
@@ -467,7 +485,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 ),
               ],
             ),
-            
+
             Positioned(
               top: 16,
               left: 16,
@@ -535,7 +553,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 ),
               ),
             ),
-            
+
             Positioned(
               top: 130,
               right: 16,
@@ -545,8 +563,8 @@ class _LiveNavigationState extends State<LiveNavigation> {
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: _isFollowingDriver
-                          ? const Color(0xFF2196F3)
-                          : Colors.white60,  
+                        ? const Color(0xFF2196F3)
+                        : Colors.white60,
                     width: 2,
                   ),
                   boxShadow: [
@@ -561,7 +579,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                     Icons.my_location,
                     color: _isFollowingDriver
                         ? const Color(0xFF2196F3)
-                        : Colors.white60,  
+                        : Colors.white60,
                     size: 28,
                   ),
                   onPressed: () {
@@ -575,7 +593,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                 ),
               ),
             ),
-            
+
             Positioned(
               bottom: 16,
               left: 16,
@@ -604,7 +622,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                         Column(
                           children: [
                             Text(
-                              _remainingTime > 0 
+                              _remainingTime > 0
                                   ? _remainingTime.toStringAsFixed(0)
                                   : '--',
                               style: const TextStyle(
@@ -622,11 +640,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                             ),
                           ],
                         ),
-                        Container(
-                          width: 2,
-                          height: 40,
-                          color: Colors.white30,
-                        ),
+                        Container(width: 2, height: 40, color: Colors.white30),
                         Column(
                           children: [
                             Text(

@@ -783,9 +783,7 @@ class _OrderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-        ],
+        
       ),
       child: Row(
         children: [
@@ -844,9 +842,7 @@ class _DeliveryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-        ],
+        
       ),
       child: Row(
         children: [
@@ -926,9 +922,7 @@ class _StockOutStatusBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(26),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
-        ],
+       
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Row(

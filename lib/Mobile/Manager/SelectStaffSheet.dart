@@ -53,7 +53,9 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
       // Get unique inventory IDs
       final inventoryIds = <int?>{};
       for (final staff in staffResponse) {
-        inventoryIds.add(staff['inventory_id'] as int?);
+        final staffData =
+            (staff['storage_staff'] ?? {}) as Map<String, dynamic>;
+        inventoryIds.add(staffData['inventory_id'] as int?);
       }
       inventoryIds.remove(null); // Remove null values
 
@@ -109,7 +111,9 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
           color: Colors.transparent,
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            padding: const EdgeInsets.all(16),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
             decoration: const BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -117,43 +121,51 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  "Select Storage Staff",
-                  style: TextStyle(
-                    color: AppColors.gold,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: const Text(
+                    "Select Storage Staff",
+                    style: TextStyle(
+                      color: AppColors.gold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
-                  future: staffByInventory,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: AppColors.gold),
-                      );
-                    }
+                Flexible(
+                  child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+                    future: staffByInventory,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: CircularProgressIndicator(
+                              color: AppColors.gold,
+                            ),
+                          ),
+                        );
+                      }
 
-                    if (snapshot.hasError ||
-                        !snapshot.hasData ||
-                        snapshot.data!.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No storage staff available',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      );
-                    }
+                      if (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data!.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: Text(
+                              'No storage staff available',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      }
 
-                    final staffByInv = snapshot.data!;
-                    final inventoryNames = staffByInv.keys.toList()..sort();
+                      final staffByInv = snapshot.data!;
+                      final inventoryNames = staffByInv.keys.toList()..sort();
 
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.8,
-                      ),
-                      child: SingleChildScrollView(
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: inventoryNames.map((inventoryName) {
@@ -226,7 +238,7 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
                                                         profileImage.isNotEmpty
                                                     ? NetworkImage(profileImage)
                                                     : const AssetImage(
-                                                            'assets/images/placeholder.png',
+                                                            'assets/images/Logo.png',
                                                           )
                                                           as ImageProvider,
                                               ),
@@ -255,11 +267,10 @@ class _SelectStaffSheetState extends State<SelectStaffSheet> {
                             );
                           }).toList(),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-                const SizedBox(height: 12),
               ],
             ),
           ),

@@ -39,23 +39,6 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
   double? cityLatitude;
   double? cityLongitude;
 
-  // Default city center coordinates for major Iraqi cities
-  final Map<String, Map<String, double>> cityCenters = {
-    'Baghdad': {'lat': 33.3128, 'lng': 44.3615},
-    'Basra': {'lat': 30.5433, 'lng': 47.8027},
-    'Mosul': {'lat': 36.3400, 'lng': 43.1575},
-    'Kirkuk': {'lat': 35.4776, 'lng': 44.3910},
-    'Najaf': {'lat': 31.9454, 'lng': 44.3661},
-    'Karbala': {'lat': 32.5269, 'lng': 44.0247},
-    'Diwaniyah': {'lat': 31.9917, 'lng': 44.9236},
-    'Hilla': {'lat': 32.4725, 'lng': 44.4250},
-    'Nasiriyah': {'lat': 30.9569, 'lng': 46.2570},
-    'Samarra': {'lat': 34.1937, 'lng': 43.8751},
-    'Sulaymaniyah': {'lat': 35.5627, 'lng': 45.4375},
-    'Erbil': {'lat': 36.1914, 'lng': 44.0091},
-    'Duhok': {'lat': 36.8706, 'lng': 42.9881},
-  };
-
   // Error messages for each field
   String? idError;
   String? nameError;
@@ -368,14 +351,8 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
 
                         // Auto-open map popup
                         if (mounted) {
-                          final initialLat =
-                              cityLatitude ??
-                              cityCenters[selectedCityName!]?['lat'] ??
-                              33.3128;
-                          final initialLng =
-                              cityLongitude ??
-                              cityCenters[selectedCityName!]?['lng'] ??
-                              44.3615;
+                          final initialLat = cityLatitude ?? 0.0;
+                          final initialLng = cityLongitude ?? 0.0;
 
                           showDialog(
                             context: context,

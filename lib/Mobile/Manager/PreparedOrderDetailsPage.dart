@@ -403,7 +403,7 @@ class _PartCard extends StatelessWidget {
                 backgroundImage:
                     part.staffImage != null && part.staffImage!.isNotEmpty
                     ? NetworkImage(part.staffImage!)
-                    : const AssetImage('assets/images/placeholder.png')
+                    : const AssetImage('assets/images/Logo.png')
                           as ImageProvider,
               ),
               const SizedBox(width: 14),
@@ -513,6 +513,8 @@ class _PartCard extends StatelessWidget {
                       children: [
                         Text(
                           item.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -530,6 +532,7 @@ class _PartCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 12),
                   Expanded(
                     flex: 4,
                     child: Text(

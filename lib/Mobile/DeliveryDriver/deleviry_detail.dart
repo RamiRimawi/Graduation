@@ -300,7 +300,9 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
     try {
       final res = await supabase
           .from('customer')
-          .select('name,address,latitude_location,longitude_location')
+          .select(
+            'name,address,latitude_location,longitude_location,customer_city(name)',
+          )
           .eq('customer_id', widget.customerId)
           .maybeSingle();
 
@@ -317,8 +319,17 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
 
       final lat = res['latitude_location'];
       final lng = res['longitude_location'];
-      final address = (res['address'] as String?) ?? 'Unknown address';
+      final rawAddress = (res['address'] as String?) ?? 'Unknown address';
       final customerName = (res['name'] as String?) ?? widget.customerName;
+
+      // Get city name from joined table
+      final cityData = res['customer_city'] as Map<String, dynamic>?;
+      final cityName = cityData?['name'] as String? ?? '';
+
+      // Format as city-quarter-location
+      final address = cityName.isNotEmpty
+          ? '$cityName - $rawAddress'
+          : rawAddress;
 
       debugPrint('Coordinates: lat=$lat, lng=$lng'); // Debug log
 

@@ -160,11 +160,12 @@ class StaffSyncManager {
 
     if (_isOnline) {
       try {
-        // Fetch from Supabase
+        // Fetch from Supabase - only get items where prepared_quantity is null (not yet completed)
         final inventoryItems = await supabase
             .from('customer_order_inventory')
-            .select('customer_order_id, product_id')
+            .select('customer_order_id, product_id, prepared_quantity')
             .eq('prepared_by', staffId)
+            .isFilter('prepared_quantity', null)
             .order('customer_order_id');
 
         if (inventoryItems.isEmpty) {
