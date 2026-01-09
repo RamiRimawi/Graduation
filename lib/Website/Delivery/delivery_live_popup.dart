@@ -52,87 +52,99 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   }
 
   @override
-void initState() {
-  super.initState();
-  _fetchLocations();
-  
-  // ✅ الاستماع للتغييرات في جدول delivery_driver
-  _driverChannel = supabase.channel('driver_location_${widget.driverId}')
-    .onPostgresChanges(
-      event: PostgresChangeEvent.update,
-      table: 'delivery_driver',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'delivery_driver_id',
-        value: widget.driverId,
-      ),
-      callback: (payload) {
-        if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
-        debugPrint('🔄 Driver data updated: ${payload.newRecord}');
-        // عند تحديث current_order_id أو الموقع
+  void initState() {
+    super.initState();
+    _fetchLocations();
+
+    // ✅ الاستماع للتغييرات في جدول delivery_driver
+    _driverChannel =
+        supabase
+            .channel('driver_location_${widget.driverId}')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              table: 'delivery_driver',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'delivery_driver_id',
+                value: widget.driverId,
+              ),
+              callback: (payload) {
+                if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
+                debugPrint('🔄 Driver data updated: ${payload.newRecord}');
+                // عند تحديث current_order_id أو الموقع
+                _fetchLocations(updateOnly: true);
+              },
+            )
+          ..subscribe();
+
+    // ✅ الاستماع للتغييرات في جدول customer_order (لاكتشاف عند تغيير الحالة إلى Delivered)
+    _orderChannel =
+        supabase
+            .channel('order_status_${widget.driverId}')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.update,
+              table: 'customer_order',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'delivered_by_id',
+                value: widget.driverId,
+              ),
+              callback: (payload) {
+                if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
+
+                final newRecord = payload.newRecord as Map<String, dynamic>;
+                final status = newRecord['order_status'] as String?;
+                final orderId = newRecord['customer_order_id'] as int?;
+                debugPrint(
+                  '🔄 Order status changed to: $status for order $orderId (driver ${widget.driverId})',
+                );
+
+                // إذا تم تحديث الحالة إلى Delivered
+                if (status == 'Delivered' && mounted) {
+                  debugPrint(
+                    '⚡ Detected Delivered status for order $orderId - removing from UI',
+                  );
+
+                  // إذا كانت هذه هي الأوردر الحالية
+                  if (_orderId == orderId && mounted) {
+                    debugPrint('🗑️ Clearing current order $orderId');
+                    setState(() {
+                      _customerLocation = null;
+                      _customerName = null;
+                      _orderId = null;
+                      _routePoints = [];
+                    });
+                  }
+
+                  // إزالة من قائمة الأوردرات الأخرى
+                  if (mounted) {
+                    setState(() {
+                      _otherOrders.removeWhere(
+                        (order) => order['order_id'] == orderId,
+                      );
+                      debugPrint(
+                        '📋 Removed order $orderId from other orders list',
+                      );
+                    });
+                  }
+
+                  // اجلب البيانات الكاملة والزوم حسب المسافة الجديدة
+                  if (mounted) {
+                    _fetchLocations(updateOnly: false);
+                  }
+                }
+              },
+            )
+          ..subscribe();
+
+    // ✅ بدء polling لتحديث الأوردرات كل 5 ثوان (backup للـ realtime)
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        debugPrint('🔄 Polling for order status changes...');
         _fetchLocations(updateOnly: true);
-      },
-    )
-    ..subscribe();
-
-  // ✅ الاستماع للتغييرات في جدول customer_order (لاكتشاف عند تغيير الحالة إلى Delivered)
-  _orderChannel = supabase.channel('order_status_${widget.driverId}')
-    .onPostgresChanges(
-      event: PostgresChangeEvent.update,
-      table: 'customer_order',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'delivered_by_id',
-        value: widget.driverId,
-      ),
-      callback: (payload) {
-        if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
-        
-        final newRecord = payload.newRecord as Map<String, dynamic>;
-        final status = newRecord['order_status'] as String?;
-        final orderId = newRecord['customer_order_id'] as int?;
-        debugPrint('🔄 Order status changed to: $status for order $orderId (driver ${widget.driverId})');
-        
-        // إذا تم تحديث الحالة إلى Delivered
-        if (status == 'Delivered' && mounted) {
-          debugPrint('⚡ Detected Delivered status for order $orderId - removing from UI');
-          
-          // إذا كانت هذه هي الأوردر الحالية
-          if (_orderId == orderId && mounted) {
-            debugPrint('🗑️ Clearing current order $orderId');
-            setState(() {
-              _customerLocation = null;
-              _customerName = null;
-              _orderId = null;
-              _routePoints = [];
-            });
-          }
-          
-          // إزالة من قائمة الأوردرات الأخرى
-          if (mounted) {
-            setState(() {
-              _otherOrders.removeWhere((order) => order['order_id'] == orderId);
-              debugPrint('📋 Removed order $orderId from other orders list');
-            });
-          }
-          
-          // اجلب البيانات الكاملة والزوم حسب المسافة الجديدة
-          if (mounted) {
-            _fetchLocations(updateOnly: false);
-          }
-        }
-      },
-    )
-    ..subscribe();
-
-  // ✅ بدء polling لتحديث الأوردرات كل 5 ثوان (backup للـ realtime)
-  _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-    if (mounted) {
-      debugPrint('🔄 Polling for order status changes...');
-      _fetchLocations(updateOnly: true);
-    }
-  });
-}
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -146,44 +158,46 @@ void initState() {
     super.dispose();
   }
 
- Future<void> _fetchLocations({bool updateOnly = false}) async {
-  if (!mounted) return; // ✅ تحقق من mounted قبل البدء
-  
-  try {
-    // ✅ جلب موقع السائق + الأوردر النشط
-    final driverData = await supabase
-        .from('delivery_driver')
-        .select('delivery_driver_id, latitude_location, longitude_location, current_order_id')
-        .eq('delivery_driver_id', widget.driverId)
-        .maybeSingle(); // ✅ استخدم maybeSingle بدلاً من single
+  Future<void> _fetchLocations({bool updateOnly = false}) async {
+    if (!mounted) return; // ✅ تحقق من mounted قبل البدء
 
-    if (driverData == null) {
-      debugPrint('⚠️ Driver data not found');
-      return;
-    }
+    try {
+      // ✅ جلب موقع السائق + الأوردر النشط
+      final driverData = await supabase
+          .from('delivery_driver')
+          .select(
+            'delivery_driver_id, latitude_location, longitude_location, current_order_id',
+          )
+          .eq('delivery_driver_id', widget.driverId)
+          .maybeSingle(); // ✅ استخدم maybeSingle بدلاً من single
 
-    final lat = driverData['latitude_location'] as num?;
-    final lng = driverData['longitude_location'] as num?;
-    final currentOrderId = driverData['current_order_id'] as int?;
-
-    // تحديث موقع السائق
-    if (mounted && lat != null && lng != null) {
-      final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
-      if (mounted) {
-        setState(() {
-          _driverLocation = newDriverLoc;
-        });
+      if (driverData == null) {
+        debugPrint('⚠️ Driver data not found');
+        return;
       }
 
-      // ✅ فقط تحديث الكاميرا في التحميل الأولي (وليس عند التحديثات)
-      // لا تقم بتحريك الكاميرا أثناء التحديثات لتجنب إزعاج المستخدم أثناء التكبير/التصغير
-    }
+      final lat = driverData['latitude_location'] as num?;
+      final lng = driverData['longitude_location'] as num?;
+      final currentOrderId = driverData['current_order_id'] as int?;
 
-    // ✅ إذا كان في أوردر نشط، اجلب تفاصيله
-    if (currentOrderId != null && mounted) {
-      final orderData = await supabase
-          .from('customer_order')
-          .select('''
+      // تحديث موقع السائق
+      if (mounted && lat != null && lng != null) {
+        final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
+        if (mounted) {
+          setState(() {
+            _driverLocation = newDriverLoc;
+          });
+        }
+
+        // ✅ فقط تحديث الكاميرا في التحميل الأولي (وليس عند التحديثات)
+        // لا تقم بتحريك الكاميرا أثناء التحديثات لتجنب إزعاج المستخدم أثناء التكبير/التصغير
+      }
+
+      // ✅ إذا كان في أوردر نشط، اجلب تفاصيله
+      if (currentOrderId != null && mounted) {
+        final orderData = await supabase
+            .from('customer_order')
+            .select('''
             customer_order_id,
             customer:customer_id(
               customer_id,
@@ -192,102 +206,110 @@ void initState() {
               longitude_location
             )
           ''')
-          .eq('customer_order_id', currentOrderId)
-          .maybeSingle(); // ✅ استخدم maybeSingle
+            .eq('customer_order_id', currentOrderId)
+            .maybeSingle(); // ✅ استخدم maybeSingle
 
-      if (orderData == null || !mounted) {
-        debugPrint('⚠️ Order data not found for ID: $currentOrderId');
-        return;
-      }
+        if (orderData == null || !mounted) {
+          debugPrint('⚠️ Order data not found for ID: $currentOrderId');
+          return;
+        }
 
-      final customer = orderData['customer'] as Map<String, dynamic>?;
-      final custLat = customer?['latitude_location'] as num?;
-      final custLng = customer?['longitude_location'] as num?;
+        final customer = orderData['customer'] as Map<String, dynamic>?;
+        final custLat = customer?['latitude_location'] as num?;
+        final custLng = customer?['longitude_location'] as num?;
 
-      if (custLat != null && custLng != null && mounted) {
-        final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
-        
+        if (custLat != null && custLng != null && mounted) {
+          final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
+
+          if (mounted) {
+            setState(() {
+              _customerLocation = newCustomerLoc;
+              _customerName = customer?['name'];
+              _orderId = currentOrderId;
+            });
+          }
+
+          // ✅ ضبط الخريطة فقط في التحميل الأولي (عندما يكون updateOnly = false)
+          if (!updateOnly && mounted) {
+            final dist = Distance().as(
+              LengthUnit.Meter,
+              _driverLocation,
+              newCustomerLoc,
+            );
+            final center = LatLng(
+              (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
+              (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
+            );
+            final zoom = _getZoomForDistance(dist);
+            _mapController.move(center, zoom);
+          }
+
+          // جلب المسار
+          if (mounted) {
+            _fetchRoute();
+          }
+        }
+
+        // ✅ جلب باقي الأوردرات (Other orders)
+        if (mounted) {
+          final otherOrders =
+              await supabase
+                      .from('customer_order')
+                      .select('customer_order_id, customer:customer_id(name)')
+                      .eq('delivered_by_id', widget.driverId)
+                      .eq('order_status', 'Delivery')
+                      .neq('customer_order_id', currentOrderId)
+                      .order('order_date', ascending: false)
+                  as List<dynamic>;
+
+          if (mounted) {
+            setState(() {
+              _otherOrders = otherOrders.map((o) {
+                final c =
+                    (o as Map<String, dynamic>)['customer']
+                        as Map<String, dynamic>?;
+                return {'order_id': o['customer_order_id'], 'name': c?['name']};
+              }).toList();
+            });
+          }
+        }
+      } else if (mounted) {
+        // ✅ إذا current_order_id هو null، اجلب جميع الأوردرات واعرضها في Other orders
+        final allOrders =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id, customer:customer_id(name)')
+                    .eq('delivered_by_id', widget.driverId)
+                    .eq('order_status', 'Delivery')
+                    .order('order_date', ascending: false)
+                as List<dynamic>;
+
         if (mounted) {
           setState(() {
-            _customerLocation = newCustomerLoc;
-            _customerName = customer?['name'];
-            _orderId = currentOrderId;
-          });
-        }
-
-        // ✅ ضبط الخريطة فقط في التحميل الأولي (عندما يكون updateOnly = false)
-        if (!updateOnly && mounted) {
-          final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
-          final center = LatLng(
-            (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
-            (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
-          );
-          final zoom = _getZoomForDistance(dist);
-          _mapController.move(center, zoom);
-        }
-
-        // جلب المسار
-        if (mounted) {
-          _fetchRoute();
-        }
-      }
-
-      // ✅ جلب باقي الأوردرات (Other orders)
-      if (mounted) {
-        final otherOrders = await supabase
-            .from('customer_order')
-            .select('customer_order_id, customer:customer_id(name)')
-            .eq('delivered_by_id', widget.driverId)
-            .eq('order_status', 'Delivery')
-            .neq('customer_order_id', currentOrderId)
-            .order('order_date', ascending: false) as List<dynamic>;
-
-        if (mounted) {
-          setState(() {
-            _otherOrders = otherOrders.map((o) {
-              final c = (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
-              return {
-                'order_id': o['customer_order_id'],
-                'name': c?['name'],
-              };
+            _customerLocation = null;
+            _customerName = null;
+            _orderId = null;
+            _routePoints = [];
+            _otherOrders = allOrders.map((o) {
+              final c =
+                  (o as Map<String, dynamic>)['customer']
+                      as Map<String, dynamic>?;
+              return {'order_id': o['customer_order_id'], 'name': c?['name']};
             }).toList();
           });
+          debugPrint(
+            '✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list',
+          );
         }
       }
-    } else if (mounted) {
-      // ✅ إذا current_order_id هو null، اجلب جميع الأوردرات واعرضها في Other orders
-      final allOrders = await supabase
-          .from('customer_order')
-          .select('customer_order_id, customer:customer_id(name)')
-          .eq('delivered_by_id', widget.driverId)
-          .eq('order_status', 'Delivery')
-          .order('order_date', ascending: false) as List<dynamic>;
-
+    } catch (e) {
+      debugPrint('❌ Error fetching locations: $e');
+      // ✅ لا تقم بعمل setState في حالة الخطأ إذا لم يكن mounted
       if (mounted) {
-        setState(() {
-          _customerLocation = null;
-          _customerName = null;
-          _orderId = null;
-          _routePoints = [];
-          _otherOrders = allOrders.map((o) {
-            final c = (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
-            return {
-              'order_id': o['customer_order_id'],
-              'name': c?['name'],
-            };
-          }).toList();
-        });
-        debugPrint('✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list');
+        // يمكنك عرض رسالة خطأ للمستخدم هنا إذا لزم الأمر
       }
     }
-  } catch (e) {
-    debugPrint('❌ Error fetching locations: $e');
-    // ✅ لا تقم بعمل setState في حالة الخطأ إذا لم يكن mounted
-    if (mounted) {
-      // يمكنك عرض رسالة خطأ للمستخدم هنا إذا لزم الأمر
-    }
   }
-}
 
   Future<void> _fetchRoute() async {
     if (_customerLocation == null || _isRouting) return;
@@ -297,13 +319,18 @@ void initState() {
       final end = _customerLocation!;
       final url =
           'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final coords = data['routes'][0]['geometry']['coordinates'] as List;
           final polyline = coords
-              .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+              .map(
+                (c) =>
+                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+              )
               .toList();
           if (mounted) {
             setState(() {
@@ -356,13 +383,19 @@ void initState() {
                           children: [
                             CircleAvatar(
                               radius: 26,
-                              backgroundImage: (widget.profileImage != null && widget.profileImage!.isNotEmpty)
+                              backgroundImage:
+                                  (widget.profileImage != null &&
+                                      widget.profileImage!.isNotEmpty)
                                   ? NetworkImage(widget.profileImage!)
                                   : null,
                               backgroundColor: const Color(0xFF67CD67),
-                              child: (widget.profileImage == null || widget.profileImage!.isEmpty)
+                              child:
+                                  (widget.profileImage == null ||
+                                      widget.profileImage!.isEmpty)
                                   ? Text(
-                                      widget.driverName.isNotEmpty ? widget.driverName[0].toUpperCase() : '?',
+                                      widget.driverName.isNotEmpty
+                                          ? widget.driverName[0].toUpperCase()
+                                          : '?',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 20,
@@ -384,14 +417,17 @@ void initState() {
                             ),
                             IconButton(
                               onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close, color: Colors.white70),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white70,
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 20),
                         const SizedBox(height: 8),
                         Text(
-                          _orderId != null 
+                          _orderId != null
                               ? 'Now delivering to'
                               : 'The delivery driver hasn\'t selected an order yet.',
                           style: const TextStyle(
@@ -427,7 +463,10 @@ void initState() {
                         ),
                         const SizedBox(height: 10),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF2D2D2D),
                             borderRadius: BorderRadius.circular(14),
@@ -479,7 +518,10 @@ void initState() {
                             (o) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF2D2D2D),
                                   borderRadius: BorderRadius.circular(14),
@@ -585,7 +627,8 @@ void initState() {
                             children: [
                               _MapIconButton(
                                 icon: Icons.my_location,
-                                onTap: () => _mapController.move(_driverLocation, 16),
+                                onTap: () =>
+                                    _mapController.move(_driverLocation, 16),
                               ),
                               const SizedBox(height: 8),
                               _MapIconButton(
@@ -617,7 +660,6 @@ void initState() {
       ),
     );
   }
-
 }
 
 class _MapIconButton extends StatelessWidget {
