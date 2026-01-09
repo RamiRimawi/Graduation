@@ -39,12 +39,12 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
     setState(() => _isLoading = true);
     
     try {
-      // Fetch customer orders with related customer data
+      // Fetch customer orders with related customer data and inventory info
       // Only show orders with status 'Delivery' assigned to this delivery driver
       final data = await supabase
           .from('customer_order')
           .select(
-            'customer_order_id, order_date, order_status, delivered_by_id, customer:customer_id(customer_id, name), customer_order_description(*)',
+            'customer_order_id, order_date, order_status, delivered_by_id, customer:customer_id(customer_id, name), customer_order_inventory(inventory_id, inventory:inventory_id(inventory_name))',
           )
           .eq('order_status', 'Delivery')
           .eq('delivered_by_id', widget.deliveryDriverId)
@@ -60,9 +60,13 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
         final customerName = customerData['name'] as String? ?? 'Unknown Customer';
         final orderId = row['customer_order_id'] as int?;
         
-        // Count inventory items from order descriptions
-        final orderDescriptions = row['customer_order_description'] as List<dynamic>? ?? [];
-        final inventoryNo = orderDescriptions.length;
+        // Get first inventory ID from customer_order_inventory
+        final orderInventory = row['customer_order_inventory'] as List<dynamic>? ?? [];
+        int? inventoryId;
+        
+        if (orderInventory.isNotEmpty) {
+          inventoryId = orderInventory[0]['inventory_id'] as int?;
+        }
 
         if (customerId != null && seenCustomerIds.contains(customerId)) {
           continue;
@@ -76,7 +80,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
           'orderId': orderId ?? customerId ?? 0,
           'customerId': customerId ?? 0,
           'name': customerName,
-          'inventory': inventoryNo,
+          'inventory': inventoryId ?? 0,
         });
       }
 
@@ -132,32 +136,18 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: GestureDetector(
-               onTap: () async {
-                  try {
-                    await supabase
-                        .from('delivery_driver')
-                        .update({'current_order_id': customer['orderId']})
-                        .eq('delivery_driver_id', widget.deliveryDriverId);
-                    
-                    debugPrint('✅ Updated current_order_id to: ${customer['orderId']}');
-                  } catch (e) {
-                    debugPrint('❌ Error updating current order: $e');
-                  }
-                  
-                  // ثم الانتقال لصفحة التفاصيل
-                  if (mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DeleviryDetail(
-                          customerName: customer['name'],
-                          customerId: customer['customerId'],
-                          orderId: customer['orderId'],
-                          deliveryDriverId: widget.deliveryDriverId,
-                        ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DeleviryDetail(
+                        customerName: customer['name'],
+                        customerId: customer['customerId'],
+                        orderId: customer['orderId'],
+                        deliveryDriverId: widget.deliveryDriverId,
                       ),
-                    );
-                  }
+                    ),
+                  );
                 },
                 child: Container(
                   decoration: BoxDecoration(

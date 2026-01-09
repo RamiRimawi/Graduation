@@ -324,7 +324,23 @@ class _LiveNavigationState extends State<LiveNavigation> {
     return distance.as(LengthUnit.Kilometer, point1, point2);
   }
 
+  Future<void> _clearCurrentOrderId() async {
+    try {
+      await supabase
+          .from('delivery_driver')
+          .update({'current_order_id': null})
+          .eq('delivery_driver_id', widget.deliveryDriverId);
+      
+      debugPrint('✅ Cleared current_order_id for driver ${widget.deliveryDriverId}');
+    } catch (e) {
+      debugPrint('❌ Error clearing current_order_id: $e');
+    }
+  }
+
   void _showArrivalDialog() {
+    // ✅ Clear current_order_id when arrived
+    _clearCurrentOrderId();
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -688,7 +704,11 @@ class _LiveNavigationState extends State<LiveNavigation> {
                                 ),
                               ),
                               TextButton(
-                                onPressed: () {
+                                onPressed: () async {
+                                  // ✅ Clear current_order_id when ending route
+                                  await _clearCurrentOrderId();
+                                  
+                                  if (!mounted) return;
                                   Navigator.pop(context);
                                   Navigator.pop(context);
                                   Navigator.pop(context);

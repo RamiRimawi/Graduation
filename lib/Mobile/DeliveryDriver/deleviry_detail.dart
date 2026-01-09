@@ -379,6 +379,7 @@ class _DeleviryDetailState extends State<DeleviryDetail> {
             address: address,
             latitude: latDouble,
             longitude: lngDouble,
+            orderId: widget.orderId,
             deliveryDriverId: widget.deliveryDriverId,
           ),
         ),

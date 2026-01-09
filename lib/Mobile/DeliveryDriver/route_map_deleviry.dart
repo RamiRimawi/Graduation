@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'live_navigation.dart';
+import '../../supabase_config.dart';
 
 class RouteMapDeleviry extends StatefulWidget {
   final String customerName;
@@ -13,7 +14,7 @@ class RouteMapDeleviry extends StatefulWidget {
   final String address;
   final double latitude;
   final double longitude;
-  final int? deliveryId;
+  final int? orderId;
   final int deliveryDriverId;
 
   const RouteMapDeleviry({
@@ -23,7 +24,7 @@ class RouteMapDeleviry extends StatefulWidget {
     required this.address,
     required this.latitude,
     required this.longitude,
-    this.deliveryId,
+    this.orderId,
     required this.deliveryDriverId,
   });
 
@@ -180,7 +181,34 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     }
   }
 
-  void _startNavigation() {
+  Future<void> _startNavigation() async {
+    debugPrint('🚀 GO button pressed!');
+    debugPrint('📦 orderId = ${widget.orderId}');
+    debugPrint('👤 deliveryDriverId = ${widget.deliveryDriverId}');
+    
+    // ✅ Set current_order_id in database when GO is pressed
+    if (widget.orderId != null) {
+      try {
+        debugPrint('🔄 Attempting to update current_order_id...');
+        
+        final response = await supabase
+            .from('delivery_driver')
+            .update({'current_order_id': widget.orderId})
+            .eq('delivery_driver_id', widget.deliveryDriverId)
+            .select();
+        
+        debugPrint('✅ Update successful! Response: $response');
+        debugPrint('✅ Set current_order_id = ${widget.orderId} for driver ${widget.deliveryDriverId}');
+      } catch (e) {
+        debugPrint('❌ Error setting current_order_id: $e');
+        debugPrint('❌ Error type: ${e.runtimeType}');
+      }
+    } else {
+      debugPrint('⚠️ orderId is NULL! Cannot set current_order_id');
+    }
+
+    if (!mounted) return;
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -189,7 +217,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
           address: widget.address,
           customerLatitude: widget.latitude,
           customerLongitude: widget.longitude,
-          orderId: widget.deliveryId,
+          orderId: widget.orderId,
           deliveryDriverId: widget.deliveryDriverId,
         ),
       ),
