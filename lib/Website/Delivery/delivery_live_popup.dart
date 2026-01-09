@@ -175,17 +175,8 @@ void initState() {
         });
       }
 
-      if (!updateOnly && mounted) {
-        if (_customerLocation != null) {
-          final center = LatLng(
-            (newDriverLoc.latitude + _customerLocation!.latitude) / 2,
-            (newDriverLoc.longitude + _customerLocation!.longitude) / 2,
-          );
-            _mapController.move(center, _mapController.camera.zoom);
-        } else {
-            _mapController.move(newDriverLoc, _mapController.camera.zoom);
-        }
-      }
+      // ✅ فقط تحديث الكاميرا في التحميل الأولي (وليس عند التحديثات)
+      // لا تقم بتحريك الكاميرا أثناء التحديثات لتجنب إزعاج المستخدم أثناء التكبير/التصغير
     }
 
     // ✅ إذا كان في أوردر نشط، اجلب تفاصيله
@@ -224,14 +215,14 @@ void initState() {
           });
         }
 
-        // ضبط الخريطة
-        final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
-        final center = LatLng(
-          (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
-          (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
-        );
-        final zoom = _getZoomForDistance(dist);
-        if (mounted) {
+        // ✅ ضبط الخريطة فقط في التحميل الأولي (عندما يكون updateOnly = false)
+        if (!updateOnly && mounted) {
+          final dist = Distance().as(LengthUnit.Meter, _driverLocation, newCustomerLoc);
+          final center = LatLng(
+            (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
+            (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
+          );
+          final zoom = _getZoomForDistance(dist);
           _mapController.move(center, zoom);
         }
 
