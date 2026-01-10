@@ -51,17 +51,44 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   @override
   void initState() {
     super.initState();
-    _fetchLocations();
+    // Initial fetch with map positioning
+    _fetchLocations().then((_) {
+      // Ensure map is positioned after initial data is loaded
+      if (mounted) {
+        _positionMapView();
+      }
+    });
 
     // ✅ استخدام polling فقط لتجنب مشاكل postgres_changes مع null values
     // Polling أكثر موثوقية ولا يسبب FormatException
-    
+
     // بدء polling لتحديث الأوردرات كل 2 ثانية (أسرع للحصول على تحديثات فورية)
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
         _fetchLocations(updateOnly: true);
       }
     });
+  }
+
+  // Helper method to position the map view based on current locations
+  void _positionMapView() {
+    if (_customerLocation != null) {
+      // Center between driver and customer
+      final dist = Distance().as(
+        LengthUnit.Meter,
+        _driverLocation,
+        _customerLocation!,
+      );
+      final center = LatLng(
+        (_driverLocation.latitude + _customerLocation!.latitude) / 2,
+        (_driverLocation.longitude + _customerLocation!.longitude) / 2,
+      );
+      final zoom = _getZoomForDistance(dist);
+      _mapController.move(center, zoom);
+    } else {
+      // No active delivery, just center on driver
+      _mapController.move(_driverLocation, 14);
+    }
   }
 
   @override
@@ -139,21 +166,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
               _customerName = customer?['name'];
               _orderId = currentOrderId;
             });
-          }
-
-          // ✅ ضبط الخريطة فقط في التحميل الأولي (عندما يكون updateOnly = false)
-          if (!updateOnly && mounted) {
-            final dist = Distance().as(
-              LengthUnit.Meter,
-              _driverLocation,
-              newCustomerLoc,
-            );
-            final center = LatLng(
-              (_driverLocation.latitude + newCustomerLoc.latitude) / 2,
-              (_driverLocation.longitude + newCustomerLoc.longitude) / 2,
-            );
-            final zoom = _getZoomForDistance(dist);
-            _mapController.move(center, zoom);
           }
 
           // جلب المسار
