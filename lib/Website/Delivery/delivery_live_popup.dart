@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../supabase_config.dart';
 
 class DeliveryLivePopup extends StatefulWidget {
@@ -33,8 +32,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   List<Map<String, dynamic>> _otherOrders = [];
   List<LatLng> _routePoints = const [];
   bool _isRouting = false;
-  RealtimeChannel? _driverChannel;
-  RealtimeChannel? _orderChannel;
   Timer? _pollingTimer;
 
   // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
@@ -56,91 +53,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     super.initState();
     _fetchLocations();
 
-    // ✅ الاستماع للتغييرات في جدول delivery_driver
-    _driverChannel =
-        supabase
-            .channel('driver_location_${widget.driverId}')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.update,
-              table: 'delivery_driver',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'delivery_driver_id',
-                value: widget.driverId,
-              ),
-              callback: (payload) {
-                if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
-                debugPrint('🔄 Driver data updated: ${payload.newRecord}');
-                // عند تحديث current_order_id أو الموقع
-                _fetchLocations(updateOnly: true);
-              },
-            )
-          ..subscribe();
-
-    // ✅ الاستماع للتغييرات في جدول customer_order (لاكتشاف عند تغيير الحالة إلى Delivered)
-    _orderChannel =
-        supabase
-            .channel('order_status_${widget.driverId}')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.update,
-              table: 'customer_order',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'delivered_by_id',
-                value: widget.driverId,
-              ),
-              callback: (payload) {
-                if (!mounted) return; // ✅ تحقق من mounted قبل المعالجة
-
-                final newRecord = payload.newRecord as Map<String, dynamic>;
-                final status = newRecord['order_status'] as String?;
-                final orderId = newRecord['customer_order_id'] as int?;
-                debugPrint(
-                  '🔄 Order status changed to: $status for order $orderId (driver ${widget.driverId})',
-                );
-
-                // إذا تم تحديث الحالة إلى Delivered
-                if (status == 'Delivered' && mounted) {
-                  debugPrint(
-                    '⚡ Detected Delivered status for order $orderId - removing from UI',
-                  );
-
-                  // إذا كانت هذه هي الأوردر الحالية
-                  if (_orderId == orderId && mounted) {
-                    debugPrint('🗑️ Clearing current order $orderId');
-                    setState(() {
-                      _customerLocation = null;
-                      _customerName = null;
-                      _orderId = null;
-                      _routePoints = [];
-                    });
-                  }
-
-                  // إزالة من قائمة الأوردرات الأخرى
-                  if (mounted) {
-                    setState(() {
-                      _otherOrders.removeWhere(
-                        (order) => order['order_id'] == orderId,
-                      );
-                      debugPrint(
-                        '📋 Removed order $orderId from other orders list',
-                      );
-                    });
-                  }
-
-                  // اجلب البيانات الكاملة والزوم حسب المسافة الجديدة
-                  if (mounted) {
-                    _fetchLocations(updateOnly: false);
-                  }
-                }
-              },
-            )
-          ..subscribe();
-
-    // ✅ بدء polling لتحديث الأوردرات كل 5 ثوان (backup للـ realtime)
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // ✅ استخدام polling فقط لتجنب مشاكل postgres_changes مع null values
+    // Polling أكثر موثوقية ولا يسبب FormatException
+    
+    // بدء polling لتحديث الأوردرات كل 2 ثانية (أسرع للحصول على تحديثات فورية)
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
-        debugPrint('🔄 Polling for order status changes...');
         _fetchLocations(updateOnly: true);
       }
     });
@@ -148,12 +66,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
 
   @override
   void dispose() {
-    if (_driverChannel != null) {
-      supabase.removeChannel(_driverChannel!);
-    }
-    if (_orderChannel != null) {
-      supabase.removeChannel(_orderChannel!);
-    }
     _pollingTimer?.cancel();
     super.dispose();
   }
