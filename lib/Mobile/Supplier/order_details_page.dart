@@ -604,7 +604,13 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 if (val != null && val > 0) {
                   setState(() {
                     products[index]['quantity'] = val;
-                    isUpdated = true;
+                    // Only mark as updated if any quantity differs from original
+                    isUpdated = products.any((p) {
+                      final currentQty = (p['quantity'] as num).toInt();
+                      final originalQty = (p['original_quantity'] as num)
+                          .toInt();
+                      return currentQty != originalQty;
+                    });
                   });
                 }
                 Navigator.pop(context);

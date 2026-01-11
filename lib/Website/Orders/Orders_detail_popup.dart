@@ -387,8 +387,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
             'total_cost': priceData['subtotal'],
             'total_balance':
                 priceData['subtotal'], // no tax for supplier orders
-            'last_action_by': accountantName,
-            'last_action_time': DateTime.now().toIso8601String(),
+            'last_tracing_by': accountantName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
           })
           .eq('order_id', widget.orderId!);
 
@@ -404,8 +404,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                 .update({
                   'quantity': currentQty,
                   'total_price': productTotals[productId],
-                  'last_action_by': accountantName,
-                  'last_action_time': DateTime.now().toIso8601String(),
+                  'last_tracing_by': accountantName,
+                  'last_tracing_time': DateTime.now().toIso8601String(),
                 })
                 .eq('order_id', widget.orderId!)
                 .eq('product_id', productId);
@@ -471,8 +471,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
             'total_cost': priceData['subtotal'],
             'total_balance':
                 priceData['subtotal'], // no tax for supplier orders
-            'last_action_by': accountantName,
-            'last_action_time': DateTime.now().toIso8601String(),
+            'last_tracing_by': accountantName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
           })
           .eq('order_id', widget.orderId!);
 
@@ -488,8 +488,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                 .update({
                   'quantity': currentQty,
                   'total_price': productTotals[productId],
-                  'last_action_by': accountantName,
-                  'last_action_time': DateTime.now().toIso8601String(),
+                  'last_tracing_by': accountantName,
+                  'last_tracing_time': DateTime.now().toIso8601String(),
                 })
                 .eq('order_id', widget.orderId!)
                 .eq('product_id', productId);
@@ -549,8 +549,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
           .from('supplier_order')
           .update({
             'order_status': 'Sent',
-            'last_action_by': accountantName,
-            'last_action_time': DateTime.now().toIso8601String(),
+            'last_tracing_by': accountantName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
           })
           .eq('order_id', widget.orderId!);
 
@@ -605,8 +605,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
           .from('supplier_order')
           .update({
             'order_status': 'Rejected',
-            'last_action_by': accountantName,
-            'last_action_time': DateTime.now().toIso8601String(),
+            'last_tracing_by': accountantName,
+            'last_tracing_time': DateTime.now().toIso8601String(),
           })
           .eq('order_id', widget.orderId!);
 
