@@ -19,6 +19,7 @@ class StockInOrderDetailsPage extends StatefulWidget {
 class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
   bool _loading = true;
   String _supplierName = '';
+  int? _supplierId;
   // ignore: unused_field
   String _orderStatus = '';
   // ignore: unused_field
@@ -44,10 +45,13 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
       // Fetch order with supplier
       final orderResponse = await supabase
           .from('supplier_order')
-          .select('supplier:supplier_id(name), order_status, order_date')
+          .select(
+            'supplier_id, supplier:supplier_id(name), order_status, order_date',
+          )
           .eq('order_id', widget.orderId)
           .single();
 
+      _supplierId = orderResponse['supplier_id'] as int?;
       _supplierName = orderResponse['supplier']['name'] as String? ?? 'Unknown';
       _orderStatus = orderResponse['order_status'] as String? ?? 'Unknown';
       _orderDate = orderResponse['order_date'] != null
@@ -155,7 +159,7 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
     }
   }
 
-  void _pickBatchForItem(int itemIndex) {
+  void _pickBatchForItem(int itemIndex, StateSetter setModalState) {
     if (_selectedInventoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -175,11 +179,14 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
         productId: item.productId,
         inventoryId: _selectedInventoryId!,
         onSelected: (batchId, displayText) {
-          Navigator.pop(context);
           setState(() {
             _selectedBatchIds[itemIndex] = batchId;
             _selectedBatchDisplays[itemIndex] = displayText;
           });
+          setModalState(() {
+            // This rebuilds the modal to show the selected batch
+          });
+          Navigator.of(context).pop();
         },
       ),
     );
@@ -208,13 +215,18 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _BatchSelectionModal(
-        items: _items,
-        inventoryId: _selectedInventoryId!,
-        inventoryName: _selectedInventoryName!,
-        selectedBatchDisplays: _selectedBatchDisplays,
-        onPickBatch: _pickBatchForItem,
-        onConfirm: _confirmReception,
+      builder: (_) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
+          return _BatchSelectionModal(
+            items: _items,
+            inventoryId: _selectedInventoryId!,
+            inventoryName: _selectedInventoryName!,
+            selectedBatchDisplays: _selectedBatchDisplays,
+            onPickBatch: (itemIndex) =>
+                _pickBatchForItem(itemIndex, setModalState),
+            onConfirm: _confirmReception,
+          );
+        },
       ),
     );
   }
@@ -298,7 +310,58 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
       await Supabase.instance.client
           .from('supplier_order_inventory')
           .insert(inventoryInserts);
+      //Update batch table: add quantity and set supplier info
+      final now = DateTime.now().toIso8601String();
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+        final batchId = _selectedBatchIds[i]!;
 
+        // Fetch current batch quantity
+        final batchData = await Supabase.instance.client
+            .from('batch')
+            .select('quantity')
+            .eq('batch_id', batchId)
+            .eq('product_id', item.productId)
+            .single();
+
+        final currentQty = (batchData['quantity'] as int?) ?? 0;
+        final newQty = currentQty + item.qty;
+
+        // Update batch with new quantity and supplier info
+        await Supabase.instance.client
+            .from('batch')
+            .update({
+              'quantity': newQty,
+              'supplier_id': _supplierId,
+              'last_action_by': managerName,
+              'last_action_time': now,
+            })
+            .eq('batch_id', batchId)
+            .eq('product_id', item.productId);
+      }
+
+      // Update product table: increment total_quantity
+      for (int i = 0; i < _items.length; i++) {
+        final item = _items[i];
+
+        // Fetch current product total_quantity
+        final productData = await Supabase.instance.client
+            .from('product')
+            .select('total_quantity')
+            .eq('product_id', item.productId)
+            .single();
+
+        final currentTotal = (productData['total_quantity'] as int?) ?? 0;
+        final newTotal = currentTotal + item.qty;
+
+        // Update product total_quantity
+        await Supabase.instance.client
+            .from('product')
+            .update({'total_quantity': newTotal})
+            .eq('product_id', item.productId);
+      }
+
+      //
       // Close loading and batch modal, show success
       if (mounted) {
         Navigator.pop(context); // Close loading
@@ -340,7 +403,6 @@ class _StockInOrderDetailsPageState extends State<StockInOrderDetailsPage> {
       Navigator.pop(context, true);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -799,7 +861,7 @@ class _InventorySelectionModalState extends State<_InventorySelectionModal> {
 }
 
 // Batch selection modal for stock-in
-class _BatchSelectionModal extends StatelessWidget {
+class _BatchSelectionModal extends StatefulWidget {
   final List<OrderItem> items;
   final int inventoryId;
   final String inventoryName;
@@ -817,6 +879,28 @@ class _BatchSelectionModal extends StatelessWidget {
   });
 
   @override
+  State<_BatchSelectionModal> createState() => _BatchSelectionModalState();
+}
+
+class _BatchSelectionModalState extends State<_BatchSelectionModal> {
+  bool _showValidationErrors = false;
+
+  void _handleConfirm() {
+    // Check if all items have batch selected
+    for (int i = 0; i < widget.items.length; i++) {
+      if (!widget.selectedBatchDisplays.containsKey(i) ||
+          widget.selectedBatchDisplays[i] == null) {
+        setState(() {
+          _showValidationErrors = true;
+        });
+        widget.onConfirm();
+        return;
+      }
+    }
+    widget.onConfirm();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -830,7 +914,7 @@ class _BatchSelectionModal extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Batches for $inventoryName',
+              'Batches for ${widget.inventoryName}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -845,25 +929,28 @@ class _BatchSelectionModal extends StatelessWidget {
             const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
-                itemCount: items.length,
+                itemCount: widget.items.length,
                 itemBuilder: (_, i) {
-                  final item = items[i];
-                  final display = selectedBatchDisplays[i];
+                  final item = widget.items[i];
+                  final display = widget.selectedBatchDisplays[i];
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.card,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
+                              flex: 4,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -877,7 +964,7 @@ class _BatchSelectionModal extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${item.brand} • ${item.qty} ${item.unit}',
+                                    item.brand,
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -886,52 +973,85 @@ class _BatchSelectionModal extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            GestureDetector(
-                              onTap: () => onPickBatch(i),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: display != null
-                                      ? AppColors.gold.withOpacity(0.2)
-                                      : Colors.orange.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: display != null
-                                        ? AppColors.gold
-                                        : Colors.orange,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2,
-                                      color: display != null
-                                          ? AppColors.gold
-                                          : Colors.orange,
-                                      size: 14,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      display ?? 'Select Batch',
-                                      style: TextStyle(
-                                        color: display != null
-                                            ? AppColors.gold
-                                            : Colors.orange,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFB7A447),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${item.qty} ${item.unit}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          onTap: () => widget.onPickBatch(i),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: display != null
+                                  ? AppColors.gold.withOpacity(0.2)
+                                  : Colors.orange.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: display != null
+                                    ? AppColors.gold
+                                    : Colors.orange,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.inventory_2,
+                                  color: display != null
+                                      ? AppColors.gold
+                                      : Colors.orange,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    display ?? 'Select Batch',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: display != null
+                                          ? AppColors.gold
+                                          : Colors.orange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_showValidationErrors && display == null) ...[
+                          const SizedBox(height: 6),
+                          const Text(
+                            '⚠ You need to select a batch',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   );
@@ -942,7 +1062,7 @@ class _BatchSelectionModal extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: onConfirm,
+                onPressed: _handleConfirm,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.gold,
                   minimumSize: const Size.fromHeight(54),

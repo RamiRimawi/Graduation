@@ -129,10 +129,22 @@ class _SelectDeliveryDriverSheetState extends State<SelectDeliveryDriverSheet> {
                         ),
                         child: CircleAvatar(
                           radius: 32,
-                          backgroundColor: Colors.grey.shade700,
+                          backgroundColor: AppColors.card,
                           backgroundImage:
                               imageUrl != null && imageUrl.isNotEmpty
                               ? NetworkImage(imageUrl)
+                              : null,
+                          child: imageUrl == null || imageUrl.isEmpty
+                              ? Text(
+                                  name.isNotEmpty
+                                      ? name.substring(0, 1).toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
                               : null,
                         ),
                       ),

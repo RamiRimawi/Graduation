@@ -783,7 +783,6 @@ class _OrderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        
       ),
       child: Row(
         children: [
@@ -842,18 +841,28 @@ class _DeliveryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(20),
-        
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 26,
+            backgroundColor: AppColors.card,
             backgroundImage:
                 driver.image.isNotEmpty && driver.image.startsWith('http')
                 ? NetworkImage(driver.image)
-                : (driver.image.isNotEmpty
-                      ? AssetImage(driver.image)
-                      : const AssetImage('assets/images/placeholder.png')),
+                : null,
+            child: driver.image.isEmpty || !driver.image.startsWith('http')
+                ? Text(
+                    driver.name.isNotEmpty
+                        ? driver.name.substring(0, 1).toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                : null,
           ),
 
           const SizedBox(width: 12),
@@ -912,8 +921,8 @@ class _StockOutStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _StatusData(Icons.photo_camera_back_outlined, 'Pending'),
-      _StatusData(Icons.chair_alt_rounded, 'Preparing'),
+      _StatusData(Icons.schedule, 'Pending'),
+      _StatusData(Icons.engineering, 'Preparing'),
       _StatusData(Icons.check_box_rounded, 'Prepared'),
       _StatusData(Icons.local_shipping_rounded, 'Delivery'),
     ];
@@ -922,7 +931,6 @@ class _StockOutStatusBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(26),
-       
       ),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Row(

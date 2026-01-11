@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../manager_theme.dart';
 import 'SelectStaffSheet.dart';
 import 'SelectBatchSheet.dart';
@@ -106,6 +107,8 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
         productId: item.productId,
         inventoryId: split.inventoryId, // Filter by selected inventory
         requiredQty: split.quantitiesByItem[itemIndex] ?? 0,
+        isStockOut: true,
+        currentlySelectedBatchId: split.batchIdByItem[itemIndex],
         onSelected: (batchId, displayText) {
           Navigator.pop(context);
           setState(() {
@@ -1087,6 +1090,7 @@ class _SplitBatchSelectionModal extends StatefulWidget {
 class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
   late Map<int, Map<int, String>>
   _selectedBatchDisplays; // splitIdx -> (itemIdx -> display)
+  bool _autoSelectionDone = false;
 
   @override
   void initState() {
@@ -1094,6 +1098,108 @@ class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
     _selectedBatchDisplays = {};
     for (int i = 0; i < widget.splits.length; i++) {
       _selectedBatchDisplays[i] = Map.from(widget.splits[i].batchDisplayByItem);
+    }
+    // Auto-select batches for all splits
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_autoSelectionDone) {
+        _autoSelectAllBatches();
+      }
+    });
+  }
+
+  Future<void> _autoSelectAllBatches() async {
+    _autoSelectionDone = true;
+    for (int splitIdx = 0; splitIdx < widget.splits.length; splitIdx++) {
+      final split = widget.splits[splitIdx];
+      if (split.quantitiesByItem.isEmpty || split.inventoryId == null) continue;
+
+      for (final entry in split.quantitiesByItem.entries) {
+        final itemIndex = entry.key;
+        final requiredQty = entry.value;
+
+        // Skip if already selected
+        if (split.batchIdByItem.containsKey(itemIndex) &&
+            split.batchIdByItem[itemIndex] != null) {
+          continue;
+        }
+
+        await _autoSelectBatchForItem(splitIdx, itemIndex, requiredQty);
+      }
+    }
+  }
+
+  Future<void> _autoSelectBatchForItem(
+    int splitIdx,
+    int itemIndex,
+    int requiredQty,
+  ) async {
+    try {
+      final split = widget.splits[splitIdx];
+      final item = widget.items[itemIndex];
+      final supabase = Supabase.instance.client;
+      final now = DateTime.now();
+
+      // Fetch batches for this product and inventory
+      final response = await supabase
+          .from('batch')
+          .select(
+            'batch_id, quantity, storage_location_descrption, production_date, expiry_date',
+          )
+          .eq('product_id', item.productId)
+          .eq('inventory_id', split.inventoryId!)
+          .order('batch_id');
+
+      final batches = List<Map<String, dynamic>>.from(response);
+
+      // Filter suitable batches
+      final suitableBatches = batches.where((batch) {
+        final quantity = batch['quantity'] as int;
+        if (quantity < requiredQty) return false;
+
+        final expiryDateStr = batch['expiry_date'] as String?;
+        if (expiryDateStr != null) {
+          final expiryDate = DateTime.parse(expiryDateStr);
+          if (expiryDate.isBefore(now)) return false;
+        }
+        return true;
+      }).toList();
+
+      if (suitableBatches.isEmpty) return;
+
+      // Sort by production_date (oldest first)
+      suitableBatches.sort((a, b) {
+        final aDateStr = a['production_date'] as String?;
+        final bDateStr = b['production_date'] as String?;
+
+        if (aDateStr != null && bDateStr == null) return -1;
+        if (aDateStr == null && bDateStr != null) return 1;
+
+        if (aDateStr != null && bDateStr != null) {
+          final aDate = DateTime.parse(aDateStr);
+          final bDate = DateTime.parse(bDateStr);
+          return aDate.compareTo(bDate);
+        }
+        return 0;
+      });
+
+      // Select the first suitable batch
+      final selectedBatch = suitableBatches.first;
+      final batchId = selectedBatch['batch_id'] as int;
+      final quantity = selectedBatch['quantity'] as int;
+      final location =
+          selectedBatch['storage_location_descrption'] as String? ??
+          'Unknown Location';
+      final displayText = 'Batch #$batchId - $location (Qty: $quantity)';
+
+      setState(() {
+        _selectedBatchDisplays[splitIdx]![itemIndex] = displayText;
+        widget.splits[splitIdx].batchIdByItem[itemIndex] = batchId;
+        widget.splits[splitIdx].batchDisplayByItem[itemIndex] = displayText;
+      });
+    } catch (e) {
+      debugPrint(
+        'Error auto-selecting batch for split $splitIdx item $itemIndex: $e',
+      );
     }
   }
 
@@ -1117,6 +1223,10 @@ class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
       builder: (_) => SelectBatchSheet(
         productId: item.productId,
         inventoryId: split.inventoryId!,
+        requiredQty: widget.splits[splitIndex].quantitiesByItem[itemIndex],
+        isStockOut: true,
+        currentlySelectedBatchId:
+            widget.splits[splitIndex].batchIdByItem[itemIndex],
         onSelected: (batchId, displayText) {
           Navigator.pop(context);
           setState(() {

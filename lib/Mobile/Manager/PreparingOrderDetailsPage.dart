@@ -329,8 +329,20 @@ class _PartCard extends StatelessWidget {
                 backgroundImage:
                     part.staffImage != null && part.staffImage!.isNotEmpty
                     ? NetworkImage(part.staffImage!)
-                    : const AssetImage('assets/images/placeholder.png')
-                          as ImageProvider,
+                    : null,
+                backgroundColor: AppColors.card,
+                child: part.staffImage == null || part.staffImage!.isEmpty
+                    ? Text(
+                        part.staffName.isNotEmpty
+                            ? part.staffName.substring(0, 1).toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 14),
               Expanded(

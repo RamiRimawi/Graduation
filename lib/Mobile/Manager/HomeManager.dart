@@ -9,9 +9,15 @@ const double kStatHeight = 144;
 
 class StorageStaff {
   final String name;
-  final int inventory;
+  final List<String> inventoryNames;
   final bool online;
-  StorageStaff(this.name, this.inventory, {this.online = true});
+  final String? profileImage;
+  StorageStaff(
+    this.name,
+    this.inventoryNames, {
+    this.online = true,
+    this.profileImage,
+  });
 }
 
 class LowStockItem {
@@ -32,7 +38,7 @@ class HomeManagerPage extends StatefulWidget {
 
 class _HomeManagerPageState extends State<HomeManagerPage> {
   int pinnedOrdersCount = 0;
-  int ordersUpdated = 5;
+  int ordersPrepared = 0;
 
   List<StorageStaff> staff = [];
   List<LowStockItem> lowStock = [];
@@ -45,16 +51,69 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
   }
 
   void _loadInitialData() {
-    staff = [
-      StorageStaff('Ayman', 2),
-      StorageStaff('Ramadan', 1),
-      StorageStaff('Rami', 2),
-      StorageStaff('Ibraheem', 1),
-      StorageStaff('Ammar', 1),
-    ];
-    setState(() {});
+    _fetchStorageStaff();
     _fetchPinnedOrdersCount();
+    _fetchPreparedOrdersCount();
     _fetchLowStockProducts();
+  }
+
+  Future<void> _fetchStorageStaff() async {
+    try {
+      final response = await supabase
+          .from('storage_staff')
+          .select(
+            'storage_staff_id, name, accounts!inner(is_active, profile_image), inventory:inventory_id(inventory_name)',
+          )
+          .eq('accounts.is_active', true)
+          .order('name');
+
+      List<StorageStaff> staffList = [];
+
+      for (var staffData in response) {
+        final name = staffData['name'] as String? ?? 'Unknown';
+        final inventoryData = staffData['inventory'];
+        final accountsData = staffData['accounts'];
+
+        String? profileImage;
+        if (accountsData != null) {
+          if (accountsData is List && accountsData.isNotEmpty) {
+            profileImage = accountsData.first['profile_image'] as String?;
+          } else if (accountsData is Map) {
+            profileImage = accountsData['profile_image'] as String?;
+          }
+        }
+
+        List<String> inventoryNames = <String>[];
+        if (inventoryData != null && inventoryData is Map) {
+          final invName = inventoryData['inventory_name'];
+          if (invName != null) {
+            inventoryNames.add(invName.toString());
+          }
+        }
+
+        staffList.add(
+          StorageStaff(
+            name,
+            inventoryNames,
+            online: true,
+            profileImage: profileImage,
+          ),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          staff = staffList;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching storage staff: $e');
+      if (mounted) {
+        setState(() {
+          staff = [];
+        });
+      }
+    }
   }
 
   Future<void> _fetchPinnedOrdersCount() async {
@@ -71,6 +130,26 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
       }
     } catch (e) {
       debugPrint('Error fetching pinned orders count: $e');
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _fetchPreparedOrdersCount() async {
+    try {
+      final response = await supabase
+          .from('customer_order')
+          .select('customer_order_id')
+          .eq('order_status', 'Preparing');
+
+      if (mounted) {
+        setState(() {
+          ordersPrepared = response.length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching prepared orders count: $e');
       if (mounted) {
         setState(() {});
       }
@@ -145,6 +224,8 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final statCardWidth = (screenWidth - 48) * 0.32; // 32% of available width
     final double staffCardHeight = kStatHeight * 2 + kGap;
 
     return Scaffold(
@@ -157,8 +238,8 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 120,
+                  Flexible(
+                    flex: 32,
                     child: Column(
                       children: [
                         StatCardFancy(
@@ -174,14 +255,15 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
                         const SizedBox(height: kGap),
                         StatCardFancy(
                           icon: Icons.inventory_2_rounded,
-                          count: '$ordersUpdated',
-                          bottomWord: 'Updated',
+                          count: '$ordersPrepared',
+                          bottomWord: 'Prepared',
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: kGap),
-                  Expanded(
+                  Flexible(
+                    flex: 68,
                     child: StaffCard(data: staff, fixedHeight: staffCardHeight),
                   ),
                 ],
@@ -221,53 +303,69 @@ class StatCardFancy extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = Container(
       height: kStatHeight,
+      width: double.infinity,
       decoration: _cardDecoration(),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.bgDark.withOpacity(.6),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 20, color: AppColors.yellow),
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.bgDark.withOpacity(.6),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: 6),
-              Text(
-                count,
-                style: const TextStyle(
-                  color: AppColors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Order',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+              child: Icon(icon, size: 18, color: AppColors.yellow),
+            ),
+            const SizedBox(height: 4),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  count,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
                 ),
               ),
-              Text(
-                bottomWord,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.gold,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+            ),
+            const SizedBox(height: 2),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Order',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 2),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  bottomWord,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.gold,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -325,8 +423,9 @@ class StaffCard extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) => _StaffRow(
                     name: data[i].name,
-                    inv: data[i].inventory,
+                    inventoryNames: data[i].inventoryNames,
                     online: data[i].online,
+                    profileImage: data[i].profileImage,
                   ),
                 ),
               ),
@@ -340,9 +439,15 @@ class StaffCard extends StatelessWidget {
 
 class _StaffRow extends StatelessWidget {
   final String name;
-  final int inv;
+  final List<String> inventoryNames;
   final bool online;
-  const _StaffRow({required this.name, required this.inv, this.online = true});
+  final String? profileImage;
+  const _StaffRow({
+    required this.name,
+    required this.inventoryNames,
+    this.online = true,
+    this.profileImage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -363,13 +468,19 @@ class _StaffRow extends StatelessWidget {
               CircleAvatar(
                 radius: 14,
                 backgroundColor: AppColors.card,
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                backgroundImage:
+                    profileImage != null && profileImage!.isNotEmpty
+                    ? NetworkImage(profileImage!)
+                    : null,
+                child: profileImage == null || profileImage!.isEmpty
+                    ? Text(
+                        initial,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
+                    : null,
               ),
               if (online)
                 Positioned(
@@ -397,12 +508,16 @@ class _StaffRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            '$inv',
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+          Expanded(
+            child: Text(
+              inventoryNames.isEmpty ? 'N/A' : inventoryNames.join('\n'),
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
             ),
           ),
         ],
