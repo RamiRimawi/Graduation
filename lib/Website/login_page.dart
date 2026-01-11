@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -129,10 +130,14 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 24),
 
                       _GlassField(
-                        hint: "Enter Username",
+                        hint: "Enter User ID",
                         obscure: false,
                         controller: idController,
                         error: usernameError,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
                         errorMessage: "Invalid username",
                         onChanged: () {
                           setState(() => usernameError = false);
@@ -205,6 +210,7 @@ class _GlassField extends StatefulWidget {
   final bool error;
   final String errorMessage;
   final VoidCallback onChanged;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _GlassField({
     required this.hint,
@@ -213,6 +219,7 @@ class _GlassField extends StatefulWidget {
     required this.error,
     required this.errorMessage,
     required this.onChanged,
+    this.inputFormatters,
   });
 
   @override
@@ -269,6 +276,7 @@ class _GlassFieldState extends State<_GlassField> {
             focusNode: _focusNode,
             obscureText: widget.obscure,
             onChanged: (_) => widget.onChanged(),
+            inputFormatters: widget.inputFormatters,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w600,

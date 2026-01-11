@@ -7,6 +7,7 @@ import '../supabase_config.dart';
 import 'bottom_navbar.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
+import 'DeliveryDriver/delivery_archive.dart';
 import 'StroageStaff/staff_home.dart';
 import 'Customer/customer_home_page.dart';
 import 'Customer/customer_cart_page.dart';
@@ -702,7 +703,7 @@ class _AccountPageState extends State<AccountPage> {
           ? Builder(
               builder: (context) {
                 return BottomNavBar(
-                  currentIndex: 1,
+                  currentIndex: (_userRole == 'delivery_driver' || _userRole == 'delivery') ? 2 : 1,
                   onTap: (i) async {
                     if (i == 0) {
                       final prefs = await SharedPreferences.getInstance();
@@ -727,6 +728,18 @@ class _AccountPageState extends State<AccountPage> {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (_) => homePage),
+                        );
+                      }
+                    } else if (i == 1 && (_userRole == 'delivery_driver' || _userRole == 'delivery')) {
+                      // Navigate to Archive page for delivery drivers
+                      final prefs = await SharedPreferences.getInstance();
+                      final String? userIdStr = prefs.getString('current_user_id');
+                      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+                      
+                      if (userId != null && mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => DeliveryArchive(deliveryDriverId: userId)),
                         );
                       }
                     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'deleviry_detail.dart';
+import 'delivery_archive.dart';
+import 'delivery_order_details.dart';
 import '../account_page.dart';
 import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
@@ -26,6 +27,16 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
 
   void _onItemTapped(int index) {
     if (index == 1) {
+      // Navigate to Archive page
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DeliveryArchive(deliveryDriverId: widget.deliveryDriverId),
+        ),
+      );
+      return;
+    }
+    if (index == 2) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const AccountPage()),
@@ -40,11 +51,11 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
     
     try {
       // Fetch customer orders with related customer data and inventory info
-      // Only show orders with status 'Delivery' assigned to this delivery driver
+      // Show only orders with status 'Delivery' (pending deliveries) assigned to this delivery driver
       final data = await supabase
           .from('customer_order')
           .select(
-            'customer_order_id, order_date, order_status, delivered_by_id, customer:customer_id(customer_id, name), customer_order_inventory(inventory_id, inventory:inventory_id(inventory_name))',
+            'customer_order_id, order_date, customer:customer_id(customer_id, name), customer_order_inventory(inventory_id)',
           )
           .eq('order_status', 'Delivery')
           .eq('delivered_by_id', widget.deliveryDriverId)
@@ -59,14 +70,16 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
         final customerId = customerData['customer_id'] as int?;
         final customerName = customerData['name'] as String? ?? 'Unknown Customer';
         final orderId = row['customer_order_id'] as int?;
-        
-        // Get first inventory ID from customer_order_inventory
-        final orderInventory = row['customer_order_inventory'] as List<dynamic>? ?? [];
-        int? inventoryId;
-        
-        if (orderInventory.isNotEmpty) {
-          inventoryId = orderInventory[0]['inventory_id'] as int?;
+        final orderDateStr = row['order_date'] as String?;
+        DateTime? orderDate;
+
+        if (orderDateStr != null) {
+          orderDate = DateTime.tryParse(orderDateStr);
         }
+        
+        // Get order items (customer_order_inventory) and derive product count
+        final orderInventory = row['customer_order_inventory'] as List<dynamic>? ?? [];
+        final int productCount = orderInventory.length;
 
         if (customerId != null && seenCustomerIds.contains(customerId)) {
           continue;
@@ -80,9 +93,20 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
           'orderId': orderId ?? customerId ?? 0,
           'customerId': customerId ?? 0,
           'name': customerName,
-          'inventory': inventoryId ?? 0,
+          'productCount': productCount,
+          'orderDate': orderDate,
         });
       }
+
+      // Sort by order date - newest first (already ordered by query but keeping for consistency)
+      fetched.sort((a, b) {
+        final da = a['orderDate'] as DateTime?;
+        final db = b['orderDate'] as DateTime?;
+        if (da != null && db != null) return db.compareTo(da);
+        if (da != null) return -1;
+        if (db != null) return 1;
+        return 0;
+      });
 
       if (!mounted) return;
       setState(() {
@@ -140,19 +164,22 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => DeleviryDetail(
-                        customerName: customer['name'],
-                        customerId: customer['customerId'],
+                      builder: (context) => DeliveryOrderDetails(
                         orderId: customer['orderId'],
+                        customerName: customer['name'],
+                        readOnly: false,
                         deliveryDriverId: widget.deliveryDriverId,
                       ),
                     ),
                   );
                 },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2D2D2D),
-                    borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.25),
@@ -223,7 +250,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
 
                             const SizedBox(width: 16),
 
-                            // PRODUCT BOX — bigger
+                            // PRODUCT BOX — show product count
                             Container(
                               width: 84,
                               height: 84,
@@ -235,7 +262,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    '${customer['inventory']}',
+                                    '${customer['productCount'] ?? 0}',
                                     style: const TextStyle(
                                       color: Color(0xFFFFEFFF),
                                       fontSize: 25,
@@ -244,7 +271,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                                   ),
                                   const SizedBox(height: 3),
                                   Text(
-                                    'inventory #',
+                                    'Products',
                                     style: TextStyle(
                                       color: const Color(0xFFB7A447),
                                       fontSize: 14,
@@ -259,6 +286,28 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                       ],
                     ),
                   ),
+                ),
+                    // Status Badge - Assigned
+                    Positioned(
+                      top: -6,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFB7A447),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Assigned',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );

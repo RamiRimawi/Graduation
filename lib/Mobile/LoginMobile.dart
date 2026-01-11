@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import '../supabase_config.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
@@ -375,6 +376,12 @@ class _LoginPageState extends State<LoginPage> {
                       obscure: false,
                       focusNode: _usernameFocus,
                       controller: _userIdController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(9),
+                      ],
+                      maxLength: 9,
                     ),
                     const SizedBox(height: 16),
 
@@ -488,12 +495,18 @@ class _LoginPageState extends State<LoginPage> {
     required bool obscure,
     required FocusNode focusNode,
     required TextEditingController controller,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    int? maxLength,
   }) {
     return TextField(
       controller: controller,
       focusNode: focusNode,
       obscureText: obscure,
       enabled: !_isLoading,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      maxLength: maxLength,
       style: const TextStyle(
         color: AppColors.white,
         fontSize: 14,
@@ -530,6 +543,7 @@ class _LoginPageState extends State<LoginPage> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
+        counterText: maxLength != null ? '' : null,
       ),
     );
   }

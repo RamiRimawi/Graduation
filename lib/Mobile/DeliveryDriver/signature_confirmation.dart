@@ -9,6 +9,7 @@ class SignatureConfirmation extends StatefulWidget {
   final int customerId;
   final int orderId;
   final List<Map<String, dynamic>>? products;
+  final Map<int, int>? deliveredQuantities;
 
   const SignatureConfirmation({
     super.key,
@@ -16,6 +17,7 @@ class SignatureConfirmation extends StatefulWidget {
     required this.customerId,
     required this.orderId,
     this.products,
+    this.deliveredQuantities,
   });
 
   @override
@@ -258,10 +260,23 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                             } catch (e) {
                               debugPrint('❌ Error clearing current_order_id: $e');
                             }
-                          // Update order descriptions using edited quantities if provided,
-                          // otherwise fall back to DB values.
+                          // Update order descriptions using edited quantities if provided
                           try {
-                            if (widget.products != null && widget.products!.isNotEmpty) {
+                            if (widget.deliveredQuantities != null && widget.deliveredQuantities!.isNotEmpty) {
+                              for (final entry in widget.deliveredQuantities!.entries) {
+                                final productId = entry.key;
+                                final qty = entry.value;
+                                await supabase
+                                    .from('customer_order_description')
+                                    .update({
+                                      'delivered_quantity': qty,
+                                      'delivered_date': DateTime.now().toIso8601String(),
+                                    })
+                                    .eq('customer_order_id', widget.orderId)
+                                    .eq('product_id', productId);
+                              }
+                              debugPrint('Delivered quantities updated from edited values for order ${widget.orderId}');
+                            } else if (widget.products != null && widget.products!.isNotEmpty) {
                               for (final p in widget.products!) {
                                 final productId = p['product_id'] as int?;
                                 final qty = p['quantity'] as int? ?? 0;

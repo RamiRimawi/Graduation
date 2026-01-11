@@ -70,6 +70,15 @@ class _BottomNavBarState extends State<BottomNavBar> {
       ];
     }
 
+    // Delivery Driver layout
+    if (r == 'delivery_driver' || r == 'delivery') {
+      return [
+        _NavItem(Icons.home_filled, 'Home'),
+        _NavItem(Icons.archive_outlined, 'Archive'),
+        _NavItem(Icons.person, 'Account'),
+      ];
+    }
+
     // Default (old) layout — keep the original compact two-item layout
     return [
       _NavItem(Icons.home_filled, 'Home'),
