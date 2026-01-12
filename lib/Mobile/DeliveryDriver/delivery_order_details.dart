@@ -263,6 +263,8 @@ class _DeliveryOrderDetailsState extends State<DeliveryOrderDetails> {
                             ),
                         ],
                       ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
                     ),
                   ),
                 ],
@@ -307,7 +309,10 @@ class _DeliveryOrderDetailsState extends State<DeliveryOrderDetails> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: _openRoute,
-                        child: const Text('View Route on Map'),
+                        child: const Text('View Route on Map' ,
+                        style: TextStyle(color: Colors.white,
+                                         fontWeight: FontWeight.w800),
+                               ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -353,7 +358,10 @@ class _DeliveryOrderDetailsState extends State<DeliveryOrderDetails> {
                             ),
                           );
                         },
-                        child: const Text('Confirm Delivery'),
+                        child: const Text('Confirm Delivery',
+                        style: TextStyle(color: Colors.white,
+                               fontWeight: FontWeight.w800),),
+                  
                       ),
                     ),
                     
@@ -485,7 +493,7 @@ class _InventoryCard extends StatelessWidget {
           const Row(
             children: [
               Expanded(
-                flex: 5,
+                flex: 4,
                 child: Text(
                   'Product',
                   style: TextStyle(
@@ -496,9 +504,9 @@ class _InventoryCard extends StatelessWidget {
                 ),
               ),
               Expanded(
-                flex: 4,
+                flex: 3,
                 child: Padding(
-                  padding: EdgeInsets.only(left: 24),
+                  padding: EdgeInsets.only(left: 8),
                   child: Text(
                     'Brand',
                     style: TextStyle(
@@ -510,7 +518,7 @@ class _InventoryCard extends StatelessWidget {
                 ),
               ),
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Padding(
                   padding: EdgeInsets.only(left: 8),
                   child: Text(
@@ -541,7 +549,7 @@ class _InventoryCard extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    flex: 5,
+                    flex: 4,
                     child: Text(
                       displayName,
                       style: const TextStyle(
@@ -553,8 +561,9 @@ class _InventoryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Expanded(
-                    flex: 4,
+                    flex: 3,
                     child: Text(
                       item.brand,
                       style: const TextStyle(
@@ -562,28 +571,30 @@ class _InventoryCard extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Expanded(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: readOnly
-                          ? Text(
-                              '${deliveredQty[item.productId] ?? item.quantity} ${item.unit}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFFB7A447),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
+                    flex: 3,
+                    child: readOnly
+                        ? Text(
+                            '${deliveredQty[item.productId] ?? item.quantity} ${item.unit}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFB7A447),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
                                     final currentQty = deliveredQty[item.productId] ?? item.quantity;
                                     final controller = TextEditingController(
                                       text: currentQty.toString(),
@@ -640,35 +651,37 @@ class _InventoryCard extends StatelessWidget {
                                       },
                                     );
                                   },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFB7A447),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      '${deliveredQty[item.productId] ?? item.quantity}',
-                                      style: const TextStyle(
-                                        color: Color(0xFF202020),
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w900,
-                                      ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFB7A447),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${deliveredQty[item.productId] ?? item.quantity}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF202020),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
                                   item.unit,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     color: Colors.white70,
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
                                   ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
-                            ),
-                    ),
+                              ),
+                            ],
+                          ),
                   ),
                 ],
               ),

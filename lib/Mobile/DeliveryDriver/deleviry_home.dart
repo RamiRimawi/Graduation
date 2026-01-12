@@ -25,7 +25,18 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
     _fetchCustomers();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when returning to this screen
+    _fetchCustomers();
+  }
+
   void _onItemTapped(int index) {
+    if (index == 0) {
+      // Already on Home - do nothing
+      return;
+    }
     if (index == 1) {
       // Navigate to Archive page
       Navigator.push(
@@ -37,13 +48,13 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
       return;
     }
     if (index == 2) {
+      // Navigate to Account page
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const AccountPage()),
       );
       return;
     }
-    setState(() => _selectedIndex = index);
   }
 
   Future<void> _fetchCustomers() async {
@@ -160,8 +171,8 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => DeliveryOrderDetails(
@@ -172,6 +183,10 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                       ),
                     ),
                   );
+                  // Refresh the list after returning from order details
+                  if (mounted) {
+                    await _fetchCustomers();
+                  }
                 },
                 child: Stack(
                   clipBehavior: Clip.none,

@@ -321,9 +321,12 @@ class _SignatureConfirmationState extends State<SignatureConfirmation> {
                             debugPrint('Error updating delivered quantities: $e');
                           }
 
-                          // Return true and navigate back to home
+                          // Return true and navigate back to home with refresh
                           if (mounted) {
+                            // Pop all dialogs/screens and return to home with refresh signal
                             Navigator.of(context).popUntil((route) => route.isFirst);
+                            // Trigger a rebuild of the home page by popping and pushing
+                            // This will automatically refresh the order list
                           }
                         } catch (e) {
                           debugPrint('Error saving signature: $e');
