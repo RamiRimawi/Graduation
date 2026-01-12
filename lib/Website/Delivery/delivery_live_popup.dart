@@ -30,6 +30,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   String? _customerName;
   int? _orderId;
   List<Map<String, dynamic>> _otherOrders = [];
+  List<Map<String, dynamic>> _deliveredOrders = [];
   List<LatLng> _routePoints = const [];
   bool _isRouting = false;
   Timer? _pollingTimer;
@@ -186,9 +187,39 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                       .order('order_date', ascending: false)
                   as List<dynamic>;
 
+          // ✅ جلب الأوردرات المسلمة (Delivered orders)
+          final deliveredOrdersRaw =
+              await supabase
+                      .from('customer_order')
+                      .select('customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
+                      .eq('delivered_by_id', widget.driverId)
+                      .eq('order_status', 'Delivered')
+                      .limit(50)
+                  as List<dynamic>;
+
+          // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم
+          final deliveredOrders = deliveredOrdersRaw
+              .where((o) {
+                final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
+                return descriptions != null && descriptions.isNotEmpty && descriptions.first['delivered_date'] != null;
+              })
+              .toList()
+            ..sort((a, b) {
+              final aDate = ((a as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+              final bDate = ((b as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+              return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
+            });
+          final limitedDeliveredOrders = deliveredOrders.take(10).toList();
+
           if (mounted) {
             setState(() {
               _otherOrders = otherOrders.map((o) {
+                final c =
+                    (o as Map<String, dynamic>)['customer']
+                        as Map<String, dynamic>?;
+                return {'order_id': o['customer_order_id'], 'name': c?['name']};
+              }).toList();
+              _deliveredOrders = limitedDeliveredOrders.map((o) {
                 final c =
                     (o as Map<String, dynamic>)['customer']
                         as Map<String, dynamic>?;
@@ -208,6 +239,30 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                     .order('order_date', ascending: false)
                 as List<dynamic>;
 
+        // ✅ جلب الأوردرات المسلمة (Delivered orders)
+        final deliveredOrdersRaw =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
+                    .eq('delivered_by_id', widget.driverId)
+                    .eq('order_status', 'Delivered')
+                    .limit(50)
+                as List<dynamic>;
+
+        // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم
+        final deliveredOrders = deliveredOrdersRaw
+            .where((o) {
+              final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
+              return descriptions != null && descriptions.isNotEmpty && descriptions.first['delivered_date'] != null;
+            })
+            .toList()
+          ..sort((a, b) {
+            final aDate = ((a as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+            final bDate = ((b as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+            return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
+          });
+        final limitedDeliveredOrders = deliveredOrders.take(10).toList();
+
         if (mounted) {
           setState(() {
             _customerLocation = null;
@@ -215,6 +270,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
             _orderId = null;
             _routePoints = [];
             _otherOrders = allOrders.map((o) {
+              final c =
+                  (o as Map<String, dynamic>)['customer']
+                      as Map<String, dynamic>?;
+              return {'order_id': o['customer_order_id'], 'name': c?['name']};
+            }).toList();
+            _deliveredOrders = limitedDeliveredOrders.map((o) {
               final c =
                   (o as Map<String, dynamic>)['customer']
                       as Map<String, dynamic>?;
@@ -349,7 +410,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        const SizedBox(height: 8),
                         Text(
                           _orderId != null
                               ? 'Now delivering to'
@@ -364,6 +424,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                         Row(
                           children: const [
                             Expanded(
+                              flex: 2,
                               child: Text(
                                 'Order ID #',
                                 style: TextStyle(
@@ -373,7 +434,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                 ),
                               ),
                             ),
+                            SizedBox(width: 24),
                             Expanded(
+                              flex: 5,
                               child: Text(
                                 'Customer Name',
                                 style: TextStyle(
@@ -383,109 +446,342 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                 ),
                               ),
                             ),
+                            SizedBox(width: 80),
                           ],
                         ),
                         const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2D2D2D),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: Offset(0, 3),
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
                               ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _orderId != null ? _orderId.toString() : '-',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2D2D2D),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 6,
+                                    offset: Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      _orderId != null ? _orderId.toString() : '-',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    flex: 5,
+                                    child: Text(
+                                      _customerName ?? '-',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 80),
+                                ],
+                              ),
+                            ),
+                            if (_orderId != null)
+                              Positioned(
+                                top: -6,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF2196F3),
+                                        Color(0xFF1976D2),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF2196F3).withValues(alpha: 0.4),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.local_shipping,
+                                        color: Colors.white,
+                                        size: 12,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Active',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                              Expanded(
-                                child: Text(
-                                  _customerName ?? '-',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_otherOrders.isNotEmpty) ...[
+                                  const Text(
+                                    'Other orders',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ],
+                                  const SizedBox(height: 12),
+                                  ..._otherOrders.map(
+                                    (o) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 17),
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF2D2D2D),
+                                              borderRadius: BorderRadius.circular(14),
+                                              boxShadow: const [
+                                                BoxShadow(
+                                                  color: Colors.black26,
+                                                  blurRadius: 6,
+                                                  offset: Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    o['order_id']?.toString() ?? '-',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 24),
+                                                Expanded(
+                                                  flex: 5,
+                                                  child: Text(
+                                                    o['name'] ?? '-',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 100),
+                                              ],
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: -6,
+                                            right: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: const LinearGradient(
+                                                  colors: [
+                                                    Color(0xFFFF9800),
+                                                    Color(0xFFF57C00),
+                                                  ],
+                                                ),
+                                                borderRadius: BorderRadius.circular(8),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.orangeAccent.withValues(alpha: 0.3),
+                                                    blurRadius: 4,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.schedule,
+                                                    color: Colors.white,
+                                                    size: 12,
+                                                  ),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'Pending',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (_deliveredOrders.isNotEmpty) ...[
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    'Orders Delivered',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ..._deliveredOrders.map(
+                                    (o) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 16),
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF2D2D2D),
+                                              borderRadius: BorderRadius.circular(14),
+                                              boxShadow: const [
+                                                BoxShadow(
+                                                  color: Colors.black26,
+                                                  blurRadius: 6,
+                                                  offset: Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    o['order_id']?.toString() ?? '-',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 24),
+                                                Expanded(
+                                                  flex: 5,
+                                                  child: Text(
+                                                    o['name'] ?? '-',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 18,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 110),
+                                              ],
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: -6,
+                                            right: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: const LinearGradient(
+                                                  colors: [
+                                                    Color(0xFF4CAF50),
+                                                    Color(0xFF388E3C),
+                                                  ],
+                                                ),
+                                                borderRadius: BorderRadius.circular(8),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.green.withValues(alpha: 0.3),
+                                                    blurRadius: 4,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.check_circle,
+                                                    color: Colors.white,
+                                                    size: 12,
+                                                  ),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'Delivered',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
-                        if (_otherOrders.isNotEmpty) ...[
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Other orders',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ..._otherOrders.map(
-                            (o) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2D2D2D),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 6,
-                                      offset: Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        o['order_id']?.toString() ?? '-',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        o['name'] ?? '-',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Spacer(),
                       ],
                     ),
                   ),

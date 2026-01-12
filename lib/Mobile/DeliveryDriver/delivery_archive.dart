@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'deleviry_home.dart';
 import 'delivery_order_details.dart';
 import '../../supabase_config.dart';
 import '../bottom_navbar.dart';
@@ -26,19 +27,27 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
 
   void _onItemTapped(int index) {
     if (index == 0) {
-      // Go back to Home
-      Navigator.pop(context);
+      // Navigate to Home
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeDeleviry(deliveryDriverId: widget.deliveryDriverId),
+        ),
+      );
+      return;
+    }
+    if (index == 1) {
+      // Already on Archive - do nothing
       return;
     }
     if (index == 2) {
       // Navigate to Account page
-      Navigator.pushReplacement(
+      Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const AccountPage()),
       );
       return;
     }
-    setState(() => _selectedIndex = index);
   }
 
   String _formatDeliveryDate(String? dateString) {

@@ -706,41 +706,49 @@ class _AccountPageState extends State<AccountPage> {
                   currentIndex: (_userRole == 'delivery_driver' || _userRole == 'delivery') ? 2 : 1,
                   onTap: (i) async {
                     if (i == 0) {
-                      final prefs = await SharedPreferences.getInstance();
-                      final String? userIdStr = prefs.getString(
-                        'current_user_id',
-                      );
-                      final int? userId = userIdStr != null
-                          ? int.tryParse(userIdStr)
-                          : null;
-
-                      Widget homePage;
-                      if ((_userRole == 'delivery_driver' ||
-                              _userRole == 'delivery') &&
-                          userId != null) {
-                        homePage = HomeDeleviry(deliveryDriverId: userId);
-                      } else if (_userRole == 'storage_staff') {
-                        homePage = const HomeStaff();
+                      // Home button
+                      if (_userRole == 'delivery_driver' || _userRole == 'delivery') {
+                        final prefs = await SharedPreferences.getInstance();
+                        final String? userIdStr = prefs.getString('current_user_id');
+                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+                        
+                        if (userId != null && mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => HomeDeleviry(deliveryDriverId: userId)),
+                          );
+                        }
                       } else {
-                        homePage = const SupplierHomePage();
+                        final prefs = await SharedPreferences.getInstance();
+                        final String? userIdStr = prefs.getString('current_user_id');
+                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+
+                        Widget homePage;
+                        if (_userRole == 'storage_staff') {
+                          homePage = const HomeStaff();
+                        } else {
+                          homePage = const SupplierHomePage();
+                        }
+                        if (mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => homePage),
+                          );
+                        }
                       }
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => homePage),
-                        );
-                      }
-                    } else if (i == 1 && (_userRole == 'delivery_driver' || _userRole == 'delivery')) {
-                      // Navigate to Archive page for delivery drivers
-                      final prefs = await SharedPreferences.getInstance();
-                      final String? userIdStr = prefs.getString('current_user_id');
-                      final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
-                      
-                      if (userId != null && mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => DeliveryArchive(deliveryDriverId: userId)),
-                        );
+                    } else if (i == 1) {
+                      // Archive button - only for delivery drivers
+                      if (_userRole == 'delivery_driver' || _userRole == 'delivery') {
+                        final prefs = await SharedPreferences.getInstance();
+                        final String? userIdStr = prefs.getString('current_user_id');
+                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+                        
+                        if (userId != null && mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => DeliveryArchive(deliveryDriverId: userId)),
+                          );
+                        }
                       }
                     }
                   },
