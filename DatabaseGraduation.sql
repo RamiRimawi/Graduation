@@ -391,3 +391,31 @@ CREATE TABLE public.unit (
   unit_name USER-DEFINED,
   CONSTRAINT unit_pkey PRIMARY KEY (unit_id)
 );
+
+
+
+payment_method_enum =	cash, check, endorsed check	
+
+
+
+Type =	Accountant, Storage Manager, Storage Staff, Delivery Driver, Customer, Supplier, Sales Rep	
+
+
+
+unit_name_enum =	cm, weight, pcs	
+
+
+
+supplier_order_status_enum =	Sent, Accepted, Rejected, Delivered, Updated, Hold, Pending	
+
+
+customer_check_status_enum =	Cashed, Returned, Company Box, Endorsed	
+
+
+supplier_check_status_enum =	Cashed, Returned, Pending	
+
+
+
+customer_order_status_enum =	Received, Pinned, Prepared, Delivery, Delivered, Updated to Accountant, Hold, Preparing, Updated to Customer, Canceled	
+
+

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
 import '../MobileAccounts/MobileAccounts_shared_popup_widgets.dart';
 
@@ -32,10 +33,30 @@ class _AddCustomerAccountPopupState extends State<AddCustomerAccountPopup> {
 
   Future<void> _loadCustomers() async {
     try {
-      // Fetch customers that don't have an account yet
+      // Fetch all accounts with is_active = false and type = 'Customer'
+      final accountsResponse = await supabase
+          .from('accounts')
+          .select('user_id')
+          .eq('type', 'Customer')
+          .eq('is_active', false);
+
+      final inactiveUserIds = accountsResponse
+          .map((account) => account['user_id'] as int)
+          .toList();
+
+      if (inactiveUserIds.isEmpty) {
+        setState(() {
+          _customers = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      // Fetch customers whose IDs are in the inactive accounts list
       final response = await supabase
           .from('customer')
           .select('customer_id, name')
+          .inFilter('customer_id', inactiveUserIds)
           .order('name');
 
       setState(() {
@@ -85,33 +106,39 @@ class _AddCustomerAccountPopupState extends State<AddCustomerAccountPopup> {
     if (hasError) return;
 
     try {
+      // Get current username from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final currentUsername = prefs.getString('username') ?? 'System';
+
       // Check if account already exists
       final existing = await supabase
           .from('accounts')
-          .select('user_id')
+          .select('user_id, password')
           .eq('user_id', _selectedCustomerId!)
           .maybeSingle();
 
       if (existing != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This customer already has an account'),
-            ),
-          );
-        }
-        return;
+        // Account exists, update it with password and activate it
+        await supabase
+            .from('accounts')
+            .update({
+              'password': passCtrl.text.trim(),
+              'is_active': true,
+              'last_action_by': currentUsername,
+              'last_action_time': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', _selectedCustomerId!);
+      } else {
+        // Account doesn't exist, insert new one
+        await supabase.from('accounts').insert({
+          'user_id': _selectedCustomerId,
+          'password': passCtrl.text.trim(),
+          'type': 'Customer',
+          'is_active': true,
+          'last_action_by': currentUsername,
+          'last_action_time': DateTime.now().toIso8601String(),
+        });
       }
-
-      // Insert new account into unified accounts table
-      await supabase.from('accounts').insert({
-        'user_id': _selectedCustomerId,
-        'password': passCtrl.text.trim(),
-        'type': 'Customer',
-        'is_active': true,
-        'last_action_by': 'Admin',
-        'last_action_time': DateTime.now().toIso8601String(),
-      });
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -301,9 +328,28 @@ class _CustomerDropdownState extends State<_CustomerDropdown> {
             fontWeight: FontWeight.w500,
           ),
           items: widget.customers.map((customer) {
+            final name = customer['name'] ?? 'Unknown';
+            final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
             return DropdownMenuItem<int>(
               value: customer['customer_id'] as int,
-              child: Text(customer['name'] ?? 'Unknown'),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFFB7A447),
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
             );
           }).toList(),
           onChanged: (int? customerId) {

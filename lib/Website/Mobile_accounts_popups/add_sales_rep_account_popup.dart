@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
 import '../MobileAccounts/MobileAccounts_shared_popup_widgets.dart';
 
@@ -32,10 +33,30 @@ class _AddSalesRepAccountPopupState extends State<AddSalesRepAccountPopup> {
 
   Future<void> _loadSalesReps() async {
     try {
-      // Fetch sales reps that don't have an account yet
+      // Fetch all accounts with is_active = false and type = 'Sales Rep'
+      final accountsResponse = await supabase
+          .from('accounts')
+          .select('user_id')
+          .eq('type', 'Sales Rep')
+          .eq('is_active', false);
+
+      final inactiveUserIds = accountsResponse
+          .map((account) => account['user_id'] as int)
+          .toList();
+
+      if (inactiveUserIds.isEmpty) {
+        setState(() {
+          _salesReps = [];
+          _loading = false;
+        });
+        return;
+      }
+
+      // Fetch sales reps whose IDs are in the inactive accounts list
       final response = await supabase
           .from('sales_representative')
           .select('sales_rep_id, name')
+          .inFilter('sales_rep_id', inactiveUserIds)
           .order('name');
 
       setState(() {
@@ -85,33 +106,39 @@ class _AddSalesRepAccountPopupState extends State<AddSalesRepAccountPopup> {
     if (hasError) return;
 
     try {
+      // Get current username from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final currentUsername = prefs.getString('username') ?? 'System';
+
       // Check if account already exists
       final existing = await supabase
           .from('accounts')
-          .select('user_id')
+          .select('user_id, password')
           .eq('user_id', _selectedSalesRepId!)
           .maybeSingle();
 
       if (existing != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This sales rep already has an account'),
-            ),
-          );
-        }
-        return;
+        // Account exists, update it with password and activate it
+        await supabase
+            .from('accounts')
+            .update({
+              'password': passCtrl.text.trim(),
+              'is_active': true,
+              'last_action_by': currentUsername,
+              'last_action_time': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', _selectedSalesRepId!);
+      } else {
+        // Account doesn't exist, insert new one
+        await supabase.from('accounts').insert({
+          'user_id': _selectedSalesRepId,
+          'password': passCtrl.text.trim(),
+          'type': 'Sales Rep',
+          'is_active': true,
+          'last_action_by': currentUsername,
+          'last_action_time': DateTime.now().toIso8601String(),
+        });
       }
-
-      // Insert new account into unified accounts table
-      await supabase.from('accounts').insert({
-        'user_id': _selectedSalesRepId,
-        'password': passCtrl.text.trim(),
-        'type': 'Sales Rep',
-        'is_active': true,
-        'last_action_by': 'Admin',
-        'last_action_time': DateTime.now().toIso8601String(),
-      });
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -301,9 +328,28 @@ class _SalesRepDropdownState extends State<_SalesRepDropdown> {
             fontWeight: FontWeight.w500,
           ),
           items: widget.salesReps.map((salesRep) {
+            final name = salesRep['name'] ?? 'Unknown';
+            final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
             return DropdownMenuItem<int>(
               value: salesRep['sales_rep_id'] as int,
-              child: Text(salesRep['name'] ?? 'Unknown'),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFFB7A447),
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                ],
+              ),
             );
           }).toList(),
           onChanged: (int? salesRepId) {

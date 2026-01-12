@@ -1371,12 +1371,21 @@ class _AccountCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 15,
-              backgroundColor: Colors.grey.shade800,
+              backgroundColor: imageUrl != null && imageUrl!.isNotEmpty
+                  ? Colors.grey.shade800
+                  : const Color(0xFFB7A447),
               backgroundImage: imageUrl != null && imageUrl!.isNotEmpty
                   ? NetworkImage(imageUrl!)
                   : null,
               child: (imageUrl == null || imageUrl!.isEmpty)
-                  ? const Icon(Icons.person, color: Colors.white, size: 16)
+                  ? Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
                   : null,
             ),
             const SizedBox(width: 10),

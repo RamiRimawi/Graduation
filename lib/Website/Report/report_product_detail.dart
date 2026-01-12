@@ -545,7 +545,7 @@ class _ProfitChart extends StatefulWidget {
 
 class _ProfitChartState extends State<_ProfitChart>
     with SingleTickerProviderStateMixin {
-  String selectedYear = '2024';
+  String selectedYear = DateTime.now().year.toString();
   List<double> profitData = List.filled(12, 0);
   bool _loading = true;
 
@@ -731,14 +731,18 @@ class _ProfitChartState extends State<_ProfitChart>
                       letterSpacing: 1.5,
                     ),
                     borderRadius: BorderRadius.circular(12),
-                    items: const ['2023','2024', '2025', '2026']
-                        .map(
-                          (year) => DropdownMenuItem(
-                            value: year,
-                            child: Center(child: Text(year)),
-                          ),
-                        )
-                        .toList(),
+                    items:
+                        List.generate(
+                              DateTime.now().year - 2022 + 1,
+                              (index) => (2022 + index).toString(),
+                            )
+                            .map(
+                              (year) => DropdownMenuItem(
+                                value: year,
+                                child: Center(child: Text(year)),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) {
                       if (value != null) {
                         setState(() {
@@ -856,67 +860,64 @@ class _ProfitChartState extends State<_ProfitChart>
                                         mainAxisAlignment:
                                             MainAxisAlignment.end,
                                         children: [
-                                          // العمود نفسه
-                                          SizedBox(
-                                            height: _barMaxHeight + 24,
-                                            child: Align(
-                                              alignment: Alignment.bottomCenter,
-                                              child: AnimatedContainer(
-                                                duration: const Duration(
-                                                  milliseconds: 230,
-                                                ),
-                                                curve: Curves.easeOutCubic,
-                                                width: barWidth,
-                                                height: barHeight,
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.blue
-                                                      .withOpacity(opacity),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                  boxShadow:
-                                                      isHovered && barHeight > 0
-                                                      ? [
-                                                          BoxShadow(
-                                                            color: AppColors
-                                                                .blue
-                                                                .withOpacity(
-                                                                  0.4,
-                                                                ),
-                                                            blurRadius: 10,
-                                                            spreadRadius: 1,
-                                                            offset:
-                                                                const Offset(
-                                                                  0,
-                                                                  2,
-                                                                ),
-                                                          ),
-                                                        ]
-                                                      : [],
+                                          // Profit label ABOVE the bar
+                                          Opacity(
+                                            opacity: anim,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 6,
+                                              ),
+                                              child: Text(
+                                                '\$ ${profitData[index].toInt()} ',
+                                                style: TextStyle(
+                                                  color: isHovered
+                                                      ? AppColors.white
+                                                      : AppColors.white
+                                                            .withOpacity(0.9),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
                                             ),
                                           ),
-
-                                          const SizedBox(height: 4),
-
-                                          // القيمة تحت العمود
-                                          Opacity(
-                                            opacity: anim,
-                                            child: Text(
-                                              profitData[index] >= 1000
-                                                  ? '${(profitData[index] / 1000).toStringAsFixed(1)}K'
-                                                  : profitData[index]
-                                                        .toStringAsFixed(0),
-                                              style: TextStyle(
-                                                color: isHovered
-                                                    ? AppColors.white
-                                                    : AppColors.white
-                                                          .withOpacity(0.9),
-                                                fontSize: 10,
-                                                fontWeight: isHovered
-                                                    ? FontWeight.w600
-                                                    : FontWeight.w400,
+                                          // The bar itself
+                                          AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 250,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            width: barWidth,
+                                            height: barHeight,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.blue.withOpacity(
+                                                opacity,
                                               ),
+                                              borderRadius:
+                                                  BorderRadius.circular(5),
+                                              boxShadow:
+                                                  isHovered && barHeight > 0
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: AppColors.blue
+                                                            .withOpacity(0.4),
+                                                        blurRadius: 10,
+                                                        spreadRadius: 1,
+                                                        offset: const Offset(
+                                                          0,
+                                                          2,
+                                                        ),
+                                                      ),
+                                                    ]
+                                                  : [],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          // Month label under the bar
+                                          Text(
+                                            months[index],
+                                            style: const TextStyle(
+                                              color: AppColors.grey,
+                                              fontSize: 10,
                                             ),
                                           ),
                                         ],

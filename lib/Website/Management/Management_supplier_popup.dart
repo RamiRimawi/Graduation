@@ -434,6 +434,19 @@ class _SupplierFormPopupState extends State<SupplierFormPopup> {
                     cityId = insertedCity['supplier_city_id'] as int;
                   }
 
+                  // Create account FIRST (foreign key constraint requires it)
+                  try {
+                    await supabase.from('accounts').insert({
+                      'user_id': idVal,
+                      'password': '',
+                      'type': 'Supplier',
+                      'is_active': false,
+                    });
+                  } catch (e) {
+                    // If account already exists, that's okay, continue
+                    debugPrint('Account may already exist: $e');
+                  }
+
                   final inserted = await supabase
                       .from('supplier')
                       .insert({

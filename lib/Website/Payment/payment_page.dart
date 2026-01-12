@@ -326,8 +326,10 @@ class _UpcomingChecksCardState extends State<_UpcomingChecksCard> {
 
       // Sort by date
       combinedChecks.sort((a, b) {
-        final dateA = DateTime.tryParse(a['dateRaw']?.toString() ?? '') ?? DateTime.now();
-        final dateB = DateTime.tryParse(b['dateRaw']?.toString() ?? '') ?? DateTime.now();
+        final dateA =
+            DateTime.tryParse(a['dateRaw']?.toString() ?? '') ?? DateTime.now();
+        final dateB =
+            DateTime.tryParse(b['dateRaw']?.toString() ?? '') ?? DateTime.now();
         return dateA.compareTo(dateB);
       });
 
@@ -953,7 +955,7 @@ class _ProfitChart extends StatefulWidget {
 
 class _ProfitChartState extends State<_ProfitChart>
     with SingleTickerProviderStateMixin {
-  String selectedYear = '2026';
+  String selectedYear = DateTime.now().year.toString();
 
   List<double> profitData = List.filled(12, 0.0);
   final List<String> months = [
@@ -1120,12 +1122,18 @@ class _ProfitChartState extends State<_ProfitChart>
                       letterSpacing: 1.2,
                     ),
                     borderRadius: BorderRadius.circular(10),
-                    items: const ['2024', '2025', '2026']
-                        .map(
-                          (year) =>
-                              DropdownMenuItem(value: year, child: Text(year)),
-                        )
-                        .toList(),
+                    items:
+                        List.generate(
+                              DateTime.now().year - 2022 + 1,
+                              (index) => (2022 + index).toString(),
+                            )
+                            .map(
+                              (year) => DropdownMenuItem(
+                                value: year,
+                                child: Text(year),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) {
                       if (value != null) {
                         setState(() => selectedYear = value);
@@ -1181,9 +1189,7 @@ class _ProfitChartState extends State<_ProfitChart>
                                   final step = chartMaxY / (_tickCount - 1);
                                   final value = index * step;
                                   return Text(
-                                    value == 0
-                                        ? '0'
-                                        : value.toStringAsFixed(0),
+                                    value == 0 ? '0' : value.toStringAsFixed(0),
                                     style: const TextStyle(
                                       color: AppColors.grey,
                                       fontSize: 10,

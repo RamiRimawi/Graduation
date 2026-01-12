@@ -728,6 +728,19 @@ class _SalesRepFormPopupState extends State<SalesRepFormPopup> {
                     cityId = insertedCity['sales_rep_city_id'] as int;
                   }
 
+                  // Create account FIRST (foreign key constraint requires it)
+                  try {
+                    await supabase.from('accounts').insert({
+                      'user_id': idVal,
+                      'password': '',
+                      'type': 'Sales Rep',
+                      'is_active': false,
+                    });
+                  } catch (e) {
+                    // If account already exists, that's okay, continue
+                    debugPrint('Account may already exist: $e');
+                  }
+
                   final inserted = await supabase
                       .from('sales_representative')
                       .insert({

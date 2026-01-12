@@ -564,6 +564,19 @@ class _CustomerFormPopupState extends State<CustomerFormPopup> {
                     }
                   }
 
+                  // Create account FIRST (foreign key constraint requires it)
+                  try {
+                    await supabase.from('accounts').insert({
+                      'user_id': idVal,
+                      'password': '',
+                      'type': 'Customer',
+                      'is_active': false,
+                    });
+                  } catch (e) {
+                    // If account already exists, that's okay, continue
+                    debugPrint('Account may already exist: $e');
+                  }
+
                   // insert customer
                   final inserted = await supabase
                       .from('customer')
