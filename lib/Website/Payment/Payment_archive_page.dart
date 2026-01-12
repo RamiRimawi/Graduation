@@ -29,6 +29,11 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
   final TextEditingController _fromDateController = TextEditingController();
   final TextEditingController _toDateController = TextEditingController();
 
+  // Payment method filter state
+  bool _filterCash = false;
+  bool _filterCheck = false;
+  bool _filterReturnedCheck = false;
+
   // Hover state tracking
   int? hoveredRow;
 
@@ -72,6 +77,20 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
       }).toList();
     }
 
+    // Apply payment method filter
+    if (_filterCash || _filterCheck || _filterReturnedCheck) {
+      tempIncoming = tempIncoming.where((payment) {
+        final method = payment['payment_method'].toString().toLowerCase();
+        if (_filterCash && method == 'cash') return true;
+        if (_filterCheck &&
+            (method.contains('check') || method.contains('cheque')) &&
+            !method.contains('returned'))
+          return true;
+        if (_filterReturnedCheck && method.contains('returned')) return true;
+        return false;
+      }).toList();
+    }
+
     // Apply search filter
     if (query.isNotEmpty) {
       tempIncoming = tempIncoming
@@ -99,6 +118,20 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           return false;
         }
         return true;
+      }).toList();
+    }
+
+    // Apply payment method filter
+    if (_filterCash || _filterCheck || _filterReturnedCheck) {
+      tempOutgoing = tempOutgoing.where((payment) {
+        final method = payment['payment_method'].toString().toLowerCase();
+        if (_filterCash && method == 'cash') return true;
+        if (_filterCheck &&
+            (method.contains('check') || method.contains('cheque')) &&
+            !method.contains('returned'))
+          return true;
+        if (_filterReturnedCheck && method.contains('returned')) return true;
+        return false;
       }).toList();
     }
 
@@ -1527,7 +1560,7 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Filter by Date Range',
+                          'Filter Options',
                           style: TextStyle(
                             color: AppColors.blue,
                             fontSize: 15,
@@ -1537,6 +1570,187 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                         const SizedBox(height: 12),
                         const Divider(color: Color(0xFF3D3D3D), height: 1),
                         const SizedBox(height: 16),
+
+                        // Payment Method Filter
+                        Text(
+                          'Payment Method',
+                          style: TextStyle(
+                            color: AppColors.blue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Cash checkbox
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (_filterCash) {
+                                _filterCash = false;
+                              } else {
+                                _filterCash = true;
+                                _filterCheck = false;
+                                _filterReturnedCheck = false;
+                              }
+                              _filterPayments();
+                            });
+                            setOverlayState(() {});
+                          },
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: _filterCash
+                                      ? AppColors.blue
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: AppColors.blue,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: _filterCash
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Cash',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Check checkbox
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (_filterCheck) {
+                                _filterCheck = false;
+                              } else {
+                                _filterCheck = true;
+                                _filterCash = false;
+                                _filterReturnedCheck = false;
+                              }
+                              _filterPayments();
+                            });
+                            setOverlayState(() {});
+                          },
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: _filterCheck
+                                      ? AppColors.blue
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: AppColors.blue,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: _filterCheck
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Check',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Returned Check checkbox
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (_filterReturnedCheck) {
+                                _filterReturnedCheck = false;
+                              } else {
+                                _filterReturnedCheck = true;
+                                _filterCash = false;
+                                _filterCheck = false;
+                              }
+                              _filterPayments();
+                            });
+                            setOverlayState(() {});
+                          },
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: _filterReturnedCheck
+                                      ? AppColors.blue
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: AppColors.blue,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: _filterReturnedCheck
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 14,
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Returned Check',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+                        const Divider(color: Color(0xFF3D3D3D), height: 1),
+                        const SizedBox(height: 16),
+
+                        // Date Range Filter
+                        Text(
+                          'Date Range',
+                          style: TextStyle(
+                            color: AppColors.blue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
 
                         // From Date (text input with auto-format)
                         _DateInputField(
@@ -1596,6 +1810,9 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
                                 setState(() {
                                   _fromDate = null;
                                   _toDate = null;
+                                  _filterCash = false;
+                                  _filterCheck = false;
+                                  _filterReturnedCheck = false;
                                   _filterPayments();
                                 });
                                 setOverlayState(() {});
