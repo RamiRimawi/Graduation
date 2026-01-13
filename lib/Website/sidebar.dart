@@ -312,12 +312,6 @@ class _ReportMenuPopup extends StatelessWidget {
             ),
             _buildDivider(),
             _ReportMenuItem(
-              icon: Icons.assignment_return_outlined,
-              label: 'Returned Check',
-              comingSoon: true,
-            ),
-            _buildDivider(),
-            _ReportMenuItem(
               icon: Icons.delete_outline,
               label: 'Destroyed Product',
               comingSoon: true,
