@@ -547,9 +547,7 @@ class _ProductRowState extends State<_ProductRow> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.index.isEven
-        ? AppColors.cardAlt
-        : AppColors.dark;
+    final bg = widget.index.isEven ? AppColors.cardAlt : AppColors.dark;
 
     return MouseRegion(
       onEnter: (_) => setState(() => isHovered = true),

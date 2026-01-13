@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../sidebar.dart';
 import '../../supabase_config.dart';
 import '../Damaged_Product/meeting_details_dialog.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
 
 class ReportDestroyedProductPage extends StatelessWidget {
   const ReportDestroyedProductPage({super.key});
@@ -117,6 +121,10 @@ class _ReportDestroyedProductPageContentState
     );
   }
 
+  void _showGenerateReportDialog() {
+    showDialog(context: context, builder: (context) => _GenerateReportDialog());
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
@@ -188,7 +196,7 @@ class _ReportDestroyedProductPageContentState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 🔹 Title + Search bar
+                            // 🔹 Title + Search bar + Generate Report button
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -200,10 +208,36 @@ class _ReportDestroyedProductPageContentState
                                     fontSize: 22,
                                   ),
                                 ),
-                                _SearchField(
-                                  hint: 'Search Meeting',
-                                  icon: Icons.manage_search_rounded,
-                                  controller: _searchController,
+                                Row(
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: _showGenerateReportDialog,
+                                      icon: const Icon(
+                                        Icons.picture_as_pdf,
+                                        size: 18,
+                                      ),
+                                      label: const Text('Generate Report'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.blue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _SearchField(
+                                      hint: 'Search Meeting',
+                                      icon: Icons.manage_search_rounded,
+                                      controller: _searchController,
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -283,8 +317,8 @@ class _ReportDestroyedProductPageContentState
   }
 }
 
-// 🔹 Search Field صغير
-class _SearchField extends StatelessWidget {
+// 🔹 Search Field صغير (focusable with blue border)
+class _SearchField extends StatefulWidget {
   final String hint;
   final IconData icon;
   final TextEditingController controller;
@@ -295,27 +329,59 @@ class _SearchField extends StatelessWidget {
   });
 
   @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isFocused = _focusNode.hasFocus;
     return Container(
       width: 230,
       height: 42,
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(28),
-      ),
       child: TextField(
-        controller: controller,
+        focusNode: _focusNode,
+        controller: widget.controller,
         style: const TextStyle(color: AppColors.white, fontSize: 13),
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: widget.hint,
           hintStyle: const TextStyle(color: AppColors.grey, fontSize: 13),
-          prefixIcon: Icon(icon, color: AppColors.white, size: 20),
-          border: InputBorder.none,
+          prefixIcon: Icon(widget.icon, color: AppColors.white, size: 20),
+          filled: true,
+          fillColor: AppColors.card,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
             vertical: 10,
           ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(color: AppColors.grey, width: 1.5),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(color: AppColors.grey, width: 1.5),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(28),
+            borderSide: BorderSide(color: AppColors.blue, width: 2),
+          ),
         ),
+        cursorColor: AppColors.blue,
+        onTap: () => setState(() {}),
       ),
     );
   }
@@ -626,6 +692,917 @@ class _HeaderText extends StatelessWidget {
             fontWeight: FontWeight.bold,
             fontSize: 13,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Generate Report Dialog
+class _GenerateReportDialog extends StatefulWidget {
+  const _GenerateReportDialog();
+
+  @override
+  State<_GenerateReportDialog> createState() => _GenerateReportDialogState();
+}
+
+class _GenerateReportDialogState extends State<_GenerateReportDialog> {
+  final _fromDateController = TextEditingController();
+  final _toDateController = TextEditingController();
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  bool _showError = false;
+  bool _generating = false;
+
+  @override
+  void dispose() {
+    _fromDateController.dispose();
+    _toDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDate(BuildContext context, bool isFromDate) async {
+    DateTime? selectedDate = isFromDate ? _fromDate : _toDate;
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        int selectedYear = selectedDate?.year ?? DateTime.now().year;
+        int selectedMonth = selectedDate?.month ?? DateTime.now().month;
+        int selectedDay = selectedDate?.day ?? DateTime.now().day;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final daysInMonth = DateTime(
+              selectedYear,
+              selectedMonth + 1,
+              0,
+            ).day;
+            if (selectedDay > daysInMonth) selectedDay = daysInMonth;
+
+            return Dialog(
+              backgroundColor: AppColors.card,
+              child: Container(
+                width: 300,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isFromDate ? 'Select From Date' : 'Select To Date',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        // Day
+                        Expanded(
+                          child: _buildDropdown(
+                            value: selectedDay,
+                            items: List.generate(daysInMonth, (i) => i + 1),
+                            onChanged: (val) =>
+                                setDialogState(() => selectedDay = val!),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Month
+                        Expanded(
+                          child: _buildDropdown(
+                            value: selectedMonth,
+                            items: List.generate(12, (i) => i + 1),
+                            onChanged: (val) =>
+                                setDialogState(() => selectedMonth = val!),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Year
+                        Expanded(
+                          child: _buildDropdown(
+                            value: selectedYear,
+                            items: List.generate(27, (i) => 2000 + i),
+                            onChanged: (val) =>
+                                setDialogState(() => selectedYear = val!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(color: AppColors.grey),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: () {
+                            final picked = DateTime(
+                              selectedYear,
+                              selectedMonth,
+                              selectedDay,
+                            );
+                            Navigator.pop(context);
+                            if (mounted) {
+                              setState(() {
+                                if (isFromDate) {
+                                  _fromDate = picked;
+                                  _fromDateController.text = DateFormat(
+                                    'yyyy-MM-dd',
+                                  ).format(picked);
+                                  _showError = false;
+                                } else {
+                                  _toDate = picked;
+                                  _toDateController.text = DateFormat(
+                                    'yyyy-MM-dd',
+                                  ).format(picked);
+                                }
+                              });
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.blue,
+                          ),
+                          child: const Text(
+                            'OK',
+                            style: TextStyle(color: AppColors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDropdown({
+    required int value,
+    required List<int> items,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.dark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.grey.withOpacity(0.3)),
+      ),
+      child: DropdownButton<int>(
+        value: value,
+        isExpanded: true,
+        underline: const SizedBox(),
+        dropdownColor: AppColors.dark,
+        style: const TextStyle(color: AppColors.white, fontSize: 14),
+        items: items.map((item) {
+          return DropdownMenuItem(
+            value: item,
+            child: Text(item.toString().padLeft(2, '0')),
+          );
+        }).toList(),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Future<void> _generateReport() async {
+    if (_fromDate == null) {
+      setState(() {
+        _showError = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _generating = true;
+    });
+
+    try {
+      // Use today's date if to date is not specified
+      final toDate = _toDate ?? DateTime.now();
+
+      // Fetch destroyed products data within date range
+      final meetingsResult = await supabase
+          .from('damaged_products_meeting')
+          .select('''
+            meeting_id,
+            meeting_address,
+            meeting_time,
+            meeting_topics,
+            result_of_meeting
+          ''')
+          .gte('meeting_time', _fromDate!.toIso8601String())
+          .lte('meeting_time', toDate.toIso8601String())
+          .order('meeting_time', ascending: false);
+
+      final meetings = List<Map<String, dynamic>>.from(meetingsResult);
+
+      // Extract meeting IDs
+      final meetingIds = meetings.map((m) => m['meeting_id']).toList();
+
+      // Fetch damaged products for these meetings
+      List<Map<String, dynamic>> damagedProducts = [];
+      if (meetingIds.isNotEmpty) {
+        final damagedProductsResult = await supabase
+            .from('damaged_products')
+            .select('''
+              meeting_id,
+              quantity,
+              reason,
+              batch(product:product_id(name, selling_price, brand:brand_id(name), category:category_id(name)))
+            ''')
+            .inFilter('meeting_id', meetingIds);
+
+        damagedProducts = List<Map<String, dynamic>>.from(
+          damagedProductsResult,
+        );
+      }
+
+      // Generate PDF
+      final pdf = await _createPDF(
+        meetings,
+        damagedProducts,
+        _fromDate!,
+        toDate,
+      );
+
+      // Show PDF preview/download
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print('Error generating report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating report: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generating = false;
+        });
+      }
+    }
+  }
+
+  Future<pw.Document> _createPDF(
+    List<Map<String, dynamic>> meetings,
+    List<Map<String, dynamic>> damagedProducts,
+    DateTime fromDate,
+    DateTime toDate,
+  ) async {
+    final pdf = pw.Document();
+
+    // Calculate statistics
+    final totalMeetings = meetings.length;
+    final totalDestroyedQty = damagedProducts.fold<int>(
+      0,
+      (sum, item) => sum + (item['quantity'] as int? ?? 0),
+    );
+
+    // Calculate total losses
+    double totalLosses = 0;
+    for (var item in damagedProducts) {
+      final quantity = item['quantity'] as int? ?? 0;
+      final batchData = item['batch'] as Map?;
+      final productData = batchData?['product'] as Map?;
+      final sellingPrice = productData?['selling_price'] as num? ?? 0;
+      totalLosses += quantity * sellingPrice;
+    }
+
+    // Group products by name
+    final Map<String, int> productQuantities = {};
+    for (var item in damagedProducts) {
+      final batchData = item['batch'] as Map?;
+      final productData = batchData?['product'] as Map?;
+      final productName = productData?['name']?.toString() ?? 'Unknown';
+      productQuantities[productName] =
+          (productQuantities[productName] ?? 0) +
+          (item['quantity'] as int? ?? 0);
+    }
+
+    // Get top 3 destroyed products
+    final topProducts = productQuantities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top3 = topProducts.take(3).toList();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            // Title
+            pw.Container(
+              alignment: pw.Alignment.center,
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    'DESTROYED PRODUCTS REPORT',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Period: ${DateFormat('dd/MM/yyyy').format(fromDate)} - ${DateFormat('dd/MM/yyyy').format(toDate)}',
+                    style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Generated on: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 30),
+
+            // Executive Summary
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'EXECUTIVE SUMMARY',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue900,
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
+                  pw.Text(
+                    'This report provides a comprehensive analysis of destroyed products during the specified period. '
+                    'It includes detailed information about meetings held to address product damage issues, '
+                    'the total quantity of products destroyed, and key statistics to help improve quality control measures.',
+                    style: const pw.TextStyle(fontSize: 11, lineSpacing: 1.5),
+                  ),
+                  pw.SizedBox(height: 16),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatBox('Total Meetings', totalMeetings.toString()),
+                      _buildStatBox(
+                        'Total Destroyed',
+                        '$totalDestroyedQty units',
+                      ),
+                      _buildStatBox(
+                        'Unique Products',
+                        productQuantities.length.toString(),
+                      ),
+                      _buildStatBox(
+                        'Total Losses',
+                        '-\$${totalLosses.toStringAsFixed(2)}',
+                        isLoss: true,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 24),
+
+            // Top Destroyed Products
+            pw.Text(
+              'TOP DESTROYED PRODUCTS',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue900,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Column(
+                children: top3.map((entry) {
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          entry.key,
+                          style: const pw.TextStyle(fontSize: 11),
+                        ),
+                        pw.Text(
+                          '${entry.value} units',
+                          style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.red700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            pw.SizedBox(height: 24),
+
+            // Meetings and their Damaged Products
+            pw.Text(
+              'MEETINGS AND DAMAGED PRODUCTS DETAILS',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue900,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // Group damaged products by meeting_id
+            ...meetings.map((meeting) {
+              final meetingId = meeting['meeting_id'];
+              final meetingProducts = damagedProducts
+                  .where((item) => item['meeting_id'] == meetingId)
+                  .toList();
+              final dateTime = meeting['meeting_time'] != null
+                  ? DateFormat(
+                      'dd/MM/yyyy HH:mm',
+                    ).format(DateTime.parse(meeting['meeting_time']))
+                  : 'N/A';
+
+              // Calculate meeting total losses
+              double meetingLoss = 0;
+              for (var item in meetingProducts) {
+                final quantity = item['quantity'] as int? ?? 0;
+                final batchData = item['batch'] as Map?;
+                final productData = batchData?['product'] as Map?;
+                final sellingPrice = productData?['selling_price'] as num? ?? 0;
+                meetingLoss += quantity * sellingPrice;
+              }
+
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // Meeting Header
+                  pw.Container(
+                    width: double.infinity,
+                    padding: const pw.EdgeInsets.all(12),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.blue100,
+                      borderRadius: pw.BorderRadius.circular(6),
+                      border: pw.Border.all(
+                        color: PdfColors.blue300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'Meeting #$meetingId',
+                              style: pw.TextStyle(
+                                fontSize: 13,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.blue900,
+                              ),
+                            ),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.end,
+                              children: [
+                                pw.Text(
+                                  dateTime,
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    color: PdfColors.grey800,
+                                  ),
+                                ),
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'Loss: -\$${meetingLoss.toStringAsFixed(2)}',
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.red700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'Topics: ',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey800,
+                              ),
+                            ),
+                            pw.Expanded(
+                              child: pw.Text(
+                                meeting['meeting_topics']?.toString() ?? 'N/A',
+                                style: const pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'Address: ',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey800,
+                              ),
+                            ),
+                            pw.Expanded(
+                              child: pw.Text(
+                                meeting['meeting_address']?.toString() ?? 'N/A',
+                                style: const pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (meeting['result_of_meeting'] != null &&
+                            meeting['result_of_meeting']
+                                .toString()
+                                .isNotEmpty) ...[
+                          pw.SizedBox(height: 4),
+                          pw.Row(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
+                                'Result: ',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                              pw.Expanded(
+                                child: pw.Text(
+                                  meeting['result_of_meeting']?.toString() ??
+                                      '',
+                                  style: const pw.TextStyle(
+                                    fontSize: 10,
+                                    color: PdfColors.grey800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+
+                  // Products Table for this meeting
+                  if (meetingProducts.isNotEmpty)
+                    pw.Table.fromTextArray(
+                      headerStyle: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                        fontSize: 10,
+                      ),
+                      cellStyle: const pw.TextStyle(fontSize: 9),
+                      headerDecoration: const pw.BoxDecoration(
+                        color: PdfColors.blue800,
+                      ),
+                      cellHeight: 22,
+                      cellAlignments: {
+                        0: pw.Alignment.centerLeft,
+                        1: pw.Alignment.centerLeft,
+                        2: pw.Alignment.centerLeft,
+                        3: pw.Alignment.center,
+                        4: pw.Alignment.centerRight,
+                        5: pw.Alignment.centerRight,
+                      },
+                      headers: [
+                        'Product',
+                        'Brand',
+                        'Reason',
+                        'Qty',
+                        'Price',
+                        'Loss',
+                      ],
+                      data: meetingProducts.map((item) {
+                        final batchData = item['batch'] as Map?;
+                        final productData = batchData?['product'] as Map?;
+                        final brandData = productData?['brand'] as Map?;
+                        final quantity = item['quantity'] as int? ?? 0;
+                        final sellingPrice =
+                            productData?['selling_price'] as num? ?? 0;
+                        final loss = quantity * sellingPrice;
+                        return [
+                          productData?['name']?.toString() ?? 'N/A',
+                          brandData?['name']?.toString() ?? 'N/A',
+                          item['reason']?.toString() ?? 'N/A',
+                          quantity.toString(),
+                          '\$${sellingPrice.toStringAsFixed(2)}',
+                          '-\$${loss.toStringAsFixed(2)}',
+                        ];
+                      }).toList(),
+                    )
+                  else
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(12),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.grey200,
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Text(
+                        'No damaged products recorded for this meeting',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontStyle: pw.FontStyle.italic,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
+
+                  pw.SizedBox(height: 15),
+                  // Separator line between meetings
+                  pw.Container(height: 1, color: PdfColors.grey400),
+                  pw.SizedBox(height: 15),
+                ],
+              );
+            }).toList(),
+          ];
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildStatBox(String label, String value, {bool isLoss = false}) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(6),
+        border: pw.Border.all(color: PdfColors.blue300, width: 1.5),
+      ),
+      child: pw.Column(
+        children: [
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: isLoss ? PdfColors.red700 : PdfColors.blue800,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 500,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with close button
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: AppColors.blue,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Generate Report',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // From Date Field
+                  const Text(
+                    'From Date *',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _fromDateController,
+                    readOnly: true,
+                    onTap: () => _selectDate(context, true),
+                    decoration: InputDecoration(
+                      hintText: 'Select from date',
+                      hintStyle: const TextStyle(color: AppColors.grey),
+                      filled: true,
+                      fillColor: AppColors.dark,
+                      suffixIcon: const Icon(
+                        Icons.calendar_today,
+                        color: AppColors.blue,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: _showError ? Colors.red : AppColors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: _showError ? Colors.red : AppColors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: _showError ? Colors.red : AppColors.blue,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  if (_showError)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'From date is required',
+                        style: TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+
+                  // To Date Field
+                  const Text(
+                    'To Date',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _toDateController,
+                    readOnly: true,
+                    onTap: () => _selectDate(context, false),
+                    decoration: InputDecoration(
+                      hintText: 'Select to date (defaults to today)',
+                      hintStyle: const TextStyle(color: AppColors.grey),
+                      filled: true,
+                      fillColor: AppColors.dark,
+                      suffixIcon: const Icon(
+                        Icons.calendar_today,
+                        color: AppColors.blue,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.blue,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 30),
+
+                  // Generate Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _generating ? null : _generateReport,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        disabledBackgroundColor: AppColors.grey,
+                      ),
+                      child: _generating
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              'Generate',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'report_page.dart';
 import 'report_archive_table.dart';
+import 'report_product_generate_dialog.dart';
 import '../../supabase_config.dart';
 
 // ============================================================================
@@ -114,6 +115,55 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+                    // Generate Report button
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.blue,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              barrierColor: Colors.black.withOpacity(0.7),
+                              builder: (_) => GenerateProductReportDialog(
+                                productId: widget.productId,
+                                productName: widget.productName,
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.picture_as_pdf,
+                                  color: AppColors.white,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Generate Report',
+                                  style: TextStyle(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     // close
