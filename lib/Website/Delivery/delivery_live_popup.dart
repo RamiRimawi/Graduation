@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -29,6 +30,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   LatLng? _customerLocation;
   String? _customerName;
   int? _orderId;
+  int? _previousOrderId; // تتبع الأوردار السابق للكشف عن التغيير
   List<Map<String, dynamic>> _otherOrders = [];
   List<Map<String, dynamic>> _deliveredOrders = [];
   List<LatLng> _routePoints = const [];
@@ -166,12 +168,17 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
               _customerLocation = newCustomerLoc;
               _customerName = customer?['name'];
               _orderId = currentOrderId;
+              // إخفاء الأوردر المختار فوراً من قائمة Other orders بدون انتظار جلب الشبكة
+              _otherOrders = _otherOrders
+                  .where((o) => o['order_id'] != currentOrderId)
+                  .toList();
             });
           }
 
-          // جلب المسار
-          if (mounted) {
+          // جلب المسار والخريطة - فقط عند اختيار أوردار جديد
+          if (mounted && _previousOrderId != currentOrderId) {
             _fetchRoute();
+            _previousOrderId = currentOrderId;
           }
         }
 
@@ -187,7 +194,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                       .order('order_date', ascending: false)
                   as List<dynamic>;
 
-          // ✅ جلب الأوردرات المسلمة (Delivered orders)
+          // ✅ جلب الأوردرات المسلمة (Delivered orders) - فقط اليوم
           final deliveredOrdersRaw =
               await supabase
                       .from('customer_order')
@@ -197,11 +204,19 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                       .limit(50)
                   as List<dynamic>;
 
-          // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم
+          // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم وتصفية لليوم فقط
+          final today = DateTime.now();
+          final todayStart = DateTime(today.year, today.month, today.day);
+          final todayEnd = todayStart.add(const Duration(days: 1));
+
           final deliveredOrders = deliveredOrdersRaw
               .where((o) {
                 final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
-                return descriptions != null && descriptions.isNotEmpty && descriptions.first['delivered_date'] != null;
+                if (descriptions == null || descriptions.isEmpty || descriptions.first['delivered_date'] == null) {
+                  return false;
+                }
+                final deliveredDate = DateTime.parse(descriptions.first['delivered_date'] as String);
+                return deliveredDate.isAfter(todayStart) && deliveredDate.isBefore(todayEnd);
               })
               .toList()
             ..sort((a, b) {
@@ -229,6 +244,35 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           }
         }
       } else if (mounted) {
+        // ✅ إذا current_order_id هو null - الأوردار انتهى
+        // تحديث الخريطة فقط عند انتهاء الأوردار (التغيير من أوردار لا أوردار)
+        final orderEnded = _previousOrderId != null && currentOrderId == null;
+        
+        if (orderEnded && mounted) {
+          // حفظ بيانات الأوردر المنتهي لإضافتها فوراً إلى Other orders
+          final endedOrderId = _previousOrderId;
+          final endedCustomerName = _customerName;
+
+          // تحريك الخريطة للموقع الحالي للسائق
+          _mapController.move(_driverLocation, 14);
+
+          // تحديث الواجهة فوراً: إعادة الأوردر إلى Other orders
+          setState(() {
+            if (endedOrderId != null) {
+              _otherOrders = [
+                {'order_id': endedOrderId, 'name': endedCustomerName},
+                ..._otherOrders.where((o) => o['order_id'] != endedOrderId)
+              ];
+            }
+            _customerLocation = null;
+            _customerName = null;
+            _orderId = null;
+            _routePoints = [];
+          });
+
+          _previousOrderId = null;
+        }
+
         // ✅ إذا current_order_id هو null، اجلب جميع الأوردرات واعرضها في Other orders
         final allOrders =
             await supabase
@@ -239,7 +283,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                     .order('order_date', ascending: false)
                 as List<dynamic>;
 
-        // ✅ جلب الأوردرات المسلمة (Delivered orders)
+        // ✅ جلب الأوردرات المسلمة (Delivered orders) - فقط اليوم
         final deliveredOrdersRaw =
             await supabase
                     .from('customer_order')
@@ -249,11 +293,19 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                     .limit(50)
                 as List<dynamic>;
 
-        // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم
+        // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم وتصفية لليوم فقط
+        final today = DateTime.now();
+        final todayStart = DateTime(today.year, today.month, today.day);
+        final todayEnd = todayStart.add(const Duration(days: 1));
+
         final deliveredOrders = deliveredOrdersRaw
             .where((o) {
               final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
-              return descriptions != null && descriptions.isNotEmpty && descriptions.first['delivered_date'] != null;
+              if (descriptions == null || descriptions.isEmpty || descriptions.first['delivered_date'] == null) {
+                return false;
+              }
+              final deliveredDate = DateTime.parse(descriptions.first['delivered_date'] as String);
+              return deliveredDate.isAfter(todayStart) && deliveredDate.isBefore(todayEnd);
             })
             .toList()
           ..sort((a, b) {
@@ -321,6 +373,10 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
             setState(() {
               _routePoints = polyline;
             });
+            // تحديث الخريطة لعرض الطريق كاملة
+            if (mounted && _routePoints.isNotEmpty) {
+              _fitMapToRoute();
+            }
           }
         }
       }
@@ -329,6 +385,63 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     } finally {
       _isRouting = false;
     }
+  }
+
+  // حساب الحدود والزوم المناسب لعرض الطريق كاملة مع زوم أكثر
+  void _fitMapToRoute() {
+    if (_routePoints.isEmpty) return;
+
+    double minLat = _routePoints.first.latitude;
+    double maxLat = _routePoints.first.latitude;
+    double minLng = _routePoints.first.longitude;
+    double maxLng = _routePoints.first.longitude;
+
+    // حساب الحدود الدنيا والعليا لجميع نقاط الطريق
+    for (final point in _routePoints) {
+      minLat = minLat > point.latitude ? point.latitude : minLat;
+      maxLat = maxLat < point.latitude ? point.latitude : maxLat;
+      minLng = minLng > point.longitude ? point.longitude : minLng;
+      maxLng = maxLng < point.longitude ? point.longitude : maxLng;
+    }
+
+    // إضافة padding صغير جداً حول الطريق (0.2% فقط من النطاق)
+    final latPadding = (maxLat - minLat) * 0.002;
+    final lngPadding = (maxLng - minLng) * 0.002;
+
+    // حساب الحدود مع الـ padding الصغير
+    final paddedMinLat = minLat - latPadding;
+    final paddedMaxLat = maxLat + latPadding;
+    final paddedMinLng = minLng - lngPadding;
+    final paddedMaxLng = maxLng + lngPadding;
+
+    // حساب المركز
+    final centerLat = (paddedMinLat + paddedMaxLat) / 2;
+    final centerLng = (paddedMinLng + paddedMaxLng) / 2;
+    final center = LatLng(centerLat, centerLng);
+
+    // حساب نطاق الطول والعرض بالدرجات بعد إضافة الـ padding
+    final latDelta = (paddedMaxLat - paddedMinLat).abs();
+    final lngDelta = (paddedMaxLng - paddedMinLng).abs();
+
+    // حساب الزوم بناءً على النطاق الجغرافي - مع زوم أعلى
+    double zoomLevel = 10.0;
+
+    if (latDelta > 0 && lngDelta > 0) {
+      // استخدام أكبر نطاق (الذي يتطلب زوم أقل)
+      final maxDelta = latDelta > lngDelta ? latDelta : lngDelta;
+      
+      // صيغة حساب الزوم بدقة أعلى: زيادة طفيفة للاقتراب أكثر للطريق
+      // zoom = log2(360 / maxDelta) + 0.25
+      zoomLevel = (log(360 / maxDelta) / log(2)) + 0.60;
+    
+      
+      // قيود الزوم
+      if (zoomLevel > 19.5) zoomLevel = 19.5;
+      if (zoomLevel < 4) zoomLevel = 4;
+    }
+
+    // تحريك الخريطة لعرض الطريق كاملة بزوم أكثر
+    _mapController.move(center, zoomLevel);
   }
 
   @override
@@ -778,6 +891,26 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                     ),
                                   ),
                                 ],
+                                if (_deliveredOrders.isEmpty) ...[
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    'Orders Delivered',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'No Orders Delivered Today',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -800,7 +933,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           options: MapOptions(
                             initialCenter: _driverLocation,
                             initialZoom: 14,
-                            maxZoom: 18,
+                            maxZoom: 20,
                           ),
                           children: [
                             TileLayer(
