@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
@@ -24,7 +25,8 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
   List<Map<String, dynamic>> _preparingOrders = [];
   List<Map<String, dynamic>> _deliveredOrders = [];
   List<Map<String, dynamic>> _deliveredOrdersAll = [];
-  DateTime? _selectedDate;
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
   void _onNavTap(int i) {
     setState(() => _currentIndex = i);
@@ -53,7 +55,8 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
       _preparingOrders = [];
       _deliveredOrders = [];
       _deliveredOrdersAll = [];
-      _selectedDate = null;
+      _fromDate = null;
+      _toDate = null;
     });
 
     try {
@@ -65,10 +68,10 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
         return;
       }
 
-        const progressStatuses = ['Preparing', 'Prepared', 'Delivery', 'Pinned', 'Received'];
-        final statusListLiteral = '(${progressStatuses.map((s) => '"$s"').join(',')})';
+      const progressStatuses = ['Preparing', 'Prepared', 'Delivery', 'Pinned', 'Received', 'Updated to Customer'];
+      final statusListLiteral = '(${progressStatuses.map((s) => '"$s"').join(',')})';
 
-        final preparing = await supabase
+      final preparing = await supabase
           .from('customer_order')
           .select('customer_order_id, order_date, order_status')
           .eq('sales_rep_id', salesRepId)
@@ -77,11 +80,12 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
       final prepList = (preparing as List<dynamic>).cast<Map<String, dynamic>>();
       final prepIds = prepList.map<int>((e) => (e['customer_order_id'] as int)).toList();
       Map<int, int> prepCounts = {};
+      Map<int, DateTime?> updateTimes = {};
       if (prepIds.isNotEmpty) {
         final prepDesc = await supabase
-          .from('customer_order_description')
-          .select('customer_order_id, product_id')
-          .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
+            .from('customer_order_description')
+            .select('customer_order_id, product_id')
+            .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
         final descList = (prepDesc as List<dynamic>).cast<Map<String, dynamic>>();
         final Map<int, Set<int>> perOrderProducts = {};
         for (final row in descList) {
@@ -90,11 +94,33 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
           perOrderProducts.putIfAbsent(oid, () => <int>{}).add(pid);
         }
         perOrderProducts.forEach((k, v) => prepCounts[k] = v.length);
+
+        final updateDesc = await supabase
+            .from('customer_order_description')
+            .select('customer_order_id, last_action_time')
+            .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
+        final updateList = (updateDesc as List<dynamic>).cast<Map<String, dynamic>>();
+        for (final row in updateList) {
+          final oid = row['customer_order_id'] as int;
+          final tsStr = row['last_action_time'] as String?;
+          final ts = tsStr != null ? DateTime.tryParse(tsStr) : null;
+          if (ts != null) {
+            final current = updateTimes[oid];
+            if (current == null || ts.isAfter(current)) {
+              updateTimes[oid] = ts;
+            }
+          }
+        }
       }
       _preparingOrders = prepList.map<Map<String, dynamic>>((e) {
         final dtStr = e['order_date'] as String?;
-        final dt = dtStr != null ? DateTime.tryParse(dtStr) : null;
         final rawStatus = (e['order_status'] as String?) ?? '';
+        DateTime? dt;
+        if (rawStatus == 'Updated to Customer') {
+          dt = updateTimes[e['customer_order_id']];
+        } else {
+          dt = dtStr != null ? DateTime.tryParse(dtStr) : null;
+        }
         return {
           'id': e['customer_order_id'] as int,
           'count': prepCounts[e['customer_order_id']] ?? 0,
@@ -116,9 +142,9 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
       Map<int, int> delCounts = {};
       if (delIds.isNotEmpty) {
         final delDesc = await supabase
-          .from('customer_order_description')
-          .select('customer_order_id, product_id')
-          .filter('customer_order_id', 'in', '(${delIds.join(',')})');
+            .from('customer_order_description')
+            .select('customer_order_id, product_id')
+            .filter('customer_order_id', 'in', '(${delIds.join(',')})');
         final descList = (delDesc as List<dynamic>).cast<Map<String, dynamic>>();
         final Map<int, Set<int>> perOrderProducts = {};
         for (final row in descList) {
@@ -142,7 +168,7 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
         };
       }).toList();
 
-      final filteredDelivered = _filterDeliveredByDate(_selectedDate, _deliveredOrdersAll);
+      final filteredDelivered = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
 
       setState(() {
         _deliveredOrders = filteredDelivered;
@@ -165,80 +191,145 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
   }
 
   String _progressStatusLabel(String? rawStatus) {
-    if (rawStatus == null) return 'In progress';
-    final lower = rawStatus.toLowerCase();
-    if (lower.startsWith('receiv')) return 'Sent';
+    if (rawStatus != null && rawStatus == 'Updated to Customer') {
+      return 'Update';
+    }
     return 'In progress';
   }
 
-  List<Map<String, dynamic>> _filterDeliveredByDate(DateTime? startDate, List<Map<String, dynamic>> source) {
-    if (startDate == null) {
+  List<Map<String, dynamic>> _filterDeliveredByDateRange(DateTime? fromDate, DateTime? toDate, List<Map<String, dynamic>> source) {
+    if (fromDate == null && toDate == null) {
       return List<Map<String, dynamic>>.from(source);
     }
-    final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+
     return source.where((order) {
       final dt = order['dateTime'] as DateTime?;
       if (dt == null) return false;
       final orderDay = DateTime(dt.year, dt.month, dt.day);
-      return !orderDay.isBefore(startDay);
+
+      if (fromDate != null && toDate != null) {
+        final fromDay = DateTime(fromDate.year, fromDate.month, fromDate.day);
+        final toDay = DateTime(toDate.year, toDate.month, toDate.day);
+        return !orderDay.isBefore(fromDay) && !orderDay.isAfter(toDay);
+      } else if (fromDate != null) {
+        final fromDay = DateTime(fromDate.year, fromDate.month, fromDate.day);
+        return !orderDay.isBefore(fromDay);
+      } else if (toDate != null) {
+        final toDay = DateTime(toDate.year, toDate.month, toDate.day);
+        return !orderDay.isAfter(toDay);
+      }
+      return true;
     }).toList();
   }
 
-  Future<void> _pickDateFilter() async {
+  Future<void> _pickFromDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
+      initialDate: _fromDate ?? DateTime.now(),
       firstDate: DateTime(2000),
+      lastDate: _toDate ?? DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _fromDate = picked;
+        _deliveredOrders = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
+      });
+    }
+  }
+
+  Future<void> _pickToDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _toDate ?? DateTime.now(),
+      firstDate: _fromDate ?? DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
     if (picked != null) {
       setState(() {
-        _selectedDate = picked;
-        _deliveredOrders = _filterDeliveredByDate(_selectedDate, _deliveredOrdersAll);
+        _toDate = picked;
+        _deliveredOrders = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
       });
     }
   }
 
   void _clearDateFilter() {
-    if (_selectedDate == null) return;
+    if (_fromDate == null && _toDate == null) return;
     setState(() {
-      _selectedDate = null;
+      _fromDate = null;
+      _toDate = null;
       _deliveredOrders = List<Map<String, dynamic>>.from(_deliveredOrdersAll);
     });
   }
 
   void _showOrderDetails(Map<String, dynamic> order, {required bool isDelivered}) async {
     final id = order['id'] as int;
-    final count = order['count'] ?? 0;
     final rawStatus = (order['statusRaw'] as String?) ?? (isDelivered ? 'Delivered' : '');
-    final statusLabel = isDelivered ? (rawStatus.isNotEmpty ? rawStatus : 'Delivered') : (order['statusLabel'] as String? ?? 'In progress');
+    final isUpdate = rawStatus == 'Updated to Customer';
     final dateTime = order['dateTime'] as DateTime?;
     final dateLabel = order['dateLabel'] as String? ?? '—';
     final formattedDate = dateTime != null ? '${_formatDate(dateTime)} ${_formatTime(dateTime)}' : dateLabel;
 
-    // Fetch product details for this order
+    String updateDescription = '';
     List<Map<String, dynamic>> productDetails = [];
+    double totalOrderPrice = 0.0;
+
     try {
-      final orderDescResp = await supabase
-          .from('customer_order_description')
-          .select('product_id, quantity')
-          .eq('customer_order_id', id);
-      final descList = (orderDescResp as List<dynamic>).cast<Map<String, dynamic>>();
-      
-      for (final desc in descList) {
-        final productId = desc['product_id'] as int;
-        final quantity = desc['quantity'] as int?;
-        final productResp = await supabase
-            .from('product')
-            .select('name')
-            .eq('product_id', productId)
+      if (isUpdate) {
+        final header = await supabase
+            .from('customer_order')
+            .select('update_description')
+            .eq('customer_order_id', id)
             .maybeSingle();
-        
-        if (productResp != null) {
+        updateDescription = (header?['update_description'] as String?) ?? '';
+
+        final orderDescResp = await supabase
+            .from('customer_order_description')
+            .select('product_id, quantity, updated_quantity, total_price, product:product_id(name, brand:brand_id(name), selling_price)')
+            .eq('customer_order_id', id);
+        final descList = (orderDescResp as List<dynamic>).cast<Map<String, dynamic>>();
+
+        for (final desc in descList) {
+          final productMap = desc['product'] as Map<String, dynamic>?;
+          final brandMap = productMap?['brand'] as Map<String, dynamic>?;
+          final oldQty = (desc['quantity'] as num?)?.toInt() ?? 0;
+          final newQty = (desc['updated_quantity'] as num?)?.toInt() ?? oldQty;
+          final totalPrice = (desc['total_price'] as num?)?.toDouble() ?? 0.0;
+          final sellingPrice = (productMap?['selling_price'] as num?)?.toDouble() ?? 0.0;
+          final unitPrice = oldQty > 0 ? totalPrice / oldQty : sellingPrice;
+          final lineTotal = unitPrice * newQty;
+          totalOrderPrice += lineTotal;
+
           productDetails.add({
-            'name': productResp['name'] as String? ?? 'Unknown',
-            'quantity': quantity ?? 0,
+            'id': desc['product_id'] as int,
+            'name': productMap?['name'] as String? ?? 'Unknown',
+            'brand': brandMap?['name'] as String? ?? '',
+            'oldQty': oldQty,
+            'newQty': newQty,
+            'unitPrice': unitPrice,
+            'lineTotal': lineTotal,
+          });
+        }
+      } else {
+        final orderDescResp = await supabase
+            .from('customer_order_description')
+            .select('product_id, quantity, total_price, product:product_id(name, brand:brand_id(name))')
+            .eq('customer_order_id', id);
+        final descList = (orderDescResp as List<dynamic>).cast<Map<String, dynamic>>();
+
+        for (final desc in descList) {
+          final productMap = desc['product'] as Map<String, dynamic>?;
+          final brandMap = productMap?['brand'] as Map<String, dynamic>?;
+          final quantity = (desc['quantity'] as num?)?.toInt() ?? 0;
+          final totalPrice = (desc['total_price'] as num?)?.toDouble() ?? 0.0;
+          totalOrderPrice += totalPrice;
+
+          productDetails.add({
+            'name': productMap?['name'] as String? ?? 'Unknown',
+            'brand': brandMap?['name'] as String? ?? '',
+            'quantity': quantity,
+            'totalPrice': totalPrice,
           });
         }
       }
@@ -248,54 +339,287 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
 
     if (!mounted) return;
 
-    showModalBottomSheet(
+    Future<void> _handleUpdateDecision({required bool accept}) async {
+      if (!isUpdate) return;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final userName = prefs.getString('current_user_name')?.trim();
+        final actorName = (userName != null && userName.isNotEmpty) ? userName : 'Sales Rep';
+        final now = DateTime.now().toIso8601String();
+
+        if (accept) {
+          double newTotal = 0.0;
+          for (final product in productDetails) {
+            final newQty = product['newQty'] as int;
+            final lineTotal = (product['unitPrice'] as double) * newQty;
+            newTotal += lineTotal;
+
+            await supabase
+                .from('customer_order_description')
+                .update({
+                  'quantity': newQty,
+                  'updated_quantity': null,
+                  'total_price': lineTotal,
+                  'last_action_by': actorName,
+                  'last_action_time': now,
+                })
+                .eq('customer_order_id', id)
+                .eq('product_id', product['id'] as int);
+          }
+
+          await supabase
+              .from('customer_order')
+              .update({
+                'order_status': 'Pinned',
+                'update_action': 'accepted by $actorName',
+                'last_action_by': actorName,
+                'last_action_time': now,
+                'total_balance': newTotal,
+              })
+              .eq('customer_order_id', id);
+        } else {
+          await supabase
+              .from('customer_order')
+              .update({
+                'order_status': 'Canceled',
+                'update_action': 'rejected by $actorName',
+                'last_action_by': actorName,
+                'last_action_time': DateTime.now().toIso8601String(),
+              })
+              .eq('customer_order_id', id);
+        }
+
+        await _fetchOrders();
+        if (!mounted) return;
+        Navigator.pop(context);
+      } catch (e) {
+        debugPrint('Error handling update decision: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to process update: $e')),
+        );
+      }
+    }
+
+    showDialog(
       context: context,
-      backgroundColor: _card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Text(
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.7),
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Dialog(
+            backgroundColor: _card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
                     'Order #$id',
-                    style: TextStyle(color: _accent, fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: _accent, fontSize: 22, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 14),
-                _detailRow('Status', statusLabel),
-                const SizedBox(height: 10),
-                if (productDetails.isNotEmpty) ...
-                  [
-                    const Text('Products:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    ...productDetails.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final product = entry.value;
-                      return Column(
-                        children: [
-                          _detailRow('product${idx + 1}', product['name']),
-                          const SizedBox(height: 4),
-                          _detailRow('Quantity', '${product['quantity']}'),
-                          const SizedBox(height: 10),
-                        ],
-                      );
-                    }),
-                  ]
-                else
-                  ...
-                  [
-                    const Text('No products', style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+                  Text(
+                    isDelivered ? 'Delivered: $formattedDate' : formattedDate,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  if (isUpdate && updateDescription.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Update Description', style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        updateDescription,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
                   ],
-                _detailRow('Date', formattedDate),
-              ],
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            'Product',
+                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isUpdate ? 'Old Qty' : 'Quantity',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isUpdate ? 'New Qty' : 'Total Price',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: productDetails.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text(
+                              'No products',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: productDetails.length,
+                            itemBuilder: (context, idx) {
+                              final product = productDetails[idx];
+                              return Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A1A1A),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            product['name'],
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          if ((product['brand'] as String).isNotEmpty)
+                                            Text(
+                                              product['brand'],
+                                              style: const TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        isUpdate ? '${product['oldQty']}' : '${product['quantity']}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        isUpdate
+                                            ? '${product['newQty']}'
+                                            : (product['totalPrice'] as double).toStringAsFixed(2),
+                                        textAlign: TextAlign.right,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isUpdate ? 'New Total Price:' : 'Total Price:',
+                          style: TextStyle(
+                            color: _accent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          totalOrderPrice.toStringAsFixed(2),
+                          style: TextStyle(
+                            color: _accent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isUpdate) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => _handleUpdateDecision(accept: true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Accept'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => _handleUpdateDecision(accept: false),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Reject'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         );
@@ -353,22 +677,25 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
                             padding: const EdgeInsets.only(bottom: 16),
                             child: GestureDetector(
                               onTap: () => _showOrderDetails(item, isDelivered: false),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: _card,
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.25),
-                                      blurRadius: 1,
-                                      spreadRadius: 1,
-                                      offset: const Offset(0, 6),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: _card,
+                                      borderRadius: BorderRadius.circular(18),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.25),
+                                          blurRadius: 1,
+                                          spreadRadius: 1,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                  child: Column(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                                      child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Row(
@@ -392,20 +719,23 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
                                           const SizedBox(width: 16),
                                           Container(
                                             width: 84,
-                                            height: 84,
+                                            height: 64,
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF262626),
                                               borderRadius: BorderRadius.circular(18),
                                             ),
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text('${item['count']}',
-                                                    style: const TextStyle(color: Color(0xFFFFEFFF), fontSize: 25, fontWeight: FontWeight.bold)),
-                                                const SizedBox(height: 3),
-                                                const Text('products',
-                                                    style: TextStyle(color: Color(0xFFF9D949), fontSize: 14, fontWeight: FontWeight.w500)),
-                                              ],
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(bottom: 4),
+                                              child: Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Text('${item['count']}',
+                                                      style: const TextStyle(color: Color(0xFFFFEFFF), fontSize: 25, fontWeight: FontWeight.bold)),
+                                                  const SizedBox(height: 3),
+                                                  const Text('products',
+                                                      style: TextStyle(color: Color(0xFFF9D949), fontSize: 14, fontWeight: FontWeight.w500)),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -414,32 +744,81 @@ class _SalesRepArchivePageState extends State<SalesRepArchivePage> {
                                   ),
                                 ),
                               ),
+                              if (item['statusRaw'] == 'Updated to Customer')
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: _accent,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: _accent.withOpacity(0.5),
+                                          blurRadius: 4,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                             ),
                           );
                         },
                       ),
                     const SizedBox(height: 22),
+                    Text('Archive', style: TextStyle(color: _accent, fontSize: 28, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
-                          child: Text('Archive', style: TextStyle(color: _accent, fontSize: 28, fontWeight: FontWeight.bold)),
-                        ),
-                        GestureDetector(
-                          onTap: _pickDateFilter,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
-                            child: Row(
-                              children: [
-                                Text(_selectedDate == null ? 'Select date' : _formatDate(_selectedDate!),
-                                    style: const TextStyle(color: Colors.white)),
-                                const SizedBox(width: 6),
-                                Icon(Icons.calendar_today, color: _accent, size: 18),
-                              ],
+                          child: GestureDetector(
+                            onTap: _pickFromDate,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _fromDate == null ? 'From date' : _formatDate(_fromDate!),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.calendar_today, color: _accent, size: 18),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                        if (_selectedDate != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _pickToDate,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _toDate == null ? 'To date' : _formatDate(_toDate!),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(Icons.calendar_today, color: _accent, size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_fromDate != null || _toDate != null) ...[
                           const SizedBox(width: 8),
                           GestureDetector(
                             onTap: _clearDateFilter,

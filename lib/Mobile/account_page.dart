@@ -12,6 +12,10 @@ import 'StroageStaff/staff_home.dart';
 import 'Customer/customer_home_page.dart';
 import 'Customer/customer_cart_page.dart';
 import 'Customer/customer_archive_page.dart';
+import 'Sales Rep/salesRep_home_page.dart';
+import 'Sales Rep/salesRep_cart_page.dart';
+import 'Sales Rep/salesRep_archive_page.dart';
+import 'Sales Rep/salesRep_customers_page.dart';
 import 'Manager/ManagerShell.dart';
 import 'LoginMobile.dart';
 
@@ -672,6 +676,37 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   );
                 } else if (i == 3) {
+                  // already on AccountPage
+                }
+              },
+            )
+          :
+            // Sales rep layout: 5 tabs (Home, Cart, Archive, Customers, Account)
+            (_userRole == 'sales_rep' || _userRole == 'sales')
+          ? BottomNavBar(
+              currentIndex: 4,
+              onTap: (i) {
+                if (i == 0) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
+                  );
+                } else if (i == 1) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
+                  );
+                } else if (i == 2) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
+                  );
+                } else if (i == 3) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SalesRepCustomersPage()),
+                  );
+                } else if (i == 4) {
                   // already on AccountPage
                 }
               },
