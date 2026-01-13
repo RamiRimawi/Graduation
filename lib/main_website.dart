@@ -11,6 +11,7 @@ import 'Website/Payment/Payment_page.dart';
 import 'Website/Report/report_page.dart';
 import 'Website/Inventory/inventory_page.dart';
 import 'Website/Orders/Orders_stock_out_page.dart';
+import 'Website/Damaged_Product/damaged_products_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +40,7 @@ class DolphinApp extends StatelessWidget {
         scaffoldBackgroundColor: bg,
         textTheme: GoogleFonts.robotoTextTheme(
           ThemeData.dark().textTheme,
-        ).apply(
-          bodyColor: white,
-          displayColor: white,
-        ),
+        ).apply(bodyColor: white, displayColor: white),
         fontFamily: GoogleFonts.roboto().fontFamily,
         colorScheme: ColorScheme.dark(
           surface: panel,
@@ -65,6 +63,7 @@ class DolphinApp extends StatelessWidget {
         '/inventory': (_) => const InventoryPage(),
         '/stockOut': (_) => const OrdersPage(),
         '/account': (_) => const ProfilePageContent(),
+        '/damagedProducts': (_) => const DamagedProductsPage(),
       },
     );
   }

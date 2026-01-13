@@ -19,7 +19,7 @@ CREATE TABLE public.accounts (
   is_active boolean,
   profile_image text,
   last_action_by text,
-  last_action_time time with time zone,
+  last_action_time timestamp without time zone,
   CONSTRAINT accounts_pkey PRIMARY KEY (user_id)
 );
 CREATE TABLE public.banks (
@@ -81,7 +81,7 @@ CREATE TABLE public.customer_checks (
   customer_id integer,
   bank_id integer,
   bank_branch integer,
-  check_image text,
+  check_image text DEFAULT ''::text,
   exchange_rate numeric,
   exchange_date date,
   status USER-DEFINED,
@@ -173,6 +173,25 @@ CREATE TABLE public.customer_quarters (
   CONSTRAINT customer_quarters_pkey PRIMARY KEY (quarter_id),
   CONSTRAINT customer_quarters_customer_city_fkey FOREIGN KEY (customer_city) REFERENCES public.customer_city(customer_city_id)
 );
+CREATE TABLE public.damaged_products (
+  meeting_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  batch_id integer,
+  quantity integer,
+  reason text,
+  product_id integer,
+  CONSTRAINT damaged_products_batch_id_product_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT damaged_products_batch_id_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(batch_id),
+  CONSTRAINT damaged_products_batch_id_product_id_fkey FOREIGN KEY (batch_id) REFERENCES public.batch(product_id),
+  CONSTRAINT damaged_products_batch_id_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.batch(product_id)
+);
+CREATE TABLE public.damaged_products_meeting (
+  meeting_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  meeting_address text,
+  meeting_time timestamp without time zone,
+  meeting_topics text,
+  result_of_meeting text,
+  CONSTRAINT damaged_products_meeting_pkey PRIMARY KEY (meeting_id)
+);
 CREATE TABLE public.delivery_driver (
   delivery_driver_id integer NOT NULL,
   name character varying,
@@ -181,8 +200,8 @@ CREATE TABLE public.delivery_driver (
   address text,
   last_action_by text,
   last_action_time timestamp without time zone,
-  longitude_location numeric,
-  latitude_location numeric,
+  longitude_location double precision,
+  latitude_location double precision,
   current_order_id integer,
   CONSTRAINT delivery_driver_pkey PRIMARY KEY (delivery_driver_id),
   CONSTRAINT delivery_driver_current_order_id_fkey FOREIGN KEY (current_order_id) REFERENCES public.customer_order(customer_order_id),
@@ -208,6 +227,14 @@ CREATE TABLE public.inventory (
   last_action_by text,
   last_action_time timestamp without time zone,
   CONSTRAINT inventory_pkey PRIMARY KEY (inventory_id)
+);
+CREATE TABLE public.meeting_memeber (
+  meeting_id bigint NOT NULL,
+  member_id bigint NOT NULL,
+  type USER-DEFINED,
+  CONSTRAINT meeting_memeber_pkey PRIMARY KEY (meeting_id, member_id),
+  CONSTRAINT meeting_memeber_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.accounts(user_id),
+  CONSTRAINT meeting_memeber_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.damaged_products_meeting(meeting_id)
 );
 CREATE TABLE public.outgoing_payment (
   payment_voucher_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,

@@ -14,7 +14,7 @@ class Sidebar extends StatelessWidget {
       List.generate(6, (i) => 'assets/icons/${i + 1}.png');
 
   List<String> get bottomIcons =>
-      List.generate(2, (i) => 'assets/icons/${i + 8}.png');
+      List.generate(3, (i) => 'assets/icons/${i + 7}.png');
 
   @override
   Widget build(BuildContext context) {
@@ -120,12 +120,15 @@ class Sidebar extends StatelessWidget {
         routeName = '/report';
         break;
       case 6:
-        routeName = '/mobileAccounts';
+        routeName = '/damagedProducts';
         break;
       case 7:
-        routeName = '/usersManagement';
+        routeName = '/mobileAccounts';
         break;
       case 8:
+        routeName = '/usersManagement';
+        break;
+      case 9:
         routeName = '/account';
         break;
       // باقي الأزرار ما عليهم صفحات لسه
