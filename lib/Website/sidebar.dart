@@ -314,7 +314,15 @@ class _ReportMenuPopup extends StatelessWidget {
             _ReportMenuItem(
               icon: Icons.delete_outline,
               label: 'Destroyed Product',
-              comingSoon: true,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(
+                  context,
+                  '/reportDestroyedProduct',
+                ).catchError((error) {
+                  return null;
+                });
+              },
             ),
           ],
         ),
