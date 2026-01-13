@@ -70,39 +70,51 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
     try {
       final List<Map<String, dynamic>> members = [];
 
-      // Fetch customers
-      final customers = await supabase
-          .from('customer')
-          .select('customer_id, name');
-      for (var customer in customers) {
+      // Fetch accountants
+      final accountants = await supabase
+          .from('accountant')
+          .select('accountant_id, name');
+      for (var accountant in accountants) {
         members.add({
-          'user_id': customer['customer_id'],
-          'name': customer['name'] ?? 'Unknown',
-          'type': 'Customer',
+          'user_id': accountant['accountant_id'],
+          'name': accountant['name'] ?? 'Unknown',
+          'type': 'accountant',
         });
       }
 
-      // Fetch sales representatives
-      final salesReps = await supabase
-          .from('sales_representative')
-          .select('sales_rep_id, name');
-      for (var rep in salesReps) {
+      // Fetch managers (storage_manager)
+      final managers = await supabase
+          .from('storage_manager')
+          .select('storage_manager_id, name');
+      for (var manager in managers) {
         members.add({
-          'user_id': rep['sales_rep_id'],
-          'name': rep['name'] ?? 'Unknown',
-          'type': 'Sales Rep',
+          'user_id': manager['storage_manager_id'],
+          'name': manager['name'] ?? 'Unknown',
+          'type': 'manager',
         });
       }
 
-      // Fetch suppliers
-      final suppliers = await supabase
-          .from('supplier')
-          .select('supplier_id, name');
-      for (var supplier in suppliers) {
+      // Fetch staff (storage_staff)
+      final staff = await supabase
+          .from('storage_staff')
+          .select('storage_staff_id, name');
+      for (var staffMember in staff) {
         members.add({
-          'user_id': supplier['supplier_id'],
-          'name': supplier['name'] ?? 'Unknown',
-          'type': 'Supplier',
+          'user_id': staffMember['storage_staff_id'],
+          'name': staffMember['name'] ?? 'Unknown',
+          'type': 'staff',
+        });
+      }
+
+      // Fetch delivery drivers
+      final deliveryDrivers = await supabase
+          .from('delivery_driver')
+          .select('delivery_driver_id, name');
+      for (var driver in deliveryDrivers) {
+        members.add({
+          'user_id': driver['delivery_driver_id'],
+          'name': driver['name'] ?? 'Unknown',
+          'type': 'delivery',
         });
       }
 
@@ -110,6 +122,11 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
         setState(() {
           allMembers = members;
           filteredMembers = members;
+          // Auto-select all accountants by default
+          selectedMemberIds = members
+              .where((member) => member['type'] == 'accountant')
+              .map<int>((member) => member['user_id'] as int)
+              .toList();
         });
       }
     } catch (e) {
@@ -122,9 +139,9 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
       final batches = await supabase.from('batch').select('''
         batch_id,
         product_id,
-        product:product_id(product_name),
-        inventories:inventory_id(inventory_name),
-        storage_location
+        product:product_id(name),
+        inventory:inventory_id(inventory_name),
+        storage_location_descrption
       ''');
 
       if (mounted) {
@@ -133,10 +150,9 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
             return {
               'batch_id': batch['batch_id'],
               'product_id': batch['product_id'],
-              'product_name': batch['product']?['product_name'] ?? 'Unknown',
-              'inventory_name':
-                  batch['inventories']?['inventory_name'] ?? 'N/A',
-              'storage_location': batch['storage_location'] ?? 'N/A',
+              'product_name': batch['product']?['name'] ?? 'Unknown',
+              'inventory_name': batch['inventory']?['inventory_name'] ?? 'N/A',
+              'storage_location': batch['storage_location_descrption'] ?? 'N/A',
             };
           }).toList();
         });
