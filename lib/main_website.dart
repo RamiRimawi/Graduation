@@ -9,6 +9,8 @@ import 'Website/MobileAccounts/mobile_accounts_page.dart';
 import 'Website/Management/Management_page.dart';
 import 'Website/Payment/Payment_page.dart';
 import 'Website/Report/report_page.dart';
+import 'Website/Report/report_customer.dart';
+import 'Website/Report/report_supplier.dart';
 import 'Website/Inventory/inventory_page.dart';
 import 'Website/Orders/Orders_stock_out_page.dart';
 import 'Website/Damaged_Product/damaged_products_page.dart';
@@ -60,6 +62,8 @@ class DolphinApp extends StatelessWidget {
         '/usersManagement': (_) => const UsersManagementPage(),
         '/payment': (_) => const PaymentPage(),
         '/report': (_) => const ReportPage(),
+        '/reportCustomer': (_) => const ReportCustomerPage(),
+        '/reportSupplier': (_) => const ReportSupplierPage(),
         '/inventory': (_) => const InventoryPage(),
         '/stockOut': (_) => const OrdersPage(),
         '/account': (_) => const ProfilePageContent(),

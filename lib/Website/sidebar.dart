@@ -96,7 +96,13 @@ class Sidebar extends StatelessWidget {
 
   // التنقل بين الصفحات
   void _onItemTap(BuildContext context, int index) {
-    if (index == activeIndex) return; // نفس الصفحة
+    if (index == activeIndex && index != 5) return; // نفس الصفحة
+
+    // Handle report icon with popup menu
+    if (index == 5) {
+      _showReportMenu(context);
+      return;
+    }
 
     String? routeName;
 
@@ -115,9 +121,6 @@ class Sidebar extends StatelessWidget {
         break;
       case 4:
         routeName = '/payment';
-        break;
-      case 5:
-        routeName = '/report';
         break;
       case 6:
         routeName = '/damagedProducts';
@@ -141,6 +144,41 @@ class Sidebar extends StatelessWidget {
       // Silently handle navigation errors
       return null;
     });
+  }
+
+  // Show report menu popup
+  void _showReportMenu(BuildContext context) {
+    // Calculate position for report icon (index 5)
+    // Logo area: ~194px (16 top padding + 10 spacing + 158 logo + 10 gap)
+    // Each icon with gap: 29px icon + 32px gap = 61px
+    // Icon at index 5: 194 + (5 * 61) = 499px
+    // Adjust by -50px to align better with the icon
+    const double logoArea = 194.0;
+    const double iconHeight = 29.0;
+    const double iconGap = 32.0;
+    const int reportIconIndex = 5;
+    const double verticalAdjustment = 90.0;
+
+    final topPosition =
+        logoArea +
+        (reportIconIndex * (iconHeight + iconGap)) -
+        verticalAdjustment;
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Stack(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(color: Colors.transparent),
+            ),
+            Positioned(left: 160, top: topPosition, child: _ReportMenuPopup()),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -208,6 +246,179 @@ class _HoverProfileImage extends StatefulWidget {
 
   @override
   State<_HoverProfileImage> createState() => _HoverProfileImageState();
+}
+
+// 🎨 Report Menu Popup
+class _ReportMenuPopup extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D2D2D),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ReportMenuItem(
+              icon: Icons.inventory_2_outlined,
+              label: 'Product',
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(context, '/report').catchError((
+                  error,
+                ) {
+                  return null;
+                });
+              },
+            ),
+            _buildDivider(),
+            _ReportMenuItem(
+              icon: Icons.people_outline,
+              label: 'Customer',
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(
+                  context,
+                  '/reportCustomer',
+                ).catchError((error) {
+                  return null;
+                });
+              },
+            ),
+            _buildDivider(),
+            _ReportMenuItem(
+              icon: Icons.local_shipping_outlined,
+              label: 'Supplier',
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacementNamed(
+                  context,
+                  '/reportSupplier',
+                ).catchError((error) {
+                  return null;
+                });
+              },
+            ),
+            _buildDivider(),
+            _ReportMenuItem(
+              icon: Icons.assignment_return_outlined,
+              label: 'Returned Check',
+              comingSoon: true,
+            ),
+            _buildDivider(),
+            _ReportMenuItem(
+              icon: Icons.delete_outline,
+              label: 'Destroyed Product',
+              comingSoon: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Container(
+      height: 1,
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      color: Colors.white.withOpacity(0.1),
+    );
+  }
+}
+
+// 🎨 Report Menu Item
+class _ReportMenuItem extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final bool comingSoon;
+  final VoidCallback? onTap;
+
+  const _ReportMenuItem({
+    required this.icon,
+    required this.label,
+    this.comingSoon = false,
+    this.onTap,
+  });
+
+  @override
+  State<_ReportMenuItem> createState() => _ReportMenuItemState();
+}
+
+class _ReportMenuItemState extends State<_ReportMenuItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.comingSoon ? null : widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          color: _isHovered && !widget.comingSoon
+              ? const Color(0xFF50B2E7).withOpacity(0.1)
+              : Colors.transparent,
+          child: Row(
+            children: [
+              Icon(
+                widget.icon,
+                color: widget.comingSoon
+                    ? Colors.white.withOpacity(0.3)
+                    : _isHovered
+                    ? const Color(0xFF50B2E7)
+                    : Colors.white,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: widget.comingSoon
+                        ? Colors.white.withOpacity(0.3)
+                        : Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (widget.comingSoon)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Soon',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HoverProfileImageState extends State<_HoverProfileImage> {
