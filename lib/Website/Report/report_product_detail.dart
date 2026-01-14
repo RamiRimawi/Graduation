@@ -118,54 +118,32 @@ class _ProductDetailDialogState extends State<ProductDetailDialog> {
                       ),
                     ),
                     // Generate Report button
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.blue,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              barrierColor: Colors.black.withOpacity(0.7),
-                              builder: (_) => GenerateProductReportDialog(
-                                productId: widget.productId,
-                                productName: widget.productName,
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(
-                                  Icons.picture_as_pdf,
-                                  color: AppColors.white,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Generate Report',
-                                  style: TextStyle(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          barrierColor: Colors.black.withOpacity(0.7),
+                          builder: (_) => GenerateProductReportDialog(
+                            productId: widget.productId,
+                            productName: widget.productName,
                           ),
+                        );
+                      },
+                      icon: const Icon(Icons.picture_as_pdf, size: 18),
+                      label: const Text('Generate Report'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     // close
                     IconButton(
                       icon: const Icon(
