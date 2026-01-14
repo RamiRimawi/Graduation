@@ -40,6 +40,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
   double _getZoomForDistance(double distanceMeters) {
     // تقريبية: كلما زادت المسافة قل الزوم
+    if (distanceMeters < 100) return 18;
+    if (distanceMeters < 250) return 17;
     if (distanceMeters < 500) return 16;
     if (distanceMeters < 1500) return 15;
     if (distanceMeters < 3000) return 14;
