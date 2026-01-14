@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../sidebar.dart';
 import '../../supabase_config.dart';
+import 'report_supplier_detail.dart';
 
 class ReportSupplierPage extends StatelessWidget {
   const ReportSupplierPage({super.key});
@@ -564,7 +565,16 @@ class _SupplierRowState extends State<_SupplierRow> {
       onExit: (_) => setState(() => isHovered = false),
       child: GestureDetector(
         onTap: () {
-          // Future: Add supplier detail dialog if needed
+          showDialog(
+            context: context,
+            builder: (context) => SupplierDetailDialog(
+              supplierId: widget.id,
+              supplierName: widget.name,
+              mobile: widget.mobile,
+              location: widget.location,
+              creditorBalance: widget.creditorBalance,
+            ),
+          );
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

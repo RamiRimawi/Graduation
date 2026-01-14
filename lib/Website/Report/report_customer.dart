@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../sidebar.dart';
 import '../../supabase_config.dart';
+import 'report_customer_detail.dart';
 
 class ReportCustomerPage extends StatelessWidget {
   const ReportCustomerPage({super.key});
@@ -563,7 +564,16 @@ class _CustomerRowState extends State<_CustomerRow> {
       onExit: (_) => setState(() => isHovered = false),
       child: GestureDetector(
         onTap: () {
-          // Future: Add customer detail dialog if needed
+          showDialog(
+            context: context,
+            builder: (context) => CustomerDetailDialog(
+              customerId: widget.id,
+              customerName: widget.name,
+              mobile: widget.mobile,
+              location: widget.location,
+              balanceDebit: widget.balanceDebit,
+            ),
+          );
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
