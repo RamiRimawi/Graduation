@@ -30,10 +30,20 @@ class LiveNavigation extends StatefulWidget {
   State<LiveNavigation> createState() => _LiveNavigationState();
 }
 
-class _LiveNavigationState extends State<LiveNavigation> {
+class _LiveNavigationState extends State<LiveNavigation>
+    with SingleTickerProviderStateMixin {
   MapController? _mapController;
   LatLng? _currentDriverLocation;
   LatLng? _previousLocation;
+
+  // ✅ Smooth marker location (displayed point)
+  LatLng? _animatedDriverLocation;
+
+  // ✅ Marker animation
+  late final AnimationController _markerAnimController;
+  LatLng? _animFrom;
+  LatLng? _animTo;
+
   List<LatLng> _routePoints = [];
   double _remainingDistance = 0;
   double _remainingTime = 0;
@@ -55,11 +65,45 @@ class _LiveNavigationState extends State<LiveNavigation> {
   static const double _maxArrivalSpeedMps = 0.8; // ~2.9 km/h (almost stopped)
   static const double _maxGpsAccuracyMeters =
       25.0; // ignore checks if GPS very noisy
+  static const double _coordMatchMeters = 6.0; // تطابق إحداثيات ضمن ~6م
+
+  // ✅ Smooth settings (car-friendly)
+  static const int _markerAnimMs = 450;
+  static const double _maxJumpMeters = 80.0; // filter crazy GPS jumps
+  static const double _stationarySpeedMps = 0.05; // يعتبر متوقفاً تحت ~0.18 كم/س
+  static const double _stationaryMoveMeters = 0.5; // تجاهل اهتزازات أقل من 0.5م
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+
+    _markerAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: _markerAnimMs),
+    );
+
+    _markerAnimController.addListener(() {
+      if (_animFrom == null || _animTo == null) return;
+      final t = _markerAnimController.value;
+
+      final lat =
+          _animFrom!.latitude + (_animTo!.latitude - _animFrom!.latitude) * t;
+      final lng =
+          _animFrom!.longitude + (_animTo!.longitude - _animFrom!.longitude) * t;
+
+      // ✅ Update displayed point smoothly
+      _animatedDriverLocation = LatLng(lat, lng);
+
+      // ✅ Follow smoothly (same UI, just smoother)
+      if (_isFollowingDriver && _animatedDriverLocation != null) {
+        _followDriver();
+      }
+
+      // Rebuild marker position smoothly
+      if (mounted) setState(() {});
+    });
+
     _startLiveTracking();
     _startDatabaseUpdates();
   }
@@ -69,6 +113,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
     _positionStream?.cancel();
     _routeUpdateTimer?.cancel();
     _dbUpdateTimer?.cancel();
+    _markerAnimController.dispose();
     super.dispose();
   }
 
@@ -112,26 +157,29 @@ class _LiveNavigationState extends State<LiveNavigation> {
           desiredAccuracy: LocationAccuracy.bestForNavigation,
         );
 
+        final initLoc = LatLng(
+          initialPosition.latitude,
+          initialPosition.longitude,
+        );
+
         setState(() {
-          _currentDriverLocation = LatLng(
-            initialPosition.latitude,
-            initialPosition.longitude,
-          );
-          _previousLocation = _currentDriverLocation;
-          _gpsAccuracy = initialPosition.accuracy; // ✅ حفظ دقة GPS
+          _currentDriverLocation = initLoc;
+          _previousLocation = initLoc;
+          _animatedDriverLocation = initLoc; // ✅ init smooth point
+          _gpsAccuracy = initialPosition.accuracy;
 
           _currentBearing = _calculateBearing(
-            _currentDriverLocation!,
+            initLoc,
             LatLng(widget.customerLatitude, widget.customerLongitude),
           );
         });
 
         await _updateRoute();
 
-        // ✅ أفضل إعدادات للدقة
+        // ✅ أفضل إعدادات للدقة (السيارة)
         const LocationSettings locationSettings = LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation, // ✅ أعلى دقة
-          distanceFilter: 2, // ✅ تحديث كل 2 متر
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 5, // ✅ أفضل للسيارة من 2m (أقل اهتزاز)
         );
 
         _positionStream =
@@ -153,12 +201,26 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
   void _handleNewPosition(Position position) {
     final newLocation = LatLng(position.latitude, position.longitude);
-
     _gpsAccuracy = position.accuracy;
 
-    if (_previousLocation != null) {
-      final distance = _calculateDistance(_previousLocation!, newLocation);
-      debugPrint('📏 Moved: ${(distance * 1000).toStringAsFixed(1)} meters');
+    // المسافة المتحركة منذ آخر نقطة معروفة
+    double movedMeters = double.infinity;
+
+    // ✅ Basic GPS noise filtering
+    if (position.accuracy > _maxGpsAccuracyMeters) {
+      debugPrint(
+        '⏳ Ignoring update (poor GPS accuracy): ${position.accuracy.toStringAsFixed(1)}m',
+      );
+      return;
+    }
+
+    if (_currentDriverLocation != null) {
+      movedMeters = _calculateDistance(_currentDriverLocation!, newLocation) * 1000;
+      if (movedMeters > _maxJumpMeters && position.speed < 5) {
+        debugPrint('⚠️ Ignoring GPS jump: ${movedMeters.toStringAsFixed(1)}m');
+        return;
+      }
+      debugPrint('📏 Moved: ${movedMeters.toStringAsFixed(1)} meters');
     }
 
     if (position.speed > 0) {
@@ -166,6 +228,10 @@ class _LiveNavigationState extends State<LiveNavigation> {
     } else {
       _currentSpeed = 0;
     }
+
+    // اعتبره متوقفاً إذا السرعة منخفضة والحركة شبه معدومة
+    final isStationary =
+        movedMeters <= _stationaryMoveMeters && position.speed <= _stationarySpeedMps;
 
     double newBearing;
     if (_previousLocation != null && _currentSpeed > 1) {
@@ -183,12 +249,24 @@ class _LiveNavigationState extends State<LiveNavigation> {
       _currentBearing = newBearing;
     });
 
-    if (_isFollowingDriver && _currentDriverLocation != null) {
-      _followDriver();
+    // ✅ لا نحرك الأيقونة إذا كان متوقفاً لتجنب الاهتزازات الصغيرة
+    if (!isStationary) {
+      _animateMarkerTo(newLocation);
     }
 
     // ✅ فحص الوصول بدقة عالية (مع الأخذ بالسرعة بعين الاعتبار)
     _checkArrival(newLocation, position.accuracy, position.speed);
+  }
+
+  void _animateMarkerTo(LatLng target) {
+    final from = _animatedDriverLocation ?? _currentDriverLocation ?? target;
+
+    _animFrom = from;
+    _animTo = target;
+
+    _markerAnimController.stop();
+    _markerAnimController.duration = const Duration(milliseconds: _markerAnimMs);
+    _markerAnimController.forward(from: 0);
   }
 
   // ✅ دالة مُحكمة للفحص الدقيق للوصول (تحد من الإيجابيات الكاذبة)
@@ -203,6 +281,16 @@ class _LiveNavigationState extends State<LiveNavigation> {
       widget.customerLatitude,
       widget.customerLongitude,
     );
+
+    // تحقق من تطابق الإحداثيات (lat/lng) ضمن هامش صغير
+    final latDiff = (currentLocation.latitude - widget.customerLatitude).abs();
+    final lngDiff = (currentLocation.longitude - widget.customerLongitude).abs();
+    final metersPerDegLat = 111320.0; // تقريب بالأمتار لكل درجة عرض
+    final metersPerDegLon =
+        111320.0 * math.cos(currentLocation.latitude * math.pi / 180);
+    final sameCoords =
+        latDiff * metersPerDegLat <= _coordMatchMeters &&
+        lngDiff * metersPerDegLon <= _coordMatchMeters;
 
     // تجاهل التحقق إذا كانت دقة GPS سيئة جداً
     if (gpsAccuracy > _maxGpsAccuracyMeters) {
@@ -220,7 +308,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
     // شروط الوصول الصارمة: مسافة صغيرة وسرعة منخفضة
     final inside =
         distanceInMeters <= _arrivalThresholdMeters &&
-        speedMps <= _maxArrivalSpeedMps;
+      speedMps <= _maxArrivalSpeedMps &&
+      sameCoords;
+
     if (inside) {
       _arrivalHitCount++;
       debugPrint(
@@ -259,7 +349,10 @@ class _LiveNavigationState extends State<LiveNavigation> {
   }
 
   void _followDriver() {
-    if (_mapController == null || _currentDriverLocation == null) return;
+    if (_mapController == null) return;
+
+    final followPoint = _animatedDriverLocation ?? _currentDriverLocation;
+    if (followPoint == null) return;
 
     double zoom = 17.0;
     if (_currentSpeed > 60) {
@@ -270,7 +363,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
       zoom = 16.5;
     }
 
-    _mapController!.move(_currentDriverLocation!, zoom);
+    _mapController!.move(followPoint, zoom);
   }
 
   Future<void> _updateRoute() async {
@@ -330,8 +423,9 @@ class _LiveNavigationState extends State<LiveNavigation> {
           .from('delivery_driver')
           .update({'current_order_id': null})
           .eq('delivery_driver_id', widget.deliveryDriverId);
-      
-      debugPrint('✅ Cleared current_order_id for driver ${widget.deliveryDriverId}');
+
+      debugPrint(
+          '✅ Cleared current_order_id for driver ${widget.deliveryDriverId}');
     } catch (e) {
       debugPrint('❌ Error clearing current_order_id: $e');
     }
@@ -340,7 +434,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
   void _showArrivalDialog() {
     // ✅ Clear current_order_id when arrived
     _clearCurrentOrderId();
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -419,9 +513,11 @@ class _LiveNavigationState extends State<LiveNavigation> {
 
                 MarkerLayer(
                   markers: [
-                    if (_currentDriverLocation != null)
+                    if ((_animatedDriverLocation ?? _currentDriverLocation) !=
+                        null)
                       Marker(
-                        point: _currentDriverLocation!,
+                        point:
+                            _animatedDriverLocation ?? _currentDriverLocation!,
                         width: 70.0,
                         height: 70.0,
                         alignment: Alignment.center,
@@ -602,7 +698,8 @@ class _LiveNavigationState extends State<LiveNavigation> {
                     setState(() {
                       _isFollowingDriver = true;
                     });
-                    if (_currentDriverLocation != null) {
+                    if ((_animatedDriverLocation ?? _currentDriverLocation) !=
+                        null) {
                       _followDriver();
                     }
                   },
@@ -707,7 +804,7 @@ class _LiveNavigationState extends State<LiveNavigation> {
                                 onPressed: () async {
                                   // ✅ Clear current_order_id when ending route
                                   await _clearCurrentOrderId();
-                                  
+
                                   if (!mounted) return;
                                   Navigator.pop(context);
                                   Navigator.pop(context);
