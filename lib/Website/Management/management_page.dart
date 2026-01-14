@@ -70,6 +70,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   // =============== LOAD DATA FROM SUPABASE ===============
 
   Future<void> loadCustomers() async {
+    if (!mounted) return;
     final res = await supabase
         .from('customer')
         .select('customer_id, name, customer_city(name)')
@@ -94,6 +95,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadSalesReps() async {
+    if (!mounted) return;
     final res = await supabase
         .from('sales_representative')
         .select('sales_rep_id, name, sales_rep_city(name)')
@@ -118,6 +120,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadSuppliers() async {
+    if (!mounted) return;
     final res = await supabase
         .from('supplier')
         .select('supplier_id, name, supplier_category(name)')
@@ -142,6 +145,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadBrands() async {
+    if (!mounted) return;
     final res = await supabase
         .from('brand')
         .select()
@@ -160,6 +164,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadCategories() async {
+    if (!mounted) return;
     final res = await supabase
         .from('product_category')
         .select()
@@ -180,6 +185,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadLocations() async {
+    if (!mounted) return;
     final res = await supabase
         .from('customer_quarters')
         .select('''
@@ -212,6 +218,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
   }
 
   Future<void> loadBanks() async {
+    if (!mounted) return;
     final res = await supabase
         .from('branches')
         .select('''
@@ -386,7 +393,7 @@ class _UsersManagementPageState extends State<UsersManagementPage>
       backgroundColor: bg,
       body: Row(
         children: [
-          const Sidebar(activeIndex: 7),
+          const Sidebar(activeIndex: 8),
 
           Expanded(
             child: Padding(

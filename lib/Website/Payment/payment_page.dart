@@ -31,7 +31,10 @@ class _PaymentPageState extends State<PaymentPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ================== الهيدر العلوي ==================
-                  Row(
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Text(
                         'Payment',
@@ -41,7 +44,6 @@ class _PaymentPageState extends State<PaymentPage> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const Spacer(),
                       ElevatedButton.icon(
                         onPressed: () => showSelectTransactionDialog(context),
                         style: ElevatedButton.styleFrom(
@@ -70,7 +72,6 @@ class _PaymentPageState extends State<PaymentPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
                       Container(
                         width: 34,
                         height: 34,
@@ -90,14 +91,16 @@ class _PaymentPageState extends State<PaymentPage> {
                   const SizedBox(height: 24),
 
                   // ================== Tabs: Statistics / Checks / Archive ==================
-                  Row(
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       _TopTab(
                         label: 'Statistics',
                         isActive: activeTab == 0,
                         onTap: () => setState(() => activeTab = 0),
                       ),
-                      const SizedBox(width: 24),
                       _TopTab(
                         label: 'Checks',
                         isActive: activeTab == 1,
@@ -111,7 +114,6 @@ class _PaymentPageState extends State<PaymentPage> {
                           );
                         },
                       ),
-                      const SizedBox(width: 24),
                       _TopTab(
                         label: 'Archive',
                         isActive: activeTab == 2,
@@ -133,34 +135,81 @@ class _PaymentPageState extends State<PaymentPage> {
                   // ================== المحتوى مع Scroll ==================
                   Expanded(
                     child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          // ================== الصف العلوي ==================
-                          SizedBox(
-                            height: 280,
-                            child: const Row(
-                              children: [
-                                Expanded(flex: 3, child: _UpcomingChecksCard()),
-                                SizedBox(width: 18),
-                                Expanded(flex: 2, child: _TopStatsCards()),
-                              ],
-                            ),
-                          ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          final breakpoint =
+                              900; // Width below which cards stack
 
-                          const SizedBox(height: 18),
-
-                          // ================== الصف السفلي ==================
-                          SizedBox(
-                            height: 440,
-                            child: const Row(
+                          if (width >= breakpoint) {
+                            // Wide screen - maintain flex ratios
+                            return Column(
                               children: [
-                                Expanded(flex: 2, child: _MostDebtorsCard()),
-                                SizedBox(width: 18),
-                                Expanded(flex: 5, child: _TotalProfitCard()),
+                                // ================== الصف العلوي ==================
+                                SizedBox(
+                                  height: 280,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: const _UpcomingChecksCard(),
+                                      ),
+                                      const SizedBox(width: 18),
+                                      Expanded(
+                                        flex: 2,
+                                        child: const _TopStatsCards(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                // ================== الصف السفلي ==================
+                                SizedBox(
+                                  height: 440,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: const _MostDebtorsCard(),
+                                      ),
+                                      const SizedBox(width: 18),
+                                      Expanded(
+                                        flex: 5,
+                                        child: const _TotalProfitCard(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
-                            ),
-                          ),
-                        ],
+                            );
+                          } else {
+                            // Narrow screen - stack vertically
+                            return Column(
+                              children: [
+                                // Cards stack in order
+                                SizedBox(
+                                  height: 280,
+                                  child: const _UpcomingChecksCard(),
+                                ),
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  height: 280,
+                                  child: const _TopStatsCards(),
+                                ),
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  height: 440,
+                                  child: const _MostDebtorsCard(),
+                                ),
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  height: 440,
+                                  child: const _TotalProfitCard(),
+                                ),
+                              ],
+                            );
+                          }
+                        },
                       ),
                     ),
                   ),

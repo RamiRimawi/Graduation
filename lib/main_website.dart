@@ -18,7 +18,7 @@ import 'Website/Damaged_Product/damaged_products_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseConfig.initialize(); // ← مهم جداً
+  await SupabaseConfig.initialize();
   runApp(const DolphinApp());
 }
 

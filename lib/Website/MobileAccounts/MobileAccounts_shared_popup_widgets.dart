@@ -64,7 +64,9 @@ class _FieldInputState extends State<FieldInput> {
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    try {
+      _focusNode.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -412,8 +414,12 @@ class _AutocompleteCityState extends State<AutocompleteCity> {
 
   @override
   void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
+    try {
+      _controller.dispose();
+    } catch (_) {}
+    try {
+      _focusNode.dispose();
+    } catch (_) {}
     super.dispose();
   }
 

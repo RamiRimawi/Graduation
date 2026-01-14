@@ -318,15 +318,43 @@ class _MainContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
-        Spacer(),
-        SizedBox(width: 289, height: 640, child: _ActiveWorkersCard()),
-        SizedBox(width: 32),
-        SizedBox(width: 994, height: 640, child: _OrdersCard()),
-        Spacer(),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final breakpoint = 1000; // Width below which cards stack
+
+        if (width >= breakpoint) {
+          // Wide screen - side by side with original proportions
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 350,
+                  height: 640,
+                  child: _ActiveWorkersCard(),
+                ),
+                const SizedBox(width: 32),
+                const Expanded(
+                  child: SizedBox(height: 640, child: _OrdersCard()),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Narrow screen - stack vertically
+          return const SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(height: 400, child: _ActiveWorkersCard()),
+                SizedBox(height: 24),
+                SizedBox(height: 640, child: _OrdersCard()),
+              ],
+            ),
+          );
+        }
+      },
     );
   }
 }

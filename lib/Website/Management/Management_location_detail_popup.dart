@@ -102,8 +102,11 @@ class _LocationDetailPopupState extends State<LocationDetailPopup> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Location Details',
@@ -113,7 +116,9 @@ class _LocationDetailPopupState extends State<LocationDetailPopup> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 if (!edit)
                   ElevatedButton.icon(

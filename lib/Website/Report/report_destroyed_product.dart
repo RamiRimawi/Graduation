@@ -198,46 +198,44 @@ class _ReportDestroyedProductPageContentState
                           children: [
                             // 🔹 Title + Search bar + Generate Report button
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Destroyed Products Meetings',
-                                  style: TextStyle(
-                                    color: AppColors.blue,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 22,
+                                const Expanded(
+                                  child: Text(
+                                    'Destroyed Products Meetings',
+                                    style: TextStyle(
+                                      color: AppColors.blue,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 22,
+                                    ),
                                   ),
                                 ),
-                                Row(
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: _showGenerateReportDialog,
-                                      icon: const Icon(
-                                        Icons.picture_as_pdf,
-                                        size: 18,
-                                      ),
-                                      label: const Text('Generate Report'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.blue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            28,
-                                          ),
-                                        ),
-                                      ),
+                                const SizedBox(width: 12),
+                                ElevatedButton.icon(
+                                  onPressed: _showGenerateReportDialog,
+                                  icon: const Icon(
+                                    Icons.picture_as_pdf,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Generate Report'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.blue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 14,
                                     ),
-                                    const SizedBox(width: 12),
-                                    _SearchField(
-                                      hint: 'Search Meeting',
-                                      icon: Icons.manage_search_rounded,
-                                      controller: _searchController,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(28),
                                     ),
-                                  ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: _SearchField(
+                                    hint: 'Search Meeting',
+                                    icon: Icons.manage_search_rounded,
+                                    controller: _searchController,
+                                  ),
                                 ),
                               ],
                             ),
@@ -350,38 +348,40 @@ class _SearchFieldState extends State<_SearchField> {
   @override
   Widget build(BuildContext context) {
     final isFocused = _focusNode.hasFocus;
-    return Container(
-      width: 230,
-      height: 42,
-      child: TextField(
-        focusNode: _focusNode,
-        controller: widget.controller,
-        style: const TextStyle(color: AppColors.white, fontSize: 13),
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          hintStyle: const TextStyle(color: AppColors.grey, fontSize: 13),
-          prefixIcon: Icon(widget.icon, color: AppColors.white, size: 20),
-          filled: true,
-          fillColor: AppColors.card,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 180, maxWidth: 280),
+      child: Container(
+        height: 42,
+        child: TextField(
+          focusNode: _focusNode,
+          controller: widget.controller,
+          style: const TextStyle(color: AppColors.white, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            hintStyle: const TextStyle(color: AppColors.grey, fontSize: 13),
+            prefixIcon: Icon(widget.icon, color: AppColors.white, size: 20),
+            filled: true,
+            fillColor: AppColors.card,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(28),
+              borderSide: BorderSide(color: AppColors.grey, width: 1.5),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(28),
+              borderSide: BorderSide(color: AppColors.grey, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(28),
+              borderSide: BorderSide(color: AppColors.blue, width: 2),
+            ),
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide(color: AppColors.grey, width: 1.5),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide(color: AppColors.grey, width: 1.5),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide(color: AppColors.blue, width: 2),
-          ),
+          cursorColor: AppColors.blue,
+          onTap: () => setState(() {}),
         ),
-        cursorColor: AppColors.blue,
-        onTap: () => setState(() {}),
       ),
     );
   }

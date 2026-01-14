@@ -67,6 +67,7 @@ class _DamagedProductsPageState extends State<DamagedProductsPage> {
   }
 
   Future<void> _fetchMeetings() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
 
     try {
@@ -259,10 +260,16 @@ class _DamagedProductsPageState extends State<DamagedProductsPage> {
                                       final meeting = filteredMeetings[i];
                                       final isHovered = hoveredRow == i;
                                       return MouseRegion(
-                                        onEnter: (_) =>
-                                            setState(() => hoveredRow = i),
-                                        onExit: (_) =>
-                                            setState(() => hoveredRow = null),
+                                        onEnter: (_) {
+                                          if (mounted) {
+                                            setState(() => hoveredRow = i);
+                                          }
+                                        },
+                                        onExit: (_) {
+                                          if (mounted) {
+                                            setState(() => hoveredRow = null);
+                                          }
+                                        },
                                         child: InkWell(
                                           onTap: () =>
                                               _showMeetingDetails(meeting),

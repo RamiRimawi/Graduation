@@ -102,8 +102,11 @@ class _BankDetailPopupState extends State<BankDetailPopup> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Bank Details',
@@ -113,7 +116,9 @@ class _BankDetailPopupState extends State<BankDetailPopup> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 if (!edit)
                   ElevatedButton.icon(

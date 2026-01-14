@@ -68,6 +68,7 @@ class _SupplierDetailDialogState extends State<SupplierDetailDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Column(
@@ -82,23 +83,22 @@ class _SupplierDetailDialogState extends State<SupplierDetailDialog> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Row(
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
                                 children: [
                                   _InfoChip(
                                     label: 'ID',
                                     value: widget.supplierId,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Mobile',
                                     value: widget.mobile,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Location',
                                     value: widget.location,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Creditor Balance',
                                     value: '\$${widget.creditorBalance}',
@@ -109,6 +109,7 @@ class _SupplierDetailDialogState extends State<SupplierDetailDialog> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 12),
                         // Generate Report button
                         ElevatedButton.icon(
                           onPressed: () {

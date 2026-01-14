@@ -22,7 +22,11 @@ class PaymentHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ================== Header Section ==================
-        Row(
+        // ================== Header: Title + Add Payment Button ==================
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             const Text(
               'Payment',
@@ -32,7 +36,6 @@ class PaymentHeader extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const Spacer(),
             ElevatedButton.icon(
               onPressed: () => showSelectTransactionDialog(context),
               style: ElevatedButton.styleFrom(
@@ -57,7 +60,6 @@ class PaymentHeader extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 16),
             Container(
               width: 34,
               height: 34,
@@ -77,7 +79,10 @@ class PaymentHeader extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ================== Tab Navigation ==================
-        Row(
+        Wrap(
+          spacing: 24,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _TopTextTab(
               label: 'Statistics',
@@ -91,7 +96,6 @@ class PaymentHeader extends StatelessWidget {
                     }
                   : null,
             ),
-            const SizedBox(width: 24),
             _TopTextTab(
               label: 'Checks',
               isActive: currentPage == 'checks',
@@ -104,7 +108,6 @@ class PaymentHeader extends StatelessWidget {
                     }
                   : null,
             ),
-            const SizedBox(width: 24),
             _TopTextTab(
               label: 'Archive',
               isActive: currentPage == 'archive',
@@ -120,14 +123,12 @@ class PaymentHeader extends StatelessWidget {
                   : null,
             ),
             // Show Incoming/Outgoing switch only for checks and archive pages
-            if (isIncoming != null && onIncomingChanged != null) ...[
-              const SizedBox(width: 32),
+            if (isIncoming != null && onIncomingChanged != null)
               _IncomingOutgoingSwitch(
                 isIncoming: isIncoming!,
                 onIncoming: () => onIncomingChanged!(true),
                 onOutgoing: () => onIncomingChanged!(false),
               ),
-            ],
           ],
         ),
       ],

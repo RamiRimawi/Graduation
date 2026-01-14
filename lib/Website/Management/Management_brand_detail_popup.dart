@@ -89,8 +89,11 @@ class _BrandDetailPopupState extends State<BrandDetailPopup> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Brand Details',
@@ -100,7 +103,9 @@ class _BrandDetailPopupState extends State<BrandDetailPopup> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 if (!isEditMode)
                   ElevatedButton.icon(

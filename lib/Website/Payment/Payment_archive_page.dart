@@ -510,7 +510,11 @@ class _ArchivePaymentPageState extends State<ArchivePaymentPage> {
           backgroundColor: Colors.transparent,
           child: Container(
             width: MediaQuery.of(context).size.width * 0.7,
-            constraints: const BoxConstraints(maxWidth: 650, maxHeight: 700),
+            constraints: const BoxConstraints(
+              minWidth: 300,
+              maxWidth: 650,
+              maxHeight: 700,
+            ),
             decoration: BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.circular(24),
@@ -1880,36 +1884,46 @@ class _SearchFilterBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 260,
-          height: 38,
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(40),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.person_search_rounded,
-                color: AppColors.white,
-                size: 18,
+        Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 180, maxWidth: 280),
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(40),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: const TextStyle(color: AppColors.white, fontSize: 13),
-                  decoration: const InputDecoration(
-                    hintText: 'Enter Name',
-                    hintStyle: TextStyle(color: AppColors.grey, fontSize: 13),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.person_search_rounded,
+                    color: AppColors.white,
+                    size: 18,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 13,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: 'Enter Name',
+                        hintStyle: TextStyle(
+                          color: AppColors.grey,
+                          fontSize: 13,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         const SizedBox(width: 10),

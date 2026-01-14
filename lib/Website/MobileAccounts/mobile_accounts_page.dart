@@ -62,6 +62,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
   }
 
   Future<void> _loadAccounts() async {
+    if (!mounted) return;
     try {
       // Ensure Supabase is initialized (safe if already initialized)
 
@@ -163,7 +164,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
       backgroundColor: bg,
       body: Row(
         children: [
-          const Sidebar(activeIndex: 6),
+          const Sidebar(activeIndex: 7),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),

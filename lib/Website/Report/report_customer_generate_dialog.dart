@@ -965,6 +965,7 @@ class _GenerateCustomerReportDialogState
                 children: [
                   pw.Text(
                     'ORDERS SECTION',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 32,
                       fontWeight: pw.FontWeight.bold,
@@ -974,6 +975,7 @@ class _GenerateCustomerReportDialogState
                   pw.SizedBox(height: 15),
                   pw.Text(
                     'Total Orders: ${orders.length}',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(fontSize: 18, color: PdfColors.blue800),
                   ),
                 ],
@@ -1013,6 +1015,7 @@ class _GenerateCustomerReportDialogState
                 children: [
                   pw.Text(
                     'PAYMENT SECTION',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 32,
                       fontWeight: pw.FontWeight.bold,
@@ -1022,6 +1025,7 @@ class _GenerateCustomerReportDialogState
                   pw.SizedBox(height: 20),
                   pw.Text(
                     'Cash Payments: ${payments['cash']!.length}',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 16,
                       color: PdfColors.green800,
@@ -1030,6 +1034,7 @@ class _GenerateCustomerReportDialogState
                   pw.SizedBox(height: 8),
                   pw.Text(
                     'Check Payments: ${payments['check']!.length}',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 16,
                       color: PdfColors.green800,
@@ -1038,6 +1043,7 @@ class _GenerateCustomerReportDialogState
                   pw.SizedBox(height: 8),
                   pw.Text(
                     'Returned Checks: ${payments['returned']!.length}',
+                    textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 16,
                       color: PdfColors.green800,
@@ -1069,6 +1075,7 @@ class _GenerateCustomerReportDialogState
                   children: [
                     pw.Text(
                       'CASH PAYMENTS',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 28,
                         fontWeight: pw.FontWeight.bold,
@@ -1078,6 +1085,7 @@ class _GenerateCustomerReportDialogState
                     pw.SizedBox(height: 12),
                     pw.Text(
                       'Total: ${payments['cash']!.length}',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 16,
                         color: PdfColors.green800,
@@ -1123,6 +1131,7 @@ class _GenerateCustomerReportDialogState
                   children: [
                     pw.Text(
                       'CHECK PAYMENTS',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 28,
                         fontWeight: pw.FontWeight.bold,
@@ -1132,6 +1141,7 @@ class _GenerateCustomerReportDialogState
                     pw.SizedBox(height: 12),
                     pw.Text(
                       'Total: ${payments['check']!.length}',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 16,
                         color: PdfColors.blue800,
@@ -1177,6 +1187,7 @@ class _GenerateCustomerReportDialogState
                   children: [
                     pw.Text(
                       'RETURNED CHECKS',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 28,
                         fontWeight: pw.FontWeight.bold,
@@ -1186,6 +1197,7 @@ class _GenerateCustomerReportDialogState
                     pw.SizedBox(height: 12),
                     pw.Text(
                       'Total: ${payments['returned']!.length}',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 16,
                         color: PdfColors.red800,

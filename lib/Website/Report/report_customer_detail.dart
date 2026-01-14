@@ -68,6 +68,7 @@ class _CustomerDetailDialogState extends State<CustomerDetailDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Column(
@@ -82,23 +83,22 @@ class _CustomerDetailDialogState extends State<CustomerDetailDialog> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Row(
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
                                 children: [
                                   _InfoChip(
                                     label: 'ID',
                                     value: widget.customerId,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Mobile',
                                     value: widget.mobile,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Location',
                                     value: widget.location,
                                   ),
-                                  const SizedBox(width: 12),
                                   _InfoChip(
                                     label: 'Balance Debit',
                                     value: '\$${widget.balanceDebit}',
@@ -109,6 +109,7 @@ class _CustomerDetailDialogState extends State<CustomerDetailDialog> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 12),
                         // Generate Report button
                         ElevatedButton.icon(
                           onPressed: () {

@@ -155,8 +155,11 @@ class _SupplierDetailPopupState extends State<SupplierDetailPopup> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
               'Supplier Details',
@@ -166,7 +169,9 @@ class _SupplierDetailPopupState extends State<SupplierDetailPopup> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 if (!isEditMode)
                   ElevatedButton.icon(
