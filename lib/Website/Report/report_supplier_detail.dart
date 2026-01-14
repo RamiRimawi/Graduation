@@ -3,6 +3,7 @@ import 'report_page.dart';
 import '../../supabase_config.dart';
 import '../Orders/Orders_stock_in_previous_popup.dart' as orders;
 import '../Payment/Payment_archive_page.dart' as payment_archive;
+import 'report_supplier_generate_dialog.dart';
 
 // ============================================================================
 // 🔹 Supplier Detail Dialog (Popup)
@@ -108,6 +109,33 @@ class _SupplierDetailDialogState extends State<SupplierDetailDialog> {
                             ],
                           ),
                         ),
+                        // Generate Report button
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              barrierColor: Colors.black.withOpacity(0.7),
+                              builder: (_) => GenerateSupplierReportDialog(
+                                supplierId: widget.supplierId,
+                                supplierName: widget.supplierName,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.picture_as_pdf, size: 18),
+                          label: const Text('Generate Report'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.close, color: AppColors.white),
                           onPressed: () => Navigator.of(context).pop(),
