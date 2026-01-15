@@ -130,8 +130,6 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
   }
 
   Future<void> _loadPreviousOrders() async {
-    setState(() => isLoading = true);
-
     try {
       // Query for Previous tab: Rejected (all days), Delivered
       final ordersResponse = await supabase
@@ -144,60 +142,59 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
             receives_by_id,
             supplier:supplier_id (
               name
+            ),
+            supplier_order_inventory!supplier_order_inventory_supplier_order_id_fkey (
+              inventory_id,
+              inventory:inventory_id (
+                inventory_name
+              )
             )
           ''')
           .or('order_status.eq.Rejected,order_status.eq.Delivered')
           .order('order_date', ascending: false);
 
       final orders = (ordersResponse as List).cast<Map<String, dynamic>>();
+      final processedOrders = <Map<String, dynamic>>[];
 
-      // Get inventory names for delivered orders, null for rejected
-      for (var order in orders) {
+      for (int i = 0; i < orders.length; i++) {
+        final order = orders[i];
+
+        // Get inventory names for delivered orders
         if (order['order_status'] == 'Delivered') {
-          try {
-            // Get all inventory_ids for this order
-            final invRows = await supabase
-                .from('supplier_order_inventory')
-                .select('inventory_id')
-                .eq('supplier_order_id', order['order_id']);
-
-            // ignore: unnecessary_null_comparison, unnecessary_type_check
-            if (invRows != null && invRows is List && invRows.isNotEmpty) {
-              // Get all inventory names, deduplicated
-              Set<String> inventoryNames = {};
-              for (var inv in invRows) {
-                if (inv['inventory_id'] != null) {
-                  final invInfo = await supabase
-                      .from('inventory')
-                      .select('inventory_name')
-                      .eq('inventory_id', inv['inventory_id'])
-                      .maybeSingle();
-                  if (invInfo != null && invInfo['inventory_name'] != null) {
-                    inventoryNames.add(invInfo['inventory_name']);
-                  }
-                }
+          final inventories = order['supplier_order_inventory'] as List?;
+          if (inventories != null && inventories.isNotEmpty) {
+            Set<String> inventoryNames = {};
+            for (var inv in inventories) {
+              final inventoryData = inv['inventory'];
+              if (inventoryData != null &&
+                  inventoryData['inventory_name'] != null) {
+                inventoryNames.add(inventoryData['inventory_name']);
               }
-              order['inventory_name'] = inventoryNames.isNotEmpty
-                  ? inventoryNames.join(', ')
-                  : null;
-            } else {
-              order['inventory_name'] = null;
             }
-          } catch (e) {
-            // Error fetching inventory for order
+            order['inventory_name'] = inventoryNames.isNotEmpty
+                ? inventoryNames.join(', ')
+                : null;
+          } else {
             order['inventory_name'] = null;
           }
-        } else if (order['order_status'] == 'Rejected') {
+        } else {
           order['inventory_name'] = null;
         }
-      }
 
-      if (!mounted) return;
-      setState(() {
-        allOrders = orders;
-        filteredOrders = orders;
-        isLoading = false;
-      });
+        processedOrders.add(order);
+
+        // Update UI every 10 orders or on last order for smooth progressive loading
+        if ((i + 1) % 10 == 0 || i == orders.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            allOrders = List.from(processedOrders);
+            filteredOrders = List.from(processedOrders);
+            isLoading = false;
+          });
+          // Small delay to allow UI to update
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
+      }
     } catch (e) {
       // Error loading previous orders
       if (!mounted) return;

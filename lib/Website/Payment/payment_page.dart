@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../sidebar.dart';
+import 'payment_header.dart';
 import 'Payment_checks_page.dart';
 import 'Payment_archive_page.dart';
 import 'Payment_choose_payment.dart';
@@ -30,105 +31,8 @@ class _PaymentPageState extends State<PaymentPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ================== الهيدر العلوي ==================
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      const Text(
-                        'Payment',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: () => showSelectTransactionDialog(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.blue,
-                          foregroundColor: AppColors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          elevation: 4,
-                        ),
-                        icon: const Icon(
-                          Icons.add,
-                          color: AppColors.black,
-                          size: 18,
-                        ),
-                        label: const Text(
-                          'Add Payment',
-                          style: TextStyle(
-                            color: AppColors.black,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: const BoxDecoration(
-                          color: AppColors.card,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // ================== Tabs: Statistics / Checks / Archive ==================
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _TopTab(
-                        label: 'Statistics',
-                        isActive: activeTab == 0,
-                        onTap: () => setState(() => activeTab = 0),
-                      ),
-                      _TopTab(
-                        label: 'Checks',
-                        isActive: activeTab == 1,
-                        onTap: () {
-                          setState(() => activeTab = 1);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const CheckPage(),
-                            ),
-                          );
-                        },
-                      ),
-                      _TopTab(
-                        label: 'Archive',
-                        isActive: activeTab == 2,
-                        onTap: () {
-                          setState(() => activeTab = 2);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ArchivePaymentPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                  // ================== Header & Tabs ==================
+                  const PaymentHeader(currentPage: 'statistics'),
 
                   const SizedBox(height: 18),
 
@@ -235,49 +139,6 @@ class AppColors {
   static const dark = Color(0xFF202020);
   static const black = Color(0xFF000000);
   // black must be opaque so text/icons are visible (was transparent which hid the label)
-}
-
-// ------------------------------------------------------------------
-// Tabs فوق (Statistics / Checks / Archive)
-// ------------------------------------------------------------------
-class _TopTab extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  const _TopTab({required this.label, this.isActive = false, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: onTap != null
-          ? SystemMouseCursors.click
-          : SystemMouseCursors.basic,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.only(bottom: 6),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isActive ? AppColors.blue : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isActive ? AppColors.white : AppColors.grey,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // Card: Upcoming Checks  (zebra + scroll + check status أزرق)
@@ -1296,31 +1157,33 @@ class _ProfitChartState extends State<_ProfitChart>
                                             child: Column(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.end,
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 // Profit label ABOVE the bar
-                                                Opacity(
-                                                  opacity: anim,
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                          bottom: 6,
+                                                if (barHeight > 0)
+                                                  Opacity(
+                                                    opacity: anim,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: 6,
+                                                          ),
+                                                      child: Text(
+                                                        '\$ ${profitData[index].toInt()} ',
+                                                        style: TextStyle(
+                                                          color: isHovered
+                                                              ? AppColors.white
+                                                              : AppColors.white
+                                                                    .withOpacity(
+                                                                      0.9,
+                                                                    ),
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
                                                         ),
-                                                    child: Text(
-                                                      '\$ ${profitData[index].toInt()} ',
-                                                      style: TextStyle(
-                                                        color: isHovered
-                                                            ? AppColors.white
-                                                            : AppColors.white
-                                                                  .withOpacity(
-                                                                    0.9,
-                                                                  ),
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
                                                       ),
                                                     ),
                                                   ),
-                                                ),
                                                 // The bar itself
                                                 AnimatedContainer(
                                                   duration: const Duration(
@@ -1328,7 +1191,10 @@ class _ProfitChartState extends State<_ProfitChart>
                                                   ),
                                                   curve: Curves.easeOutCubic,
                                                   width: barWidth,
-                                                  height: barHeight,
+                                                  height: barHeight.clamp(
+                                                    0,
+                                                    _barMaxHeight,
+                                                  ),
                                                   decoration: BoxDecoration(
                                                     color: AppColors.blue
                                                         .withOpacity(opacity),

@@ -85,12 +85,12 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
             delivery_driver:delivered_by_id(name)
           ''')
           .eq('order_status', 'Delivered')
-          .order('order_date', ascending: false)
-          .limit(100);
+          .order('order_date', ascending: false);
 
       final ordersList = <OrderPreviousRow>[];
 
-      for (final row in data) {
+      for (int i = 0; i < data.length; i++) {
+        final row = data[i];
         final orderId = (row['customer_order_id'] ?? '').toString();
         final customerName = (row['customer'] is Map)
             ? (row['customer']['name'] ?? 'Unknown')
@@ -113,14 +113,21 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
             date: date,
           ),
         );
-      }
 
-      setState(() {
-        _previousOrders = ordersList;
-        _loading = false;
-        _error = null;
-      });
+        // Update UI every 10 rows or on last row for smooth progressive loading
+        if ((i + 1) % 10 == 0 || i == data.length - 1) {
+          if (!mounted) return;
+          setState(() {
+            _previousOrders = List.from(ordersList);
+            _loading = false;
+            _error = null;
+          });
+          // Small delay to allow UI to update
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
+      }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
