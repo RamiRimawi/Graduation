@@ -190,7 +190,7 @@ class _LiveNavigationState extends State<LiveNavigation>
             });
 
         _routeUpdateTimer = Timer.periodic(
-          const Duration(seconds: 20),
+          const Duration(seconds: 5),
           (_) => _updateRoute(),
         );
       }

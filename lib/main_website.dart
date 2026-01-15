@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'supabase_config.dart';
 import 'Website/login_page.dart';
 import 'Website/dashboard_page.dart';
@@ -52,25 +53,111 @@ class DolphinApp extends StatelessWidget {
         ),
       ),
 
-      // 🔹 البداية من صفحة Login
       initialRoute: '/login',
+      onGenerateRoute: (settings) => _onGenerateRoute(settings),
+    );
+  }
 
-      routes: {
-        '/login': (_) => const LoginPage(),
-        '/dashboard': (_) => const DashboardPage(),
-        '/delivery': (_) => const DeliveryPage(),
-        '/mobileAccounts': (_) => const MobileAccountsPage(),
-        '/usersManagement': (_) => const UsersManagementPage(),
-        '/payment': (_) => const PaymentPage(),
-        '/report': (_) => const ReportPage(),
-        '/reportCustomer': (_) => const ReportCustomerPage(),
-        '/reportSupplier': (_) => const ReportSupplierPage(),
-        '/reportDestroyedProduct': (_) => const ReportDestroyedProductPage(),
-        '/inventory': (_) => const InventoryPage(),
-        '/stockOut': (_) => const OrdersPage(),
-        '/account': (_) => const ProfilePageContent(),
-        '/damagedProducts': (_) => const DamagedProductsPage(),
+  static Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (context) => _AuthGuard(
+        routeName: settings.name ?? '/login',
+      ),
+    );
+  }
+}
+
+class _AuthGuard extends StatelessWidget {
+  final String routeName;
+
+  const _AuthGuard({required this.routeName});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _isLoggedIn(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF202020),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFB7A447),
+              ),
+            ),
+          );
+        }
+
+        final isLoggedIn = snapshot.data ?? false;
+
+        // If trying to access login page while logged in, redirect to dashboard
+        if (routeName == '/login') {
+          if (isLoggedIn) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.pushReplacementNamed(context, '/dashboard');
+            });
+          }
+          return const LoginPage();
+        }
+
+        // If not logged in and trying to access protected page, redirect to login
+        if (!isLoggedIn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushReplacementNamed(context, '/login');
+          });
+          return const Scaffold(
+            backgroundColor: Color(0xFF202020),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFB7A447),
+              ),
+            ),
+          );
+        }
+
+        // User is logged in, show the requested page
+        return _getPageForRoute(routeName);
       },
     );
+  }
+
+  Future<bool> _isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accountantId = prefs.getInt('accountant_id');
+    return accountantId != null;
+  }
+
+  Widget _getPageForRoute(String route) {
+    switch (route) {
+      case '/dashboard':
+        return const DashboardPage();
+      case '/delivery':
+        return const DeliveryPage();
+      case '/mobileAccounts':
+        return const MobileAccountsPage();
+      case '/usersManagement':
+        return const UsersManagementPage();
+      case '/payment':
+        return const PaymentPage();
+      case '/report':
+        return const ReportPage();
+      case '/reportCustomer':
+        return const ReportCustomerPage();
+      case '/reportSupplier':
+        return const ReportSupplierPage();
+      case '/reportDestroyedProduct':
+        return const ReportDestroyedProductPage();
+      case '/inventory':
+        return const InventoryPage();
+      case '/stockOut':
+        return const OrdersPage();
+      case '/account':
+        return const ProfilePageContent();
+      case '/damagedProducts':
+        return const DamagedProductsPage();
+      default:
+        return const LoginPage();
+    }
   }
 }
