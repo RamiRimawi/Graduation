@@ -183,6 +183,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
 
   Future<void> _fetchCustomers() async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingCustomers = true);
 
       final response = await Supabase.instance.client
@@ -190,12 +191,14 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
           .select('customer_id, name')
           .order('name', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         customers = List<Map<String, dynamic>>.from(response);
         filteredCustomers = customers;
         isLoadingCustomers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingCustomers = false);
       // Handle error - could show a snackbar
       if (mounted) {
@@ -208,6 +211,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
 
   Future<void> _fetchBanks() async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingBanks = true);
 
       final response = await Supabase.instance.client
@@ -215,11 +219,13 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
           .select('bank_id, bank_name')
           .order('bank_name', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         banks = List<Map<String, dynamic>>.from(response);
         isLoadingBanks = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingBanks = false);
       // Handle error - could show a snackbar
       if (mounted) {
@@ -232,6 +238,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
 
   Future<void> _fetchBranches(String bankId) async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingBranches = true);
 
       final response = await Supabase.instance.client
@@ -240,11 +247,13 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
           .eq('bank_id', int.parse(bankId))
           .order('address', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         branches = List<Map<String, dynamic>>.from(response);
         isLoadingBranches = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingBranches = false);
       // Handle error - could show a snackbar
       if (mounted) {
@@ -269,6 +278,7 @@ class _AddIncomingCheckPageState extends State<AddIncomingCheckPage> {
       if (croppedFile == null) return;
 
       final bytes = await croppedFile.readAsBytes();
+      if (!mounted) return;
       setState(() {
         _checkImageBytes = bytes;
         selectedCheckImage = picked.name;

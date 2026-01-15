@@ -67,6 +67,7 @@ class _ArchiveTableState extends State<ArchiveTable> {
       final unique = names.toSet().toList()
         ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+      if (!mounted) return;
       setState(() {
         _inventories = unique;
       });

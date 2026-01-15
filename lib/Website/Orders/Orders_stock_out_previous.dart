@@ -153,6 +153,7 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
       final unique = names.toSet().toList()
         ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+      if (!mounted) return;
       setState(() {
         _drivers = unique;
       });

@@ -62,6 +62,7 @@ class _AddOutgoingCashPageState extends State<AddOutgoingCashPage> {
 
   Future<void> _fetchSuppliers() async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingSuppliers = true);
 
       final response = await Supabase.instance.client
@@ -69,12 +70,14 @@ class _AddOutgoingCashPageState extends State<AddOutgoingCashPage> {
           .select('supplier_id, name')
           .order('name', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         suppliers = List<Map<String, dynamic>>.from(response);
         filteredSuppliers = suppliers;
         isLoadingSuppliers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingSuppliers = false);
       // Handle error - could show a snackbar
       if (mounted) {

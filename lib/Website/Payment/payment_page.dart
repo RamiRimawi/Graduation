@@ -909,6 +909,7 @@ class _ProfitChartState extends State<_ProfitChart>
   }
 
   Future<void> _fetchProfitData() async {
+    if (!mounted) return;
     setState(() {
       isLoading = true;
     });
@@ -931,6 +932,8 @@ class _ProfitChartState extends State<_ProfitChart>
           ''')
           .gte('order_date', '$selectedYear-01-01')
           .lte('order_date', '$selectedYear-12-31');
+
+      if (!mounted) return;
 
       // Prepare monthly profit array
       List<double> monthlyProfit = List.filled(12, 0.0);
@@ -958,12 +961,14 @@ class _ProfitChartState extends State<_ProfitChart>
         monthlyProfit[monthIndex] += orderProfit;
       }
 
+      if (!mounted) return;
       setState(() {
         profitData = monthlyProfit;
         isLoading = false;
       });
     } catch (e) {
       print('Error fetching profit data: $e');
+      if (!mounted) return;
       setState(() {
         isLoading = false;
       });

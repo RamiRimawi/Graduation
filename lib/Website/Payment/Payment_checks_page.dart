@@ -90,23 +90,28 @@ class _CheckPageState extends State<CheckPage> {
   }
 
   Future<void> _fetchChecks() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     await Future.wait([_fetchIncomingChecks(), _fetchOutgoingChecks()]);
+    if (!mounted) return;
     setState(() => isLoading = false);
   }
 
   Future<void> _fetchSuppliers() async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingSuppliers = true);
       final response = await supabase
           .from('supplier')
           .select('supplier_id, name')
           .order('name', ascending: true);
+      if (!mounted) return;
       setState(() {
         suppliers = List<Map<String, dynamic>>.from(response);
         isLoadingSuppliers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingSuppliers = false);
       print('Error fetching suppliers: $e');
     }
@@ -210,6 +215,7 @@ class _CheckPageState extends State<CheckPage> {
           },
         });
       }
+      if (!mounted) return;
       setState(() {
         incomingChecks = checks;
         filteredIncomingChecks = checks;
@@ -261,6 +267,7 @@ class _CheckPageState extends State<CheckPage> {
           },
         });
       }
+      if (!mounted) return;
       setState(() {
         outgoingChecks = checks;
         filteredOutgoingChecks = checks;

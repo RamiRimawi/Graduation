@@ -63,6 +63,7 @@ class _AddIncomingCashPageState extends State<AddIncomingCashPage> {
 
   Future<void> _fetchCustomers() async {
     try {
+      if (!mounted) return;
       setState(() => isLoadingCustomers = true);
 
       final response = await Supabase.instance.client
@@ -70,12 +71,14 @@ class _AddIncomingCashPageState extends State<AddIncomingCashPage> {
           .select('customer_id, name')
           .order('name', ascending: true);
 
+      if (!mounted) return;
       setState(() {
         customers = List<Map<String, dynamic>>.from(response);
         filteredCustomers = customers;
         isLoadingCustomers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingCustomers = false);
       // Handle error - could show a snackbar
       if (mounted) {
