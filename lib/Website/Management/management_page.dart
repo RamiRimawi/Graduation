@@ -15,6 +15,7 @@ import 'Management_location_detail_popup.dart';
 import 'Management_bank_popup.dart';
 import 'Management_bank_detail_popup.dart';
 import '../../supabase_config.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class UsersManagementPage extends StatefulWidget {
   const UsersManagementPage({super.key});
@@ -402,14 +403,20 @@ class _UsersManagementPageState extends State<UsersManagementPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title
-                  Text(
-                    'Management',
-                    style: GoogleFonts.roboto(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  // Title and Notification
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Management',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const NotificationBellWidget(),
+                    ],
                   ),
 
                   const SizedBox(height: 10),

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sidebar.dart';
 import '../supabase_config.dart';
+import 'Notifications/notification_bell_widget.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -332,20 +333,7 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                                 },
                               ),
                               const SizedBox(width: 16),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: IconButton(
-                                  onPressed: () {},
-                                  icon: const Icon(
-                                    Icons.notifications_none_rounded,
-                                    color: AppColors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                              ),
+                              const NotificationBellWidget(),
                             ],
                           ),
                           const SizedBox(height: 26),

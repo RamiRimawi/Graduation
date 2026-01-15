@@ -36,7 +36,7 @@ class DolphinApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Dolphin Dashboard',
+      title: 'Dolphin Company',
 
       theme: ThemeData(
         useMaterial3: true,

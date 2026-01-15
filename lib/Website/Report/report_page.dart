@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../sidebar.dart';
 import 'report_product_detail.dart';
 import '../../supabase_config.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class ReportPage extends StatelessWidget {
   const ReportPage({super.key});
@@ -121,11 +122,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.white,
-                          size: 24,
-                        ),
+                        NotificationBellWidget(),
                       ],
                     ),
                     const SizedBox(height: 24),

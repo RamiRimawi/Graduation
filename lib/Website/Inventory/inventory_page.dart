@@ -4,6 +4,7 @@ import 'Inventory_add_product_popup.dart';
 import 'Inventory_add_pop.dart';
 import 'Inventory_product_details_popup.dart';
 import '../../supabase_config.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
@@ -76,6 +77,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Future<void> _loadProductsByInventory() async {
     if (selectedTab == 0) {
       // Total - show ALL products with total_quantity from product table
+      if (!mounted) return;
       setState(() {
         products = allProducts;
       });
@@ -86,6 +88,7 @@ class _InventoryPageState extends State<InventoryPage> {
 
       if (inventoryIndex < 0 || inventoryIndex >= inventories.length) {
         print('Invalid inventory tab index');
+        if (!mounted) return;
         setState(() {
           products = [];
         });
@@ -116,6 +119,7 @@ class _InventoryPageState extends State<InventoryPage> {
         }
 
         // Show only products that exist in this inventory (quantity > 0)
+        if (!mounted) return;
         setState(() {
           products = allProducts
               .where(
@@ -131,6 +135,7 @@ class _InventoryPageState extends State<InventoryPage> {
         });
       } catch (e) {
         print('Error loading inventory products: $e');
+        if (!mounted) return;
         setState(() {
           products = [];
         });
@@ -139,6 +144,7 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   void _filterProducts(String query) {
+    if (!mounted) return;
     setState(() {
       searchQuery = query;
     });
@@ -206,11 +212,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                   },
                                 ),
                                 const SizedBox(width: 12),
-                                const Icon(
-                                  Icons.notifications_none_rounded,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
+                                const NotificationBellWidget(),
                               ],
                             ),
                           ],

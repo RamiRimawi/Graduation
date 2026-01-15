@@ -21,6 +21,11 @@ dependencies:
   geolocator: ^9.0.2
   signature: ^5.5.0
   flutter_compass: ^0.8.0
+  
+  # Push notifications
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.5
+  flutter_local_notifications: ^18.0.1
 
   # أيقونات iOS-style
   cupertino_icons: ^1.0.8

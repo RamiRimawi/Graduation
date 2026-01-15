@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../supabase_config.dart';
 import '../sidebar.dart';
 import 'delivery_live_popup.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class DeliveryPage extends StatefulWidget {
   const DeliveryPage({super.key});
@@ -118,19 +119,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2D2D2D),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.notifications_none_rounded,
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                      ),
+                      const NotificationBellWidget(),
                     ],
                   ),
 

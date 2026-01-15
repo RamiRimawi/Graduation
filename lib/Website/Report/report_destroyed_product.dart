@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class ReportDestroyedProductPage extends StatelessWidget {
   const ReportDestroyedProductPage({super.key});
@@ -155,11 +156,7 @@ class _ReportDestroyedProductPageContentState
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.white,
-                          size: 24,
-                        ),
+                        NotificationBellWidget(),
                       ],
                     ),
                     const SizedBox(height: 24),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'payment_page.dart';
 import 'Payment_checks_page.dart';
 import 'Payment_archive_page.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 /// Reusable header for payment pages
 class PaymentHeader extends StatelessWidget {
@@ -23,10 +24,8 @@ class PaymentHeader extends StatelessWidget {
       children: [
         // ================== Header Section ==================
         // ================== Header: Title + Add Payment Button ==================
-        Wrap(
-          spacing: 16,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
               'Payment',
@@ -36,42 +35,35 @@ class PaymentHeader extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            ElevatedButton.icon(
-              onPressed: () => showSelectTransactionDialog(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.blue,
-                foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => showSelectTransactionDialog(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blue,
+                    foregroundColor: AppColors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    elevation: 4,
+                  ),
+                  icon: const Icon(Icons.add, color: AppColors.black, size: 18),
+                  label: const Text(
+                    'Add Payment',
+                    style: TextStyle(
+                      color: AppColors.black,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                elevation: 4,
-              ),
-              icon: const Icon(Icons.add, color: AppColors.black, size: 18),
-              label: const Text(
-                'Add Payment',
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            Container(
-              width: 34,
-              height: 34,
-              decoration: const BoxDecoration(
-                color: AppColors.card,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                color: AppColors.white,
-                size: 20,
-              ),
+                const SizedBox(width: 12),
+                const NotificationBellWidget(),
+              ],
             ),
           ],
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 /// Reusable header widget for all order pages
 /// Contains: Title, Stock toggle, Create order button, Notification icon, and Tabs
@@ -56,15 +57,8 @@ class OrdersHeader extends StatelessWidget {
                 // Create order button
                 _CreateOrderButton(onPressed: onCreateOrder),
                 const SizedBox(width: 10),
-                // Notification icon
-                InkWell(
-                  onTap: onNotificationTap,
-                  child: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
+                // Notification bell widget
+                const NotificationBellWidget(),
               ],
             ),
           ],

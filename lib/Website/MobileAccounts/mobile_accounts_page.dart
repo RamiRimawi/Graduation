@@ -10,6 +10,7 @@ import '../Mobile_accounts_popups/add_supplier_account_popup.dart';
 import '../Mobile_accounts_popups/add_sales_rep_account_popup.dart';
 import '../Mobile_accounts_popups/add_storage_staff_account_popup.dart';
 import '../Mobile_accounts_popups/add_delivery_driver_account_popup.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class MobileAccountsPage extends StatefulWidget {
   const MobileAccountsPage({super.key});
@@ -183,29 +184,35 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: gold,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: gold,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25),
+                              ),
+                            ),
+                            onPressed: () => _openRoleChooser(context),
+                            icon: const Icon(
+                              Icons.person_add_alt_1,
+                              color: Colors.black,
+                            ),
+                            label: const Text(
+                              "Add Account",
+                              style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                        ),
-                        onPressed: () => _openRoleChooser(context),
-                        icon: const Icon(
-                          Icons.person_add_alt_1,
-                          color: Colors.black,
-                        ),
-                        label: const Text(
-                          "Add Account",
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                          const SizedBox(width: 12),
+                          const NotificationBellWidget(),
+                        ],
                       ),
                     ],
                   ),

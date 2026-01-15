@@ -5,6 +5,7 @@ import '../supabase_config.dart';
 import 'sidebar.dart';
 import 'Orders/Orders_detail_popup.dart';
 import 'Orders/Orders_stock_out_page.dart';
+import 'Notifications/notification_bell_widget.dart';
 
 const Color gold = Color(0xFFB7A447);
 const Color blue = Color(0xFF50B2E7);
@@ -23,10 +24,15 @@ class DashboardPage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-                children: const [
-                  _TopStepsRow(),
-                  SizedBox(height: 16),
-                  Expanded(child: _MainContent()),
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: const [NotificationBellWidget()],
+                  ),
+                  const SizedBox(height: 8),
+                  const _TopStepsRow(),
+                  const SizedBox(height: 16),
+                  const Expanded(child: _MainContent()),
                 ],
               ),
             ),

@@ -4,6 +4,7 @@ import '../sidebar.dart';
 import '../../supabase_config.dart';
 import 'meeting_details_dialog.dart';
 import 'add_meeting_popup.dart';
+import '../Notifications/notification_bell_widget.dart';
 
 class AppColors {
   static const bg = Color(0xFF202020);
@@ -141,13 +142,19 @@ class _DamagedProductsPageState extends State<DamagedProductsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Title
-                  Text(
-                    'Damaged Products',
-                    style: GoogleFonts.roboto(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Damaged Products',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const NotificationBellWidget(),
+                    ],
                   ),
 
                   const SizedBox(height: 20),
