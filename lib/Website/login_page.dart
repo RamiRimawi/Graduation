@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'Notifications/accountant_notifications.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -81,7 +82,24 @@ class _LoginPageState extends State<LoginPage> {
       await prefs.setInt('accountant_id', int.parse(id));
       print('Stored accountant_id: $id');
 
+      // الانتقال للداشبورد
       Navigator.pushReplacementNamed(context, "/dashboard");
+      
+      // ⚠️ نظام الإشعارات معطل مؤقتاً
+      
+      Future.delayed(const Duration(seconds: 2), () {
+        print('🔔 Starting notification system safely...');
+        try {
+          AccountantNotifications().initialize().then((_) {
+            print('✅ Notifications ready');
+          }).catchError((e, stackTrace) {
+            print('⚠️ Notifications disabled due to error: $e');
+          });
+        } catch (e) {
+          print('⚠️ Could not start notifications: $e');
+        }
+      });
+      
     } catch (e) {
       print("LOGIN ERROR: $e");
       setState(() => loading = false);

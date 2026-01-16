@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../../../supabase_config.dart';
 
@@ -35,11 +36,164 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   List<Map<String, dynamic>> _deliveredOrders = [];
   List<LatLng> _routePoints = const [];
   bool _isRouting = false;
+
   Timer? _pollingTimer;
+  RealtimeChannel? _driverChannel;
+
+  bool _isOffRoute = false; // تتبع ما إذا كان السائق خارج المسار
+  static const double _routeThresholdMeters = 50.0; // 50 متر
+
+  // متغيرات لحساب السرعة وتعديل وقت التحديث
+  LatLng? _previousDriverLocation;
+  DateTime? _lastLocationUpdateTime;
+  double _currentSpeed = 0.0; // كم/س
+  Duration _currentPollingInterval = const Duration(seconds: 2);
+
+  // ✅ Smart route update
+  Timer? _routeSmartTimer;
+  DateTime? _lastRouteUpdateAt;
+  LatLng? _lastRouteFrom;
+
+  static const Duration _routeMinIntervalNormal = Duration(seconds: 12);
+  static const Duration _routeMinIntervalFast = Duration(seconds: 4);
+  static const double _routeMinMoveNormalMeters = 25.0;
+  static const double _routeMinMoveFastMeters = 10.0;
+  static const double _fastSpeedKmh = 50.0;
+
+  // Helper: حساب أقرب مسافة من نقطة إلى خط (المسار)
+  double _getMinDistanceToRoute(LatLng point, List<LatLng> route) {
+    if (route.isEmpty) return double.infinity;
+
+    double minDistance = double.infinity;
+    final Distance distance = Distance();
+
+    for (int i = 0; i < route.length - 1; i++) {
+      final segmentStart = route[i];
+      final segmentEnd = route[i + 1];
+      final distToSegment =
+          _distanceToSegment(point, segmentStart, segmentEnd, distance);
+      if (distToSegment < minDistance) {
+        minDistance = distToSegment;
+      }
+    }
+
+    return minDistance;
+  }
+
+  // Helper: حساب المسافة من نقطة إلى قطعة مستقيمة
+  double _distanceToSegment(
+    LatLng point,
+    LatLng segStart,
+    LatLng segEnd,
+    Distance distance,
+  ) {
+    final double distToStart = distance.as(LengthUnit.Meter, point, segStart);
+    final double segmentLength = distance.as(LengthUnit.Meter, segStart, segEnd);
+
+    if (segmentLength < 0.1) return distToStart;
+
+    final double t = max(
+      0.0,
+      min(
+        1.0,
+        ((point.latitude - segStart.latitude) *
+                    (segEnd.latitude - segStart.latitude) +
+                (point.longitude - segStart.longitude) *
+                    (segEnd.longitude - segStart.longitude)) /
+            (segmentLength * segmentLength / 111320.0),
+      ),
+    );
+
+    final closestLat =
+        segStart.latitude + t * (segEnd.latitude - segStart.latitude);
+    final closestLng =
+        segStart.longitude + t * (segEnd.longitude - segStart.longitude);
+    final closestPoint = LatLng(closestLat, closestLng);
+
+    return distance.as(LengthUnit.Meter, point, closestPoint);
+  }
+
+  // Helper: حساب السرعة وتحديث فترة الـ polling
+  void _updateSpeedAndPolling(LatLng newLocation) {
+    if (_previousDriverLocation != null && _lastLocationUpdateTime != null) {
+      final distance = Distance();
+      final distanceMeters = distance.as(
+        LengthUnit.Meter,
+        _previousDriverLocation!,
+        newLocation,
+      );
+
+      final timeDiff = DateTime.now().difference(_lastLocationUpdateTime!);
+      final timeSeconds = timeDiff.inMilliseconds / 1000.0;
+
+      if (timeSeconds > 0 && distanceMeters > 1) {
+        _currentSpeed = (distanceMeters / timeSeconds) * 3.6;
+
+        Duration newInterval;
+        if (_currentSpeed > 60) {
+          newInterval = const Duration(milliseconds: 500);
+        } else if (_currentSpeed > 40) {
+          newInterval = const Duration(seconds: 1);
+        } else if (_currentSpeed > 20) {
+          newInterval = const Duration(milliseconds: 1500);
+        } else if (_currentSpeed > 5) {
+          newInterval = const Duration(seconds: 2);
+        } else {
+          newInterval = const Duration(seconds: 3);
+        }
+
+        if (newInterval != _currentPollingInterval) {
+          _currentPollingInterval = newInterval;
+          _restartPollingTimer();
+          debugPrint(
+              '🚗 السرعة: ${_currentSpeed.toStringAsFixed(1)} كم/س - فترة التحديث: ${newInterval.inMilliseconds}ms');
+        }
+      }
+    }
+
+    _previousDriverLocation = newLocation;
+    _lastLocationUpdateTime = DateTime.now();
+  }
+
+  void _restartPollingTimer() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(_currentPollingInterval, (_) {
+      if (mounted) {
+        _fetchLocations(updateOnly: true);
+      }
+    });
+  }
+
+  // Helper: التحقق وتحديث حالة الانحراف عن المسار
+  void _checkIfOffRoute() {
+    if (_routePoints.isEmpty || _customerLocation == null) {
+      if (_isOffRoute) {
+        setState(() => _isOffRoute = false);
+      }
+      return;
+    }
+
+    final distanceToRoute =
+        _getMinDistanceToRoute(_driverLocation, _routePoints);
+    final bool wasOffRoute = _isOffRoute;
+    final bool isNowOffRoute = distanceToRoute > _routeThresholdMeters;
+
+    if (wasOffRoute != isNowOffRoute) {
+      setState(() {
+        _isOffRoute = isNowOffRoute;
+      });
+
+      if (_isOffRoute) {
+        debugPrint(
+            '⚠️ السائق خارج المسار! المسافة: ${distanceToRoute.toStringAsFixed(1)} متر');
+      } else {
+        debugPrint('✅ السائق عاد إلى المسار');
+      }
+    }
+  }
 
   // Helper: حساب الزوم المناسب حسب المسافة (بـ كم)
   double _getZoomForDistance(double distanceMeters) {
-    // تقريبية: كلما زادت المسافة قل الزوم
     if (distanceMeters < 100) return 18;
     if (distanceMeters < 250) return 17;
     if (distanceMeters < 500) return 16;
@@ -53,32 +207,77 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     return 8;
   }
 
+  void _startDriverRealtime() {
+    if (_driverChannel != null) return;
+
+    _driverChannel = supabase.channel('driver_${widget.driverId}_live');
+
+    _driverChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'delivery_driver',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'delivery_driver_id',
+            value: widget.driverId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+
+            final rec = payload.newRecord;
+
+            final latRaw = rec['latitude_location'];
+            final lngRaw = rec['longitude_location'];
+
+            final double? lat = (latRaw is num)
+                ? latRaw.toDouble()
+                : double.tryParse(latRaw?.toString() ?? '');
+            final double? lng = (lngRaw is num)
+                ? lngRaw.toDouble()
+                : double.tryParse(lngRaw?.toString() ?? '');
+
+            if (lat == null || lng == null) return;
+
+            final newDriverLoc = LatLng(lat, lng);
+
+            setState(() {
+              _driverLocation = newDriverLoc;
+            });
+
+            _updateSpeedAndPolling(newDriverLoc);
+            _checkIfOffRoute();
+            // تحديث المسار الذكي رح يصير من التايمر (_routeSmartTimer)
+          },
+        )
+        .subscribe();
+  }
+
   @override
   void initState() {
     super.initState();
-    // Initial fetch with map positioning
+
+    _startDriverRealtime();
+
     _fetchLocations().then((_) {
-      // Ensure map is positioned after initial data is loaded
-      if (mounted) {
-        _positionMapView();
-      }
+      if (mounted) _positionMapView();
     });
 
-    // ✅ استخدام polling فقط لتجنب مشاكل postgres_changes مع null values
-    // Polling أكثر موثوقية ولا يسبب FormatException
-
-    // بدء polling لتحديث الأوردرات كل 2 ثانية (أسرع للحصول على تحديثات فورية)
+    // Polling موجود عندك
     _pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (mounted) {
         _fetchLocations(updateOnly: true);
       }
     });
+
+    // ✅ Smart route timer: يقرر متى يحدث المسار فعلياً
+    _routeSmartTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) _maybeUpdateRouteSmart();
+    });
   }
 
-  // Helper method to position the map view based on current locations
   void _positionMapView() {
     if (_customerLocation != null) {
-      // Center between driver and customer
       final dist = Distance().as(
         LengthUnit.Meter,
         _driverLocation,
@@ -91,7 +290,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       final zoom = _getZoomForDistance(dist);
       _mapController.move(center, zoom);
     } else {
-      // No active delivery, just center on driver
       _mapController.move(_driverLocation, 14);
     }
   }
@@ -99,21 +297,61 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _routeSmartTimer?.cancel();
+
+    if (_driverChannel != null) {
+      supabase.removeChannel(_driverChannel!);
+      _driverChannel = null;
+    }
+
     super.dispose();
   }
 
+  // ✅ Smart route decision
+  Future<void> _maybeUpdateRouteSmart() async {
+    if (_orderId == null || _customerLocation == null) return;
+
+    final now = DateTime.now();
+
+    final bool fast = _isOffRoute || _currentSpeed >= _fastSpeedKmh;
+
+    final minInterval = fast ? _routeMinIntervalFast : _routeMinIntervalNormal;
+    final minMove = fast ? _routeMinMoveFastMeters : _routeMinMoveNormalMeters;
+
+    if (_lastRouteUpdateAt != null &&
+        now.difference(_lastRouteUpdateAt!) < minInterval) {
+      return;
+    }
+
+    if (_lastRouteFrom != null) {
+      final moved = Distance().as(
+        LengthUnit.Meter,
+        _lastRouteFrom!,
+        _driverLocation,
+      );
+      if (moved < minMove) return;
+    }
+
+    await _fetchRoute(force: true);
+
+    _lastRouteUpdateAt = now;
+    _lastRouteFrom = _driverLocation;
+
+    debugPrint(fast
+        ? '⚡ Smart route update (FAST) speed=${_currentSpeed.toStringAsFixed(1)} offRoute=$_isOffRoute'
+        : '🧠 Smart route update (NORMAL)');
+  }
+
   Future<void> _fetchLocations({bool updateOnly = false}) async {
-    if (!mounted) return; // ✅ تحقق من mounted قبل البدء
+    if (!mounted) return;
 
     try {
-      // ✅ جلب موقع السائق + الأوردر النشط
       final driverData = await supabase
           .from('delivery_driver')
           .select(
-            'delivery_driver_id, latitude_location, longitude_location, current_order_id',
-          )
+              'delivery_driver_id, latitude_location, longitude_location, current_order_id')
           .eq('delivery_driver_id', widget.driverId)
-          .maybeSingle(); // ✅ استخدم maybeSingle بدلاً من single
+          .maybeSingle();
 
       if (driverData == null) {
         debugPrint('⚠️ Driver data not found');
@@ -124,34 +362,28 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       final lng = driverData['longitude_location'] as num?;
       final currentOrderId = driverData['current_order_id'] as int?;
 
-      // تحديث موقع السائق
       if (mounted && lat != null && lng != null) {
         final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
-        if (mounted) {
-          setState(() {
-            _driverLocation = newDriverLoc;
-          });
-        }
+        setState(() => _driverLocation = newDriverLoc);
 
-        // ✅ فقط تحديث الكاميرا في التحميل الأولي (وليس عند التحديثات)
-        // لا تقم بتحريك الكاميرا أثناء التحديثات لتجنب إزعاج المستخدم أثناء التكبير/التصغير
+        _updateSpeedAndPolling(newDriverLoc);
+        _checkIfOffRoute();
       }
 
-      // ✅ إذا كان في أوردر نشط، اجلب تفاصيله
       if (currentOrderId != null && mounted) {
         final orderData = await supabase
             .from('customer_order')
             .select('''
-            customer_order_id,
-            customer:customer_id(
-              customer_id,
-              name,
-              latitude_location,
-              longitude_location
-            )
-          ''')
+              customer_order_id,
+              customer:customer_id(
+                customer_id,
+                name,
+                latitude_location,
+                longitude_location
+              )
+            ''')
             .eq('customer_order_id', currentOrderId)
-            .maybeSingle(); // ✅ استخدم maybeSingle
+            .maybeSingle();
 
         if (orderData == null || !mounted) {
           debugPrint('⚠️ Order data not found for ID: $currentOrderId');
@@ -165,105 +397,99 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
         if (custLat != null && custLng != null && mounted) {
           final newCustomerLoc = LatLng(custLat.toDouble(), custLng.toDouble());
 
-          if (mounted) {
-            setState(() {
-              _customerLocation = newCustomerLoc;
-              _customerName = customer?['name'];
-              _orderId = currentOrderId;
-              // إخفاء الأوردر المختار فوراً من قائمة Other orders بدون انتظار جلب الشبكة
-              _otherOrders = _otherOrders
-                  .where((o) => o['order_id'] != currentOrderId)
-                  .toList();
-            });
-          }
+          setState(() {
+            _customerLocation = newCustomerLoc;
+            _customerName = customer?['name'];
+            _orderId = currentOrderId;
+            _otherOrders =
+                _otherOrders.where((o) => o['order_id'] != currentOrderId).toList();
+          });
 
-          // جلب المسار والخريطة - فقط عند اختيار أوردار جديد
-          if (mounted && _previousOrderId != currentOrderId) {
-            _fetchRoute();
+          // ✅ أول ما يختار أوردر جديد: جيب مسار مباشرة (force)
+          if (_previousOrderId != currentOrderId) {
+            _fetchRoute(force: true);
             _previousOrderId = currentOrderId;
           }
         }
 
-        // ✅ جلب باقي الأوردرات (Other orders)
+        // Other orders
         if (mounted) {
-          final otherOrders =
-              await supabase
-                      .from('customer_order')
-                      .select('customer_order_id, customer:customer_id(name)')
-                      .eq('delivered_by_id', widget.driverId)
-                      .eq('order_status', 'Delivery')
-                      .neq('customer_order_id', currentOrderId)
-                      .order('order_date', ascending: false)
-                  as List<dynamic>;
+          final otherOrders = await supabase
+              .from('customer_order')
+              .select('customer_order_id, customer:customer_id(name)')
+              .eq('delivered_by_id', widget.driverId)
+              .eq('order_status', 'Delivery')
+              .neq('customer_order_id', currentOrderId)
+              .order('order_date', ascending: false) as List<dynamic>;
 
-          // ✅ جلب الأوردرات المسلمة (Delivered orders) - فقط اليوم
-          final deliveredOrdersRaw =
-              await supabase
-                      .from('customer_order')
-                      .select('customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
-                      .eq('delivered_by_id', widget.driverId)
-                      .eq('order_status', 'Delivered')
-                      .limit(50)
-                  as List<dynamic>;
+          // Delivered today
+          final deliveredOrdersRaw = await supabase
+              .from('customer_order')
+              .select(
+                  'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
+              .eq('delivered_by_id', widget.driverId)
+              .eq('order_status', 'Delivered')
+              .limit(50) as List<dynamic>;
 
-          // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم وتصفية لليوم فقط
           final today = DateTime.now();
           final todayStart = DateTime(today.year, today.month, today.day);
           final todayEnd = todayStart.add(const Duration(days: 1));
 
-          final deliveredOrders = deliveredOrdersRaw
-              .where((o) {
-                final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
-                if (descriptions == null || descriptions.isEmpty || descriptions.first['delivered_date'] == null) {
-                  return false;
-                }
-                final deliveredDate = DateTime.parse(descriptions.first['delivered_date'] as String);
-                return deliveredDate.isAfter(todayStart) && deliveredDate.isBefore(todayEnd);
-              })
-              .toList()
+          final deliveredOrders = deliveredOrdersRaw.where((o) {
+            final descriptions =
+                (o as Map<String, dynamic>)['customer_order_description']
+                    as List<dynamic>?;
+            if (descriptions == null ||
+                descriptions.isEmpty ||
+                descriptions.first['delivered_date'] == null) {
+              return false;
+            }
+            final deliveredDate =
+                DateTime.parse(descriptions.first['delivered_date'] as String);
+            return deliveredDate.isAfter(todayStart) &&
+                deliveredDate.isBefore(todayEnd);
+          }).toList()
             ..sort((a, b) {
-              final aDate = ((a as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
-              final bDate = ((b as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+              final aDate = ((a as Map<String, dynamic>)
+                      ['customer_order_description'] as List<dynamic>)
+                  .first['delivered_date'] as String;
+              final bDate = ((b as Map<String, dynamic>)
+                      ['customer_order_description'] as List<dynamic>)
+                  .first['delivered_date'] as String;
               return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
             });
+
           final limitedDeliveredOrders = deliveredOrders.take(10).toList();
 
-          if (mounted) {
-            setState(() {
-              _otherOrders = otherOrders.map((o) {
-                final c =
-                    (o as Map<String, dynamic>)['customer']
-                        as Map<String, dynamic>?;
-                return {'order_id': o['customer_order_id'], 'name': c?['name']};
-              }).toList();
-              _deliveredOrders = limitedDeliveredOrders.map((o) {
-                final c =
-                    (o as Map<String, dynamic>)['customer']
-                        as Map<String, dynamic>?;
-                return {'order_id': o['customer_order_id'], 'name': c?['name']};
-              }).toList();
-            });
-          }
+          setState(() {
+            _otherOrders = otherOrders.map((o) {
+              final c = (o as Map<String, dynamic>)['customer']
+                  as Map<String, dynamic>?;
+              return {'order_id': o['customer_order_id'], 'name': c?['name']};
+            }).toList();
+
+            _deliveredOrders = limitedDeliveredOrders.map((o) {
+              final c = (o as Map<String, dynamic>)['customer']
+                  as Map<String, dynamic>?;
+              return {'order_id': o['customer_order_id'], 'name': c?['name']};
+            }).toList();
+          });
         }
       } else if (mounted) {
-        // ✅ إذا current_order_id هو null - الأوردار انتهى
-        // تحديث الخريطة فقط عند انتهاء الأوردار (التغيير من أوردار لا أوردار)
+        // current_order_id = null (انتهى الأوردر)
         final orderEnded = _previousOrderId != null && currentOrderId == null;
-        
-        if (orderEnded && mounted) {
-          // حفظ بيانات الأوردر المنتهي لإضافتها فوراً إلى Other orders
+
+        if (orderEnded) {
           final endedOrderId = _previousOrderId;
           final endedCustomerName = _customerName;
 
-          // تحريك الخريطة للموقع الحالي للسائق
           _mapController.move(_driverLocation, 14);
 
-          // تحديث الواجهة فوراً: إعادة الأوردر إلى Other orders
           setState(() {
             if (endedOrderId != null) {
               _otherOrders = [
                 {'order_id': endedOrderId, 'name': endedCustomerName},
-                ..._otherOrders.where((o) => o['order_id'] != endedOrderId)
+                ..._otherOrders.where((o) => o['order_id'] != endedOrderId),
               ];
             }
             _customerLocation = null;
@@ -273,110 +499,114 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           });
 
           _previousOrderId = null;
+          _lastRouteFrom = null;
+          _lastRouteUpdateAt = null;
         }
 
-        // ✅ إذا current_order_id هو null، اجلب جميع الأوردرات واعرضها في Other orders
-        final allOrders =
-            await supabase
-                    .from('customer_order')
-                    .select('customer_order_id, customer:customer_id(name)')
-                    .eq('delivered_by_id', widget.driverId)
-                    .eq('order_status', 'Delivery')
-                    .order('order_date', ascending: false)
-                as List<dynamic>;
+        final allOrders = await supabase
+            .from('customer_order')
+            .select('customer_order_id, customer:customer_id(name)')
+            .eq('delivered_by_id', widget.driverId)
+            .eq('order_status', 'Delivery')
+            .order('order_date', ascending: false) as List<dynamic>;
 
-        // ✅ جلب الأوردرات المسلمة (Delivered orders) - فقط اليوم
-        final deliveredOrdersRaw =
-            await supabase
-                    .from('customer_order')
-                    .select('customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
-                    .eq('delivered_by_id', widget.driverId)
-                    .eq('order_status', 'Delivered')
-                    .limit(50)
-                as List<dynamic>;
+        final deliveredOrdersRaw = await supabase
+            .from('customer_order')
+            .select(
+                'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
+            .eq('delivered_by_id', widget.driverId)
+            .eq('order_status', 'Delivered')
+            .limit(50) as List<dynamic>;
 
-        // ترتيب الأوردرات حسب delivered_date من الأحدث إلى الأقدم وتصفية لليوم فقط
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
         final todayEnd = todayStart.add(const Duration(days: 1));
 
-        final deliveredOrders = deliveredOrdersRaw
-            .where((o) {
-              final descriptions = (o as Map<String, dynamic>)['customer_order_description'] as List<dynamic>?;
-              if (descriptions == null || descriptions.isEmpty || descriptions.first['delivered_date'] == null) {
-                return false;
-              }
-              final deliveredDate = DateTime.parse(descriptions.first['delivered_date'] as String);
-              return deliveredDate.isAfter(todayStart) && deliveredDate.isBefore(todayEnd);
-            })
-            .toList()
+        final deliveredOrders = deliveredOrdersRaw.where((o) {
+          final descriptions =
+              (o as Map<String, dynamic>)['customer_order_description']
+                  as List<dynamic>?;
+          if (descriptions == null ||
+              descriptions.isEmpty ||
+              descriptions.first['delivered_date'] == null) {
+            return false;
+          }
+          final deliveredDate =
+              DateTime.parse(descriptions.first['delivered_date'] as String);
+          return deliveredDate.isAfter(todayStart) &&
+              deliveredDate.isBefore(todayEnd);
+        }).toList()
           ..sort((a, b) {
-            final aDate = ((a as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
-            final bDate = ((b as Map<String, dynamic>)['customer_order_description'] as List<dynamic>).first['delivered_date'] as String;
+            final aDate = ((a as Map<String, dynamic>)['customer_order_description']
+                    as List<dynamic>)
+                .first['delivered_date'] as String;
+            final bDate = ((b as Map<String, dynamic>)['customer_order_description']
+                    as List<dynamic>)
+                .first['delivered_date'] as String;
             return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
           });
+
         final limitedDeliveredOrders = deliveredOrders.take(10).toList();
 
-        if (mounted) {
-          setState(() {
-            _customerLocation = null;
-            _customerName = null;
-            _orderId = null;
-            _routePoints = [];
-            _otherOrders = allOrders.map((o) {
-              final c =
-                  (o as Map<String, dynamic>)['customer']
-                      as Map<String, dynamic>?;
-              return {'order_id': o['customer_order_id'], 'name': c?['name']};
-            }).toList();
-            _deliveredOrders = limitedDeliveredOrders.map((o) {
-              final c =
-                  (o as Map<String, dynamic>)['customer']
-                      as Map<String, dynamic>?;
-              return {'order_id': o['customer_order_id'], 'name': c?['name']};
-            }).toList();
-          });
-          debugPrint(
-            '✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list',
-          );
-        }
+        setState(() {
+          _customerLocation = null;
+          _customerName = null;
+          _orderId = null;
+          _routePoints = [];
+          _otherOrders = allOrders.map((o) {
+            final c =
+                (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
+            return {'order_id': o['customer_order_id'], 'name': c?['name']};
+          }).toList();
+          _deliveredOrders = limitedDeliveredOrders.map((o) {
+            final c =
+                (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
+            return {'order_id': o['customer_order_id'], 'name': c?['name']};
+          }).toList();
+        });
+
+        debugPrint(
+            '✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list');
       }
     } catch (e) {
       debugPrint('❌ Error fetching locations: $e');
-      // ✅ لا تقم بعمل setState في حالة الخطأ إذا لم يكن mounted
-      if (mounted) {
-        // يمكنك عرض رسالة خطأ للمستخدم هنا إذا لزم الأمر
-      }
     }
   }
 
-  Future<void> _fetchRoute() async {
+  Future<void> _fetchRoute({bool force = false}) async {
     if (_customerLocation == null || _isRouting) return;
+
+    // لو ما في أوردر شغال، لا تطلب مسار
+    if (_orderId == null) return;
+
     _isRouting = true;
     try {
       final start = _driverLocation;
       final end = _customerLocation!;
+
       final url =
           'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 10));
+
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final coords = data['routes'][0]['geometry']['coordinates'] as List;
           final polyline = coords
-              .map(
-                (c) =>
-                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
-              )
+              .map((c) => LatLng(
+                    (c[1] as num).toDouble(),
+                    (c[0] as num).toDouble(),
+                  ))
               .toList();
+
           if (mounted) {
             setState(() {
               _routePoints = polyline;
             });
-            // تحديث الخريطة لعرض الطريق كاملة
-            if (mounted && _routePoints.isNotEmpty) {
+
+            if (_routePoints.isNotEmpty) {
               _fitMapToRoute();
             }
           }
@@ -389,7 +619,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     }
   }
 
-  // حساب الحدود والزوم المناسب لعرض الطريق كاملة مع زوم أكثر
   void _fitMapToRoute() {
     if (_routePoints.isEmpty) return;
 
@@ -398,7 +627,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     double minLng = _routePoints.first.longitude;
     double maxLng = _routePoints.first.longitude;
 
-    // حساب الحدود الدنيا والعليا لجميع نقاط الطريق
     for (final point in _routePoints) {
       minLat = minLat > point.latitude ? point.latitude : minLat;
       maxLat = maxLat < point.latitude ? point.latitude : maxLat;
@@ -406,43 +634,31 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       maxLng = maxLng < point.longitude ? point.longitude : maxLng;
     }
 
-    // إضافة padding صغير جداً حول الطريق (0.2% فقط من النطاق)
     final latPadding = (maxLat - minLat) * 0.002;
     final lngPadding = (maxLng - minLng) * 0.002;
 
-    // حساب الحدود مع الـ padding الصغير
     final paddedMinLat = minLat - latPadding;
     final paddedMaxLat = maxLat + latPadding;
     final paddedMinLng = minLng - lngPadding;
     final paddedMaxLng = maxLng + lngPadding;
 
-    // حساب المركز
     final centerLat = (paddedMinLat + paddedMaxLat) / 2;
     final centerLng = (paddedMinLng + paddedMaxLng) / 2;
     final center = LatLng(centerLat, centerLng);
 
-    // حساب نطاق الطول والعرض بالدرجات بعد إضافة الـ padding
     final latDelta = (paddedMaxLat - paddedMinLat).abs();
     final lngDelta = (paddedMaxLng - paddedMinLng).abs();
 
-    // حساب الزوم بناءً على النطاق الجغرافي - مع زوم أعلى
     double zoomLevel = 10.0;
 
     if (latDelta > 0 && lngDelta > 0) {
-      // استخدام أكبر نطاق (الذي يتطلب زوم أقل)
       final maxDelta = latDelta > lngDelta ? latDelta : lngDelta;
-      
-      // صيغة حساب الزوم بدقة أعلى: زيادة طفيفة للاقتراب أكثر للطريق
-      // zoom = log2(360 / maxDelta) + 0.25
       zoomLevel = (log(360 / maxDelta) / log(2)) + 0.60;
-    
-      
-      // قيود الزوم
+
       if (zoomLevel > 19.5) zoomLevel = 19.5;
       if (zoomLevel < 4) zoomLevel = 4;
     }
 
-    // تحريك الخريطة لعرض الطريق كاملة بزوم أكثر
     _mapController.move(center, zoomLevel);
   }
 
@@ -483,14 +699,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           children: [
                             CircleAvatar(
                               radius: 26,
-                              backgroundImage:
-                                  (widget.profileImage != null &&
+                              backgroundImage: (widget.profileImage != null &&
                                       widget.profileImage!.isNotEmpty)
                                   ? NetworkImage(widget.profileImage!)
                                   : null,
                               backgroundColor: const Color(0xFF67CD67),
-                              child:
-                                  (widget.profileImage == null ||
+                              child: (widget.profileImage == null ||
                                       widget.profileImage!.isEmpty)
                                   ? Text(
                                       widget.driverName.isNotEmpty
@@ -589,7 +803,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   Expanded(
                                     flex: 2,
                                     child: Text(
-                                      _orderId != null ? _orderId.toString() : '-',
+                                      _orderId != null
+                                          ? _orderId.toString()
+                                          : '-',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 18,
@@ -633,7 +849,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                     borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF2196F3).withValues(alpha: 0.4),
+                                        color: const Color(0xFF2196F3)
+                                            .withValues(alpha: 0.4),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
@@ -680,7 +897,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   const SizedBox(height: 12),
                                   ..._otherOrders.map(
                                     (o) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 17),
+                                      padding:
+                                          const EdgeInsets.only(bottom: 17),
                                       child: Stack(
                                         clipBehavior: Clip.none,
                                         children: [
@@ -691,7 +909,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF2D2D2D),
-                                              borderRadius: BorderRadius.circular(14),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
                                               boxShadow: const [
                                                 BoxShadow(
                                                   color: Colors.black26,
@@ -705,11 +924,13 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                 Expanded(
                                                   flex: 2,
                                                   child: Text(
-                                                    o['order_id']?.toString() ?? '-',
+                                                    o['order_id']?.toString() ??
+                                                        '-',
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 18,
-                                                      fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
                                                   ),
                                                 ),
@@ -721,9 +942,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 18,
-                                                      fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 const SizedBox(width: 100),
@@ -734,23 +957,29 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             top: -6,
                                             right: 8,
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
                                                 horizontal: 10,
                                                 vertical: 6,
                                               ),
                                               decoration: BoxDecoration(
-                                                gradient: const LinearGradient(
+                                                gradient:
+                                                    const LinearGradient(
                                                   colors: [
                                                     Color(0xFFFF9800),
                                                     Color(0xFFF57C00),
                                                   ],
                                                 ),
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Colors.orangeAccent.withValues(alpha: 0.3),
+                                                    color: Colors.orangeAccent
+                                                        .withValues(
+                                                            alpha: 0.3),
                                                     blurRadius: 4,
-                                                    offset: const Offset(0, 2),
+                                                    offset:
+                                                        const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
@@ -768,7 +997,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                     style: TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 11,
-                                                      fontWeight: FontWeight.w800,
+                                                      fontWeight:
+                                                          FontWeight.w800,
                                                     ),
                                                   ),
                                                 ],
@@ -793,7 +1023,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   const SizedBox(height: 12),
                                   ..._deliveredOrders.map(
                                     (o) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 16),
+                                      padding:
+                                          const EdgeInsets.only(bottom: 16),
                                       child: Stack(
                                         clipBehavior: Clip.none,
                                         children: [
@@ -804,7 +1035,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF2D2D2D),
-                                              borderRadius: BorderRadius.circular(14),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
                                               boxShadow: const [
                                                 BoxShadow(
                                                   color: Colors.black26,
@@ -818,11 +1050,13 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                 Expanded(
                                                   flex: 2,
                                                   child: Text(
-                                                    o['order_id']?.toString() ?? '-',
+                                                    o['order_id']?.toString() ??
+                                                        '-',
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 18,
-                                                      fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
                                                   ),
                                                 ),
@@ -834,9 +1068,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 18,
-                                                      fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
                                                     ),
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 const SizedBox(width: 110),
@@ -847,23 +1083,29 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             top: -6,
                                             right: 8,
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
                                                 horizontal: 10,
                                                 vertical: 6,
                                               ),
                                               decoration: BoxDecoration(
-                                                gradient: const LinearGradient(
+                                                gradient:
+                                                    const LinearGradient(
                                                   colors: [
                                                     Color(0xFF4CAF50),
                                                     Color(0xFF388E3C),
                                                   ],
                                                 ),
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Colors.green.withValues(alpha: 0.3),
+                                                    color: Colors.green
+                                                        .withValues(
+                                                            alpha: 0.3),
                                                     blurRadius: 4,
-                                                    offset: const Offset(0, 2),
+                                                    offset:
+                                                        const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
@@ -881,7 +1123,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                     style: TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 11,
-                                                      fontWeight: FontWeight.w800,
+                                                      fontWeight:
+                                                          FontWeight.w800,
                                                     ),
                                                   ),
                                                 ],
@@ -921,6 +1164,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                     ),
                   ),
                 ),
+
                 // Map area
                 Expanded(
                   child: ClipRRect(
@@ -939,8 +1183,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           ),
                           children: [
                             TileLayer(
-                              // Use a provider with an API key to avoid OSM blocking.
-                              // Replace YOUR_KEY below with a valid key (e.g., MapTiler or Mapbox).
                               urlTemplate:
                                   'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
                               userAgentPackageName: 'com.example.app',
@@ -952,6 +1194,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   Polyline(
                                     points: _routePoints,
                                     strokeWidth: 4,
+                                    // ✅ ما غيرنا اللون حسب طلبك
                                     color: Colors.blueAccent,
                                   ),
                                 ],

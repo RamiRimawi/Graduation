@@ -162,15 +162,11 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget> {
               right: 8,
               top: 8,
               child: Container(
-                width: 12,
-                height: 12,
+                width: 10,
+                height: 10,
                 decoration: BoxDecoration(
                   color: const Color(0xFF50B2E7),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF50B2E7).withOpacity(0.6),
@@ -178,6 +174,7 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget> {
                       spreadRadius: 1,
                     ),
                   ],
+                 
                 ),
               ),
             ),

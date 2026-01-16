@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'sidebar.dart';
 import '../supabase_config.dart';
 import 'Notifications/notification_bell_widget.dart';
+import 'Notifications/accountant_notifications.dart';
 
 // 🎨 الألوان
 class AppColors {
@@ -321,6 +322,9 @@ class _ProfilePageContentState extends State<ProfilePageContent> {
                                   vertical: 14,
                                 ),
                                 onTap: () async {
+                                  // إيقاف نظام الإشعارات
+                                  AccountantNotifications().dispose();
+                                  
                                   final prefs =
                                       await SharedPreferences.getInstance();
                                   await prefs.remove('accountant_id');
