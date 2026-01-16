@@ -2,7 +2,41 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../supabase_config.dart';
 import 'notification_service.dart';
 
-/// خدمة إشعارات المحاسب - تراقب التغييرات في قاعدة البيانات
+/// Safe conversion helpers to avoid "null" string parsing errors
+int? _safeInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  final str = v.toString();
+  if (str.isEmpty || str == 'null') return null;
+  return int.tryParse(str);
+}
+
+double? _safeDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  final str = v.toString();
+  if (str.isEmpty || str == 'null') return null;
+  return double.tryParse(str);
+}
+
+String _safeStr(dynamic v) {
+  if (v == null) return '';
+  final str = v.toString();
+  return (str == 'null') ? '' : str;
+}
+
+/// Log null fields for debugging
+void _logNullFields(String tag, Map<String, dynamic> rec) {
+  final nullKeys = <String>[];
+  rec.forEach((k, v) {
+    if (v == null || v.toString() == 'null') nullKeys.add(k);
+  });
+  if (nullKeys.isNotEmpty) {
+    print('⚠️ $tag null fields: $nullKeys');
+  }
+}
+
 class AccountantNotifications {
   static final AccountantNotifications _instance =
       AccountantNotifications._internal();
@@ -11,10 +45,10 @@ class AccountantNotifications {
 
   final NotificationService _notificationService = NotificationService();
   final List<RealtimeChannel> _subscriptions = [];
-  bool _isInitialized = false;
-  bool _realtimeEnabled = false; // للتحقق من تفعيل Realtime
 
-  /// تفعيل المراقبة لجميع الإشعارات
+  bool _isInitialized = false;
+  bool _realtimeEnabled = false;
+
   Future<void> initialize() async {
     if (_isInitialized) {
       print('⚠️ Notifications already initialized');
@@ -27,95 +61,82 @@ class AccountantNotifications {
       await _notificationService.initialize();
       print('✅ NotificationService initialized');
 
-      // التحقق من إمكانية الاتصال بـ Realtime
       print('🔄 Checking Realtime availability...');
       _realtimeEnabled = await _checkRealtimeAvailability();
-      
+
       if (!_realtimeEnabled) {
         print('⚠️ Realtime is not enabled in Supabase');
-        print('💡 Notifications will not work until you enable Realtime');
         print('💡 Enable tables in: Supabase Dashboard → Database → Replication');
         _isInitialized = true;
         return;
       }
       print('✅ Realtime is available');
 
-      // تشغيل كل listener مع معالجة أخطاء منفصلة
       await _initializeListeners();
 
       _isInitialized = true;
       print('✅ Notification system initialized successfully');
-      print('💡 System is now monitoring for real-time updates');
     } catch (e, stackTrace) {
-      print('❌ NOTIFICATION SYSTEM ERROR:');
-      print('Error: $e');
-      print('Stack trace:');
+      print('❌ NOTIFICATION SYSTEM ERROR: $e');
       print(stackTrace);
-      _isInitialized = true; // تعيين كـ initialized حتى لا يحاول مرة أخرى
-      // رمي الخطأ مرة أخرى ليتم التقاطه في login_page
-      rethrow;
+      _isInitialized = true; // Mark as initialized to prevent retry loops
+      // Don't rethrow - let the app continue without notifications
     }
   }
 
-  /// تهيئة جميع الـ listeners بشكل آمن
   Future<void> _initializeListeners() async {
+    // Add delays between subscriptions to avoid overwhelming the connection
+    const delay = Duration(milliseconds: 100);
+
     try {
-      // 1. مراقبة الطلبيات الجديدة من الزبائن
       print('🔄 Setting up customer orders listener...');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(delay);
       _listenToCustomerOrders();
 
-      // 2. مراقبة طلبيات الموردين
       print('🔄 Setting up supplier orders listener...');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(delay);
       _listenToSupplierOrders();
 
-      // 3. مراقبة الشيكات
       print('🔄 Setting up checks listeners...');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(delay);
       _listenToCustomerChecks();
-      await Future.delayed(const Duration(milliseconds: 50));
+      
+      await Future.delayed(delay);
       _listenToSupplierChecks();
 
-      // 4. مراقبة تعديلات الطلبيات
       print('🔄 Setting up order updates listener...');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(delay);
       _listenToOrderUpdates();
 
-      // 5. مراقبة المخزون
       print('🔄 Setting up low stock listener...');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(delay);
       _listenToLowStock();
+
+      print('✅ All listeners initialized');
     } catch (e, stackTrace) {
-      print('❌ Error during listeners initialization:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Error during listeners initialization: $e');
+      print(stackTrace);
     }
   }
 
-  /// التحقق من توفر Realtime
   Future<bool> _checkRealtimeAvailability() async {
     try {
-      print('🔄 Creating test channel...');
-      // محاولة إنشاء channel بسيط للتحقق
-      final testChannel = supabase.channel('test_connection');
-      await Future.delayed(const Duration(milliseconds: 100));
+      final testChannel = supabase.channel('test_connection_${DateTime.now().millisecondsSinceEpoch}');
+      await Future.delayed(const Duration(milliseconds: 200));
       supabase.removeChannel(testChannel);
-      print('✅ Test channel created successfully');
       return true;
-    } catch (e, stackTrace) {
-      print('❌ Realtime availability check failed:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
+      print('❌ Realtime availability check failed: $e');
       return false;
     }
   }
 
-  /// إيقاف جميع الاشتراكات
   void dispose() {
     try {
-      for (var subscription in _subscriptions) {
-        supabase.removeChannel(subscription);
+      for (final ch in _subscriptions) {
+        try {
+          supabase.removeChannel(ch);
+        } catch (_) {}
       }
       _subscriptions.clear();
       _isInitialized = false;
@@ -125,181 +146,168 @@ class AccountantNotifications {
     }
   }
 
-  // ============== 1. طلبيات جديدة من الزبائن ==============
+  // ===================== 1) Customer Orders (INSERT) =====================
   void _listenToCustomerOrders() {
     try {
-      print('🔄 Subscribing to customer_order table...');
+      final channelName = 'customer_orders_${DateTime.now().millisecondsSinceEpoch}';
       
-      try {
-        final channel = supabase
-            .channel('customer_orders_channel')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.insert,
-              schema: 'public',
-              table: 'customer_order',
-              callback: (payload) async {
+      final channel = supabase
+          .channel(channelName)
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'customer_order',
+            callback: (payload) {
+              // Wrap everything in Future.microtask to avoid blocking
+              Future.microtask(() async {
                 try {
-                  print('📦 New customer order received: ${payload.newRecord}');
                   final order = payload.newRecord;
-                  final customerId = order['customer_id'];
-                  final orderId = order['customer_order_id'];
-                  final totalCost = order['total_cost'];
+                  _logNullFields('customer_order(new)', order);
 
-                  // جلب اسم الزبون
-                  String customerName = 'Customer #$customerId';
-                  try {
-                    final customerData = await supabase
-                        .from('customer')
-                        .select('name')
-                        .eq('customer_id', customerId)
-                        .single();
-                    customerName = customerData['name'] ?? customerName;
-                  } catch (e) {
-                    print('⚠️ Could not fetch customer name: $e');
+                  final customerId = _safeInt(order['customer_id']);
+                  final orderId = _safeInt(order['customer_order_id']);
+                  final totalCost = _safeDouble(order['total_cost']);
+
+                  if (orderId == null) {
+                    print('⚠️ customer_order: orderId is null, skipping');
+                    return;
                   }
+
+                  String customerName = 'Customer #$customerId';
+                  if (customerId != null) {
+                    try {
+                      final customerData = await supabase
+                          .from('customer')
+                          .select('name')
+                          .eq('customer_id', customerId)
+                          .maybeSingle();
+                      if (customerData != null) {
+                        customerName = _safeStr(customerData['name']);
+                        if (customerName.isEmpty) customerName = 'Customer #$customerId';
+                      }
+                    } catch (e) {
+                      print('⚠️ Could not fetch customer name: $e');
+                    }
+                  }
+
+                  final totalText = totalCost?.toStringAsFixed(2) ?? '0.00';
 
                   await _notificationService.addNotification(
                     title: 'New order',
-                    message:
-                        'Order #$orderId from $customerName with total \$${totalCost?.toStringAsFixed(2) ?? "0"}',
+                    message: 'Order #$orderId from $customerName with total \$$totalText',
                     type: 'order',
                   );
-                  print('✅ Customer order notification added');
+                  print('✅ Customer order notification added for #$orderId');
                 } catch (e, stackTrace) {
-                  print('❌ Error processing customer order notification:');
-                  print('Error: $e');
-                  print('Stack trace: $stackTrace');
+                  print('❌ Error processing customer order notification: $e');
+                  print(stackTrace);
                 }
-              },
-            )
-            .subscribe();
+              });
+            },
+          )
+          .subscribe((status, error) {
+            if (error != null) {
+              print('❌ customer_order subscription error: $error');
+            } else {
+              print('✅ customer_order subscription status: $status');
+            }
+          });
 
-        _subscriptions.add(channel);
-        print('✅ Customer orders listener subscribed');
-      } catch (subscribeError, stackTrace) {
-        print('❌ SUBSCRIBE ERROR for customer_order:');
-        print('Error: $subscribeError');
-        print('Stack trace: $stackTrace');
-      }
+      _subscriptions.add(channel);
+      print('✅ customer_order INSERT subscribed');
     } catch (e, stackTrace) {
-      print('❌ Cannot setup customer orders listener:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Cannot setup customer orders listener: $e');
+      print(stackTrace);
     }
   }
 
-  // ============== 2. طلبيات الموردين ==============
+  // ===================== 2) Supplier Orders (UPDATE) =====================
   void _listenToSupplierOrders() {
     try {
-      print('🔄 Subscribing to supplier_order table...');
+      final channelName = 'supplier_orders_${DateTime.now().millisecondsSinceEpoch}';
+      
       final channel = supabase
-          .channel('supplier_orders_channel')
+          .channel(channelName)
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'supplier_order',
-            callback: (payload) async {
-              try {
-                final oldRecord = payload.oldRecord;
-                final newRecord = payload.newRecord;
+            callback: (payload) {
+              Future.microtask(() async {
+                try {
+                  final newRecord = payload.newRecord;
+                  final oldRecord = payload.oldRecord;
 
-                final oldStatus = oldRecord['order_status'];
-                final newStatus = newRecord['order_status'];
+                  final newStatus = _safeStr(newRecord['order_status']);
+                  final oldStatus = _safeStr(oldRecord['order_status']);
 
-            // فقط عند تغيير الحالة
-            if (oldStatus != newStatus) {
-              final orderId = newRecord['order_id'];
-              final supplierId = newRecord['supplier_id'];
+                  // Only notify on status change
+                  if (newStatus.isEmpty || oldStatus == newStatus) return;
 
-              // جلب اسم المورد
-              String supplierName = 'Supplier #$supplierId';
-              try {
-                final supplierData = await supabase
-                    .from('supplier')
-                    .select('name')
-                    .eq('supplier_id', supplierId)
-                    .single();
-                supplierName = supplierData['name'] ?? supplierName;
-              } catch (e) {
-                // ignore
-              }
+                  final orderId = _safeInt(newRecord['order_id']);
+                  final supplierId = _safeInt(newRecord['supplier_id']);
 
-              String statusText = '';
-              if (newStatus == 'accepted') {
-                statusText = 'has been accepted';
-              } else if (newStatus == 'rejected') {
-                statusText = 'has been rejected';
-              } else if (newStatus == 'pending') {
-                statusText = 'is pending';
-              } else if (newStatus == 'completed') {
-                statusText = 'has been completed';
-              }
+                  if (orderId == null) return;
 
-                await _notificationService.addNotification(
-                  title: 'Supplier order update',
-                  message: 'Order #$orderId from $supplierName $statusText',
-                  type: 'order',
-                );
-              }
-            } catch (e, stackTrace) {
-              print('❌ Error processing supplier order notification:');
-              print('Error: $e');
-              print('Stack trace: $stackTrace');
-            }
-          },
-        )
-        .subscribe();
+                  String supplierName = 'Supplier #$supplierId';
+                  if (supplierId != null) {
+                    try {
+                      final supplierData = await supabase
+                          .from('supplier')
+                          .select('name')
+                          .eq('supplier_id', supplierId)
+                          .maybeSingle();
+                      if (supplierData != null) {
+                        final name = _safeStr(supplierData['name']);
+                        if (name.isNotEmpty) supplierName = name;
+                      }
+                    } catch (_) {}
+                  }
 
-      _subscriptions.add(channel);
-      print('✅ Supplier orders listener subscribed');
+                  final statusTextMap = {
+                    'Accepted': 'has been accepted',
+                    'Rejected': 'has been rejected',
+                    'Pending': 'is pending',
+                    'Delivered': 'has been delivered',
+                    'Hold': 'is on hold',
+                    'Sent': 'has been sent',
+                    'Updated': 'has been updated',
+                  };
 
-      // مراقبة التعديلات على طلبيات الموردين
-      print('🔄 Subscribing to supplier_order_description table...');
-      final updateChannel = supabase
-          .channel('supplier_orders_description_channel')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'supplier_order_description',
-            callback: (payload) async {
-              try {
-                final orderId = payload.newRecord['order_id'];
+                  final statusText = statusTextMap[newStatus];
+                  if (statusText == null) return;
 
-                await _notificationService.addNotification(
-                  title: 'Supplier update',
-                  message: 'Supplier edited order #$orderId',
-                  type: 'order',
-                );
-              } catch (e, stackTrace) {
-                print('❌ Error processing supplier order description:');
-                print('Error: $e');
-                print('Stack trace: $stackTrace');
-              }
+                  await _notificationService.addNotification(
+                    title: 'Supplier order update',
+                    message: 'Order #$orderId from $supplierName $statusText',
+                    type: 'order',
+                  );
+                } catch (e, stackTrace) {
+                  print('❌ Error processing supplier order notification: $e');
+                  print(stackTrace);
+                }
+              });
             },
           )
           .subscribe();
 
-      _subscriptions.add(updateChannel);
-      print('✅ Supplier order description listener subscribed');
+      _subscriptions.add(channel);
+      print('✅ supplier_order UPDATE subscribed');
     } catch (e, stackTrace) {
-      print('❌ Cannot listen to supplier orders:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Cannot listen to supplier orders: $e');
+      print(stackTrace);
     }
   }
 
-  // ============== 3. شيكات الزبائن ==============
+  // ===================== 3) Customer Checks (scheduled check) =====================
   void _listenToCustomerChecks() {
     print('🔄 Setting up customer checks monitoring...');
-    // مراقبة الشيكات التي باقي 3 أيام
     _checkUpcomingChecks();
     print('✅ Customer checks monitoring setup complete');
 
-    // إعادة الفحص كل يوم
+    // Re-check daily
     Future.delayed(const Duration(hours: 24), () {
-      if (_isInitialized) {
-        _listenToCustomerChecks();
-      }
+      if (_isInitialized) _listenToCustomerChecks();
     });
   }
 
@@ -307,240 +315,266 @@ class AccountantNotifications {
     try {
       final today = DateTime.now();
       final threeDaysLater = today.add(const Duration(days: 3));
+      final todayStr = today.toIso8601String().split('T')[0];
+      final futureStr = threeDaysLater.toIso8601String().split('T')[0];
 
-      // شيكات الزبائن
-      final customerChecks = await supabase
-          .from('customer_checks')
-          .select('check_id, customer_id, exchange_rate, exchange_date')
-          .eq('status', 'pending')
-          .gte('exchange_date', today.toIso8601String().split('T')[0])
-          .lte('exchange_date', threeDaysLater.toIso8601String().split('T')[0]);
+      // Customer checks
+      try {
+        final customerChecks = await supabase
+            .from('customer_checks')
+            .select('check_id, customer_id, exchange_rate, exchange_date, status')
+            .neq('status', 'Cashed')
+            .gte('exchange_date', todayStr)
+            .lte('exchange_date', futureStr);
 
-      for (var check in customerChecks) {
-        final exchangeDate = DateTime.parse(check['exchange_date']);
-        final daysRemaining = exchangeDate.difference(today).inDays;
+        if (customerChecks is List) {
+          for (final check in customerChecks) {
+            try {
+              final dateStr = _safeStr(check['exchange_date']);
+              if (dateStr.isEmpty) continue;
+              
+              final exchangeDate = DateTime.tryParse(dateStr);
+              if (exchangeDate == null) continue;
+              
+              final daysRemaining = exchangeDate.difference(today).inDays;
+              final amount = _safeDouble(check['exchange_rate']) ?? 0.0;
+              final checkId = _safeInt(check['check_id']) ?? 0;
 
-        if (daysRemaining == 0) {
-          // شيك اليوم
-          await _notificationService.addNotification(
-            title: 'Check due today',
-            message:
-                'Check #${check['check_id']} for \$${check['exchange_rate']} must be cashed today',
-            type: 'payment',
-          );
-        } else if (daysRemaining <= 3) {
-          // شيك باقي 3 أيام أو أقل
-          await _notificationService.addNotification(
-            title: 'Check cash reminder',
-            message:
-                'Check #${check['check_id']} for \$${check['exchange_rate']} is due in $daysRemaining day(s)',
-            type: 'payment',
-          );
+              if (daysRemaining == 0) {
+                await _notificationService.addNotification(
+                  title: 'Check due today',
+                  message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} must be cashed today',
+                  type: 'payment',
+                );
+              } else if (daysRemaining <= 3 && daysRemaining > 0) {
+                await _notificationService.addNotification(
+                  title: 'Check cash reminder',
+                  message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} is due in $daysRemaining day(s)',
+                  type: 'payment',
+                );
+              }
+            } catch (_) {}
+          }
         }
+      } catch (e) {
+        print('⚠️ Error fetching customer checks: $e');
       }
 
-      // شيكات الموردين
-      final supplierChecks = await supabase
-          .from('supplier_checks')
-          .select('check_id, supplier_id, exchange_rate, exchange_date')
-          .eq('status', 'pending')
-          .gte('exchange_date', today.toIso8601String().split('T')[0])
-          .lte('exchange_date', threeDaysLater.toIso8601String().split('T')[0]);
+      // Supplier checks
+      try {
+        final supplierChecks = await supabase
+            .from('supplier_checks')
+            .select('check_id, supplier_id, exchange_rate, exchange_date, status')
+            .eq('status', 'Pending')
+            .gte('exchange_date', todayStr)
+            .lte('exchange_date', futureStr);
 
-      for (var check in supplierChecks) {
-        final exchangeDate = DateTime.parse(check['exchange_date']);
-        final daysRemaining = exchangeDate.difference(today).inDays;
+        if (supplierChecks is List) {
+          for (final check in supplierChecks) {
+            try {
+              final dateStr = _safeStr(check['exchange_date']);
+              if (dateStr.isEmpty) continue;
+              
+              final exchangeDate = DateTime.tryParse(dateStr);
+              if (exchangeDate == null) continue;
+              
+              final daysRemaining = exchangeDate.difference(today).inDays;
+              final amount = _safeDouble(check['exchange_rate']) ?? 0.0;
+              final checkId = _safeInt(check['check_id']) ?? 0;
 
-        if (daysRemaining == 0) {
-          await _notificationService.addNotification(
-            title: 'Supplier check due today',
-            message:
-                'Check #${check['check_id']} for \$${check['exchange_rate']} must be cashed today',
-            type: 'payment',
-          );
-        } else if (daysRemaining <= 3) {
-          await _notificationService.addNotification(
-            title: 'Supplier check cash reminder',
-            message:
-                'Check #${check['check_id']} for \$${check['exchange_rate']} is due in $daysRemaining day(s)',
-            type: 'payment',
-          );
+              if (daysRemaining == 0) {
+                await _notificationService.addNotification(
+                  title: 'Supplier check due today',
+                  message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} must be cashed today',
+                  type: 'payment',
+                );
+              } else if (daysRemaining <= 3 && daysRemaining > 0) {
+                await _notificationService.addNotification(
+                  title: 'Supplier check cash reminder',
+                  message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} is due in $daysRemaining day(s)',
+                  type: 'payment',
+                );
+              }
+            } catch (_) {}
+          }
         }
+      } catch (e) {
+        print('⚠️ Error fetching supplier checks: $e');
       }
     } catch (e) {
-      // ignore error
+      print('⚠️ Error in _checkUpcomingChecks: $e');
     }
   }
 
+  // ===================== 4) Supplier Checks (UPDATE) =====================
   void _listenToSupplierChecks() {
     try {
-      print('🔄 Subscribing to supplier_checks table...');
+      final channelName = 'supplier_checks_${DateTime.now().millisecondsSinceEpoch}';
+      
       final channel = supabase
-          .channel('supplier_checks_channel')
+          .channel(channelName)
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'supplier_checks',
-            callback: (payload) async {
-              try {
-            final oldStatus = payload.oldRecord['status'];
-            final newStatus = payload.newRecord['status'];
+            callback: (payload) {
+              Future.microtask(() async {
+                try {
+                  final newStatus = _safeStr(payload.newRecord['status']);
+                  final oldStatus = _safeStr(payload.oldRecord['status']);
 
-            if (oldStatus != newStatus && newStatus == 'cashed') {
-              final checkId = payload.newRecord['check_id'];
-              final amount = payload.newRecord['exchange_rate'];
+                  if (oldStatus != newStatus && newStatus == 'Cashed') {
+                    final checkId = _safeInt(payload.newRecord['check_id']) ?? 0;
+                    final amount = _safeDouble(payload.newRecord['exchange_rate']) ?? 0.0;
 
-                await _notificationService.addNotification(
-                  title: 'Check cashed',
-                  message: 'Check #$checkId for \$${amount ?? "0"} has been cashed',
-                  type: 'payment',
-                );
-              }
-            } catch (e, stackTrace) {
-              print('❌ Error processing supplier check notification:');
-              print('Error: $e');
-              print('Stack trace: $stackTrace');
-            }
-          },
-        )
-        .subscribe();
+                    await _notificationService.addNotification(
+                      title: 'Check cashed',
+                      message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} has been cashed',
+                      type: 'payment',
+                    );
+                  }
+                } catch (e) {
+                  print('❌ Error processing supplier check notification: $e');
+                }
+              });
+            },
+          )
+          .subscribe();
 
       _subscriptions.add(channel);
-      print('✅ Supplier checks listener subscribed');
+      print('✅ supplier_checks UPDATE subscribed');
     } catch (e, stackTrace) {
-      print('❌ Cannot listen to supplier checks:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Cannot listen to supplier checks: $e');
+      print(stackTrace);
     }
   }
 
-  // ============== 4. تعديلات الطلبيات ==============
+  // ===================== 5) Order Updates =====================
   void _listenToOrderUpdates() {
     try {
-      print('🔄 Subscribing to customer_order updates...');
+      final channelName = 'customer_order_updates_${DateTime.now().millisecondsSinceEpoch}';
+      
       final channel = supabase
-          .channel('customer_order_updates_channel')
+          .channel(channelName)
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'customer_order',
-            callback: (payload) async {
-              try {
-            final oldRecord = payload.oldRecord;
-            final newRecord = payload.newRecord;
+            callback: (payload) {
+              Future.microtask(() async {
+                try {
+                  final oldRecord = payload.oldRecord;
+                  final newRecord = payload.newRecord;
 
-            // التحقق من التعديلات
-            final updateAction = newRecord['update_action'];
-            final updateDescription = newRecord['update_description'];
+                  final orderId = _safeInt(newRecord['customer_order_id']);
+                  if (orderId == null) return;
 
-            if (updateAction != null && updateAction.toString().isNotEmpty) {
-              final orderId = newRecord['customer_order_id'];
-              final managedBy = newRecord['managed_by_id'];
+                  // Check for manager updates
+                  final updateAction = _safeStr(newRecord['update_action']);
+                  final updateDescription = _safeStr(newRecord['update_description']);
 
-              String message = 'Order #$orderId was updated';
-              if (updateDescription != null &&
-                  updateDescription.toString().isNotEmpty) {
-                message += ': $updateDescription';
-              }
+                  if (updateAction.isNotEmpty) {
+                    String message = 'Order #$orderId was updated';
+                    if (updateDescription.isNotEmpty) {
+                      message += ': $updateDescription';
+                    }
 
-              await _notificationService.addNotification(
-                title: 'Manager order update',
-                message: message,
-                type: 'order',
-              );
-            }
+                    await _notificationService.addNotification(
+                      title: 'Manager order update',
+                      message: message,
+                      type: 'order',
+                    );
+                    return; // Don't double-notify
+                  }
 
-            // التحقق من تغيير حالة الطلبية (قبول أو رفض من الزبون)
-            final oldStatus = oldRecord['order_status'];
-            final newStatus = newRecord['order_status'];
+                  // Check for status changes
+                  final oldStatus = _safeStr(oldRecord['order_status']);
+                  final newStatus = _safeStr(newRecord['order_status']);
 
-            if (oldStatus != newStatus) {
-              final orderId = newRecord['customer_order_id'];
+                  if (oldStatus != newStatus && newStatus.isNotEmpty) {
+                    final statusTextMap = {
+                      'Received': 'received',
+                      'Pinned': 'pinned',
+                      'Prepared': 'prepared',
+                      'Delivery': 'out for delivery',
+                      'Delivered': 'delivered',
+                      'Canceled': 'cancelled',
+                      'Hold': 'put on hold',
+                    };
 
-              String statusText = '';
-              if (newStatus == 'accepted') {
-                statusText = 'accepted';
-              } else if (newStatus == 'rejected') {
-                statusText = 'rejected';
-              } else if (newStatus == 'cancelled') {
-                statusText = 'cancelled';
-              }
-
-              if (statusText.isNotEmpty) {
-                await _notificationService.addNotification(
-                  title: 'Order status update',
-                  message: 'Order #$orderId was $statusText by the customer',
-                  type: 'order',
-                  );
+                    final statusText = statusTextMap[newStatus];
+                    if (statusText != null) {
+                      await _notificationService.addNotification(
+                        title: 'Order status update',
+                        message: 'Order #$orderId was $statusText',
+                        type: 'order',
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('❌ Error processing order update notification: $e');
                 }
-              }
-            } catch (e, stackTrace) {
-              print('❌ Error processing order update notification:');
-              print('Error: $e');
-              print('Stack trace: $stackTrace');
-            }
-          },
-        )
-        .subscribe();
+              });
+            },
+          )
+          .subscribe();
 
       _subscriptions.add(channel);
       print('✅ Order updates listener subscribed');
     } catch (e, stackTrace) {
-      print('❌ Cannot listen to order updates:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Cannot listen to order updates: $e');
+      print(stackTrace);
     }
   }
 
-  // ============== 5. مراقبة المخزون المنخفض ==============
+  // ===================== 6) Low Stock =====================
   void _listenToLowStock() {
     try {
-      print('🔄 Subscribing to product table for low stock alerts...');
+      final channelName = 'product_stock_${DateTime.now().millisecondsSinceEpoch}';
+      
       final channel = supabase
-          .channel('product_stock_channel')
+          .channel(channelName)
           .onPostgresChanges(
             event: PostgresChangeEvent.update,
             schema: 'public',
             table: 'product',
-            callback: (payload) async {
-              try {
-            final newRecord = payload.newRecord;
-            final totalQuantity = newRecord['total_quantity'] as int?;
-            final minimumStock = newRecord['minimum_stock'] as int?;
-            final productName = newRecord['name'];
-            final productId = newRecord['product_id'];
+            callback: (payload) {
+              Future.microtask(() async {
+                try {
+                  final newRecord = payload.newRecord;
 
-            if (totalQuantity != null &&
-                minimumStock != null &&
-                totalQuantity <= minimumStock) {
-              await _notificationService.addNotification(
-                title: 'Low stock alert',
-                message:
-                    'Product "$productName" (#$productId) reached the minimum: $totalQuantity of $minimumStock',
-                  type: 'system',
-                );
-              }
-            } catch (e, stackTrace) {
-              print('❌ Error processing low stock notification:');
-              print('Error: $e');
-              print('Stack trace: $stackTrace');
-            }
-          },
-        )
-        .subscribe();
+                  final totalQuantity = _safeInt(newRecord['total_quantity']);
+                  final minimumStock = _safeInt(newRecord['minimum_stock']);
+                  final productName = _safeStr(newRecord['name']);
+                  final productId = _safeInt(newRecord['product_id']);
+
+                  if (totalQuantity != null &&
+                      minimumStock != null &&
+                      totalQuantity <= minimumStock) {
+                    await _notificationService.addNotification(
+                      title: 'Low stock alert',
+                      message: 'Product "$productName" (#$productId) reached minimum: $totalQuantity of $minimumStock',
+                      type: 'system',
+                    );
+                  }
+                } catch (e) {
+                  print('❌ Error processing low stock notification: $e');
+                }
+              });
+            },
+          )
+          .subscribe();
 
       _subscriptions.add(channel);
-      print('✅ Low stock listener subscribed');
+      print('✅ product low stock listener subscribed');
     } catch (e, stackTrace) {
-      print('❌ Cannot listen to low stock:');
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Cannot listen to low stock: $e');
+      print(stackTrace);
     }
   }
 
-  // ============== دوال مساعدة لإرسال إشعارات يدوية ==============
+  // ============== Helper methods for manual notifications ==============
 
-  /// إرسال إشعار عند إضافة طلبية جديدة
   Future<void> notifyNewCustomerOrder(
     int orderId,
     String customerName,
@@ -548,24 +582,25 @@ class AccountantNotifications {
   ) async {
     await _notificationService.addNotification(
       title: 'New order',
-      message:
-          'Order #$orderId from $customerName with total \$${totalCost.toStringAsFixed(2)}',
+      message: 'Order #$orderId from $customerName with total \$${totalCost.toStringAsFixed(2)}',
       type: 'order',
     );
   }
 
-  /// إرسال إشعار عند تغيير حالة طلبية مورد
   Future<void> notifySupplierOrderStatusChange(
     int orderId,
     String supplierName,
     String status,
   ) async {
-    String statusText = '';
-    if (status == 'accepted') {
-      statusText = 'has been accepted';
-    } else if (status == 'rejected') {
-      statusText = 'has been rejected';
-    }
+    final statusTextMap = {
+      'Accepted': 'has been accepted',
+      'Rejected': 'has been rejected',
+      'Pending': 'is pending',
+      'Delivered': 'has been delivered',
+      'Hold': 'is on hold',
+    };
+
+    final statusText = statusTextMap[status] ?? 'status changed to $status';
 
     await _notificationService.addNotification(
       title: 'Supplier order update',
@@ -574,32 +609,29 @@ class AccountantNotifications {
     );
   }
 
-  /// إرسال إشعار عند اقتراب موعد صرف شيك
   Future<void> notifyCheckDueDate(
     int checkId,
     double amount,
     int daysRemaining,
     bool isCustomerCheck,
   ) async {
-    final checkType = isCustomerCheck ? '' : '(supplier)';
+    final checkType = isCustomerCheck ? '' : ' (supplier)';
 
     if (daysRemaining == 0) {
       await _notificationService.addNotification(
-        title: 'Check due today $checkType',
+        title: 'Check due today$checkType',
         message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} must be cashed today',
         type: 'payment',
       );
     } else {
       await _notificationService.addNotification(
-        title: 'Check cash reminder $checkType',
-        message:
-            'Check #$checkId for \$${amount.toStringAsFixed(2)} is due in $daysRemaining day(s)',
+        title: 'Check cash reminder$checkType',
+        message: 'Check #$checkId for \$${amount.toStringAsFixed(2)} is due in $daysRemaining day(s)',
         type: 'payment',
       );
     }
   }
 
-  /// إرسال إشعار عند انخفاض المخزون
   Future<void> notifyLowStock(
     int productId,
     String productName,
@@ -608,13 +640,11 @@ class AccountantNotifications {
   ) async {
     await _notificationService.addNotification(
       title: 'Low stock alert',
-      message:
-          'Product "$productName" (#$productId) reached the minimum: $currentQuantity of $minimumQuantity',
+      message: 'Product "$productName" (#$productId) reached minimum: $currentQuantity of $minimumQuantity',
       type: 'system',
     );
   }
 
-  /// إرسال إشعار عند تعديل طلبية من Manager
   Future<void> notifyOrderUpdateByManager(
     int orderId,
     String updateDescription,

@@ -102,6 +102,11 @@ class NotificationService extends ChangeNotifier {
     required String message,
     String type = 'system',
   }) async {
+    print('🔔🔔🔔 NotificationService.addNotification CALLED!');
+    print('   Title: $title');
+    print('   Message: $message');
+    print('   Type: $type');
+    
     final notification = NotificationItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
@@ -111,6 +116,7 @@ class NotificationService extends ChangeNotifier {
     );
 
     _notifications.insert(0, notification);
+    print('✅ Notification added to list. Total notifications: ${_notifications.length}');
     
     // Keep only last 100 notifications
     if (_notifications.length > 100) {
@@ -118,7 +124,10 @@ class NotificationService extends ChangeNotifier {
     }
 
     await _saveToStorage();
+    print('✅ Notifications saved to storage');
+    
     notifyListeners();
+    print('✅ Listeners notified. Unread count: $unreadCount');
   }
 
   Future<void> markAsRead(String id) async {
