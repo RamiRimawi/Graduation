@@ -296,8 +296,15 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
               padding: EdgeInsets.all(cardPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildProductImage(imageUrl, imageRadius, imageAspectRatio),
+                  Flexible(
+                    child: _buildProductImage(
+                      imageUrl,
+                      imageRadius,
+                      imageAspectRatio,
+                    ),
+                  ),
                   SizedBox(height: spacing),
                   Text(
                     product['name'] ?? '',
@@ -309,7 +316,7 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     brandName,
                     style: TextStyle(
@@ -498,28 +505,34 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      isScrollControlled: true,
       builder: (context) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: _buildProductImage(imageUrl)),
-              const SizedBox(height: 16),
-              _infoRow('Name', product['name'] ?? ''),
-              const SizedBox(height: 8),
-              _infoRow('Category', categoryName),
-              const SizedBox(height: 8),
-              _infoRow('Brand', brandName),
-              const SizedBox(height: 8),
-              _infoRow(
-                'Selling Price',
-                sellingPrice != null ? sellingPrice.toString() : '—',
-              ),
-              const SizedBox(height: 16),
-              _buildAddToCartButton(product, disabled: alreadyInCart),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 200,
+                  child: Center(child: _buildProductImage(imageUrl)),
+                ),
+                const SizedBox(height: 16),
+                _infoRow('Name', product['name'] ?? ''),
+                const SizedBox(height: 8),
+                _infoRow('Category', categoryName),
+                const SizedBox(height: 8),
+                _infoRow('Brand', brandName),
+                const SizedBox(height: 8),
+                _infoRow(
+                  'Selling Price',
+                  sellingPrice != null ? sellingPrice.toString() : '—',
+                ),
+                const SizedBox(height: 16),
+                _buildAddToCartButton(product, disabled: alreadyInCart),
+              ],
+            ),
           ),
         );
       },
