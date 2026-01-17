@@ -30,13 +30,22 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
   void _onNavTap(int i) {
     setState(() => _currentIndex = i);
     if (i == 0) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CustomerHomePage()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
+      );
     } else if (i == 1) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const CustomerCartPage()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
+      );
     } else if (i == 2) {
       // stay
     } else if (i == 3) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AccountPage()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AccountPage()),
+      );
     }
   }
 
@@ -61,29 +70,41 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       final userIdStr = prefs.getString('current_user_id');
       final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
       if (customerId == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-        const progressStatuses = ['Preparing', 'Prepared', 'Delivery', 'Pinned', 'Received', 'Updated to Customer'];
-        final statusListLiteral = '(${progressStatuses.map((s) => '"$s"').join(',')})';
+      const progressStatuses = [
+        'Preparing',
+        'Prepared',
+        'Delivery',
+        'Pinned',
+        'Received',
+        'Updated to Customer',
+      ];
+      final statusListLiteral =
+          '(${progressStatuses.map((s) => '"$s"').join(',')})';
 
-        final preparing = await supabase
+      final preparing = await supabase
           .from('customer_order')
           .select('customer_order_id, order_date, order_status')
           .eq('customer_id', customerId)
           .filter('order_status', 'in', statusListLiteral)
           .order('order_date', ascending: false);
-      final prepList = (preparing as List<dynamic>).cast<Map<String, dynamic>>();
-      final prepIds = prepList.map<int>((e) => (e['customer_order_id'] as int)).toList();
+      final prepList = (preparing as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+      final prepIds = prepList
+          .map<int>((e) => (e['customer_order_id'] as int))
+          .toList();
       Map<int, int> prepCounts = {};
       Map<int, DateTime?> updateTimes = {};
       if (prepIds.isNotEmpty) {
         final prepDesc = await supabase
-          .from('customer_order_description')
-          .select('customer_order_id, product_id')
-          .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
-        final descList = (prepDesc as List<dynamic>).cast<Map<String, dynamic>>();
+            .from('customer_order_description')
+            .select('customer_order_id, product_id')
+            .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
+        final descList = (prepDesc as List<dynamic>)
+            .cast<Map<String, dynamic>>();
         final Map<int, Set<int>> perOrderProducts = {};
         for (final row in descList) {
           final oid = row['customer_order_id'] as int;
@@ -96,7 +117,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
             .from('customer_order_description')
             .select('customer_order_id, last_action_time')
             .filter('customer_order_id', 'in', '(${prepIds.join(',')})');
-        final updateList = (updateDesc as List<dynamic>).cast<Map<String, dynamic>>();
+        final updateList = (updateDesc as List<dynamic>)
+            .cast<Map<String, dynamic>>();
         for (final row in updateList) {
           final oid = row['customer_order_id'] as int;
           final tsStr = row['last_action_time'] as String?;
@@ -135,14 +157,17 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
           .eq('order_status', 'Delivered')
           .order('last_action_time', ascending: false);
       final delList = (delivered as List<dynamic>).cast<Map<String, dynamic>>();
-      final delIds = delList.map<int>((e) => (e['customer_order_id'] as int)).toList();
+      final delIds = delList
+          .map<int>((e) => (e['customer_order_id'] as int))
+          .toList();
       Map<int, int> delCounts = {};
       if (delIds.isNotEmpty) {
         final delDesc = await supabase
-          .from('customer_order_description')
-          .select('customer_order_id, product_id')
-          .filter('customer_order_id', 'in', '(${delIds.join(',')})');
-        final descList = (delDesc as List<dynamic>).cast<Map<String, dynamic>>();
+            .from('customer_order_description')
+            .select('customer_order_id, product_id')
+            .filter('customer_order_id', 'in', '(${delIds.join(',')})');
+        final descList = (delDesc as List<dynamic>)
+            .cast<Map<String, dynamic>>();
         final Map<int, Set<int>> perOrderProducts = {};
         for (final row in descList) {
           final oid = row['customer_order_id'] as int;
@@ -165,15 +190,21 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
         };
       }).toList();
 
-      final filteredDelivered = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
+      final filteredDelivered = _filterDeliveredByDateRange(
+        _fromDate,
+        _toDate,
+        _deliveredOrdersAll,
+      );
 
-      setState(() {
-        _deliveredOrders = filteredDelivered;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _deliveredOrders = filteredDelivered;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching orders: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -194,16 +225,20 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
     return 'In progress';
   }
 
-  List<Map<String, dynamic>> _filterDeliveredByDateRange(DateTime? fromDate, DateTime? toDate, List<Map<String, dynamic>> source) {
+  List<Map<String, dynamic>> _filterDeliveredByDateRange(
+    DateTime? fromDate,
+    DateTime? toDate,
+    List<Map<String, dynamic>> source,
+  ) {
     if (fromDate == null && toDate == null) {
       return List<Map<String, dynamic>>.from(source);
     }
-    
+
     return source.where((order) {
       final dt = order['dateTime'] as DateTime?;
       if (dt == null) return false;
       final orderDay = DateTime(dt.year, dt.month, dt.day);
-      
+
       if (fromDate != null && toDate != null) {
         final fromDay = DateTime(fromDate.year, fromDate.month, fromDate.day);
         final toDay = DateTime(toDate.year, toDate.month, toDate.day);
@@ -227,10 +262,14 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       lastDate: _toDate ?? DateTime.now().add(const Duration(days: 365)),
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         _fromDate = picked;
-        _deliveredOrders = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
+        _deliveredOrders = _filterDeliveredByDateRange(
+          _fromDate,
+          _toDate,
+          _deliveredOrdersAll,
+        );
       });
     }
   }
@@ -243,16 +282,21 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         _toDate = picked;
-        _deliveredOrders = _filterDeliveredByDateRange(_fromDate, _toDate, _deliveredOrdersAll);
+        _deliveredOrders = _filterDeliveredByDateRange(
+          _fromDate,
+          _toDate,
+          _deliveredOrdersAll,
+        );
       });
     }
   }
 
   void _clearDateFilter() {
     if (_fromDate == null && _toDate == null) return;
+    if (!mounted) return;
     setState(() {
       _fromDate = null;
       _toDate = null;
@@ -260,13 +304,19 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
     });
   }
 
-  void _showOrderDetails(Map<String, dynamic> order, {required bool isDelivered}) async {
+  void _showOrderDetails(
+    Map<String, dynamic> order, {
+    required bool isDelivered,
+  }) async {
     final id = order['id'] as int;
-    final rawStatus = (order['statusRaw'] as String?) ?? (isDelivered ? 'Delivered' : '');
+    final rawStatus =
+        (order['statusRaw'] as String?) ?? (isDelivered ? 'Delivered' : '');
     final isUpdate = rawStatus == 'Updated to Customer';
     final dateTime = order['dateTime'] as DateTime?;
     final dateLabel = order['dateLabel'] as String? ?? '—';
-    final formattedDate = dateTime != null ? '${_formatDate(dateTime)} ${_formatTime(dateTime)}' : dateLabel;
+    final formattedDate = dateTime != null
+        ? '${_formatDate(dateTime)} ${_formatTime(dateTime)}'
+        : dateLabel;
 
     String updateDescription = '';
     List<Map<String, dynamic>> productDetails = [];
@@ -284,9 +334,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
         final orderDescResp = await supabase
             .from('customer_order_description')
             .select(
-                'product_id, quantity, updated_quantity, total_price, product:product_id(name, brand:brand_id(name), selling_price)')
+              'product_id, quantity, updated_quantity, total_price, product:product_id(name, brand:brand_id(name), selling_price)',
+            )
             .eq('customer_order_id', id);
-        final descList = (orderDescResp as List<dynamic>).cast<Map<String, dynamic>>();
+        final descList = (orderDescResp as List<dynamic>)
+            .cast<Map<String, dynamic>>();
 
         for (final desc in descList) {
           final productMap = desc['product'] as Map<String, dynamic>?;
@@ -294,7 +346,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
           final oldQty = (desc['quantity'] as num?)?.toInt() ?? 0;
           final newQty = (desc['updated_quantity'] as num?)?.toInt() ?? oldQty;
           final totalPrice = (desc['total_price'] as num?)?.toDouble() ?? 0.0;
-          final sellingPrice = (productMap?['selling_price'] as num?)?.toDouble() ?? 0.0;
+          final sellingPrice =
+              (productMap?['selling_price'] as num?)?.toDouble() ?? 0.0;
           final unitPrice = oldQty > 0 ? totalPrice / oldQty : sellingPrice;
           final lineTotal = unitPrice * newQty;
           totalOrderPrice += lineTotal;
@@ -312,9 +365,12 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       } else {
         final orderDescResp = await supabase
             .from('customer_order_description')
-            .select('product_id, quantity, total_price, product:product_id(name, brand:brand_id(name))')
+            .select(
+              'product_id, quantity, total_price, product:product_id(name, brand:brand_id(name))',
+            )
             .eq('customer_order_id', id);
-        final descList = (orderDescResp as List<dynamic>).cast<Map<String, dynamic>>();
+        final descList = (orderDescResp as List<dynamic>)
+            .cast<Map<String, dynamic>>();
 
         for (final desc in descList) {
           final productMap = desc['product'] as Map<String, dynamic>?;
@@ -342,7 +398,9 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       try {
         final prefs = await SharedPreferences.getInstance();
         final userName = prefs.getString('current_user_name')?.trim();
-        final customerName = (userName != null && userName.isNotEmpty) ? userName : 'Customer';
+        final customerName = (userName != null && userName.isNotEmpty)
+            ? userName
+            : 'Customer';
         final now = DateTime.now().toIso8601String();
 
         if (accept) {
@@ -393,9 +451,9 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       } catch (e) {
         debugPrint('Error handling update decision: $e');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to process update: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to process update: $e')));
       }
     }
 
@@ -419,7 +477,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                 children: [
                   Text(
                     'Order #$id',
-                    style: TextStyle(color: _accent, fontSize: 22, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: _accent,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -430,7 +492,13 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                     const SizedBox(height: 14),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Update Description', style: TextStyle(color: _accent, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        'Update Description',
+                        style: TextStyle(
+                          color: _accent,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Container(
@@ -448,7 +516,10 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                   ],
                   const SizedBox(height: 18),
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A1A1A),
                       borderRadius: BorderRadius.circular(8),
@@ -459,7 +530,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           flex: 3,
                           child: Text(
                             'Product',
-                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(
+                              color: _accent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                         Expanded(
@@ -467,7 +542,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           child: Text(
                             isUpdate ? 'Old Qty' : 'Quantity',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(
+                              color: _accent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                         Expanded(
@@ -475,7 +554,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           child: Text(
                             isUpdate ? 'New Qty' : 'Total Price',
                             textAlign: TextAlign.right,
-                            style: TextStyle(color: _accent, fontWeight: FontWeight.bold, fontSize: 14),
+                            style: TextStyle(
+                              color: _accent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
@@ -497,7 +580,10 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                             itemBuilder: (context, idx) {
                               final product = productDetails[idx];
                               return Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                  horizontal: 12,
+                                ),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF1A1A1A),
@@ -508,7 +594,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                                     Expanded(
                                       flex: 3,
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             product['name'],
@@ -518,7 +605,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                                               fontSize: 14,
                                             ),
                                           ),
-                                          if ((product['brand'] as String).isNotEmpty)
+                                          if ((product['brand'] as String)
+                                              .isNotEmpty)
                                             Text(
                                               product['brand'],
                                               style: const TextStyle(
@@ -532,7 +620,9 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                                     Expanded(
                                       flex: 2,
                                       child: Text(
-                                        isUpdate ? '${product['oldQty']}' : '${product['quantity']}',
+                                        isUpdate
+                                            ? '${product['oldQty']}'
+                                            : '${product['quantity']}',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
                                           color: Colors.white,
@@ -546,7 +636,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                                       child: Text(
                                         isUpdate
                                             ? '${product['newQty']}'
-                                            : (product['totalPrice'] as double).toStringAsFixed(2),
+                                            : (product['totalPrice'] as double)
+                                                  .toStringAsFixed(2),
                                         textAlign: TextAlign.right,
                                         style: const TextStyle(
                                           color: Colors.white,
@@ -592,7 +683,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () => _handleUpdateDecision(accept: true),
+                            onPressed: () =>
+                                _handleUpdateDecision(accept: true),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green.shade700,
                               foregroundColor: Colors.white,
@@ -604,7 +696,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () => _handleUpdateDecision(accept: false),
+                            onPressed: () =>
+                                _handleUpdateDecision(accept: false),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red.shade700,
                               foregroundColor: Colors.white,
@@ -629,13 +722,22 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
@@ -648,20 +750,35 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
       backgroundColor: _bg,
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFFF9D949)))
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFF9D949)),
+              )
             : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sended Orders', style: TextStyle(color: _accent, fontSize: 34, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Sended Orders',
+                      style: TextStyle(
+                        color: _accent,
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     if (_preparingOrders.isEmpty)
                       Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(16)),
-                        child: const Text('No preparing orders', style: TextStyle(color: Colors.white70)),
+                        decoration: BoxDecoration(
+                          color: _card,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text(
+                          'No preparing orders',
+                          style: TextStyle(color: Colors.white70),
+                        ),
                       )
                     else
                       ListView.builder(
@@ -674,7 +791,8 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16),
                             child: GestureDetector(
-                              onTap: () => _showOrderDetails(item, isDelivered: false),
+                              onTap: () =>
+                                  _showOrderDetails(item, isDelivered: false),
                               child: Stack(
                                 clipBehavior: Clip.none,
                                 children: [
@@ -692,84 +810,149 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                                       ],
                                     ),
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 11,
+                                      ),
                                       child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: const [
-                                          Text('ID #', style: TextStyle(color: Color(0xFFF9D949), fontSize: 14, fontWeight: FontWeight.w600)),
-                                          SizedBox(width: 34),
-                                          Text('Status', style: TextStyle(color: Color(0xFFF9D949), fontSize: 14, fontWeight: FontWeight.w600)),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text('${item['id']}',
-                                              style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.bold)),
-                                          const SizedBox(width: 28),
-                                          Expanded(
-                                            child: Text(item['statusLabel'] as String,
-                                                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600)),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          Container(
-                                            width: 84,
-                                            height: 64,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF262626),
-                                              borderRadius: BorderRadius.circular(18),
-                                            ),
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(bottom: 4),
-                                              child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Text('${item['count']}',
-                                                      style: const TextStyle(color: Color(0xFFFFEFFF), fontSize: 25, fontWeight: FontWeight.bold)),
-                                                  const SizedBox(height: 3),
-                                                  const Text('products',
-                                                      style: TextStyle(color: Color(0xFFF9D949), fontSize: 14, fontWeight: FontWeight.w500)),
-                                                ],
+                                          Row(
+                                            children: const [
+                                              Text(
+                                                'ID #',
+                                                style: TextStyle(
+                                                  color: Color(0xFFF9D949),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
-                                            ),
+                                              SizedBox(width: 34),
+                                              Text(
+                                                'Status',
+                                                style: TextStyle(
+                                                  color: Color(0xFFF9D949),
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                '${item['id']}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 23,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 28),
+                                              Expanded(
+                                                child: Text(
+                                                  item['statusLabel'] as String,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Container(
+                                                width: 84,
+                                                height: 64,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(
+                                                    0xFF262626,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(18),
+                                                ),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        bottom: 4,
+                                                      ),
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Text(
+                                                        '${item['count']}',
+                                                        style: const TextStyle(
+                                                          color: Color(
+                                                            0xFFFFEFFF,
+                                                          ),
+                                                          fontSize: 25,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 3),
+                                                      const Text(
+                                                        'products',
+                                                        style: TextStyle(
+                                                          color: Color(
+                                                            0xFFF9D949,
+                                                          ),
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              if (item['statusRaw'] == 'Updated to Customer')
-                                Positioned(
-                                  top: -4,
-                                  right: -4,
-                                  child: Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: _accent,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: _accent.withOpacity(0.5),
-                                          blurRadius: 4,
-                                          spreadRadius: 1,
-                                        ),
-                                      ],
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
+                                  if (item['statusRaw'] ==
+                                      'Updated to Customer')
+                                    Positioned(
+                                      top: -4,
+                                      right: -4,
+                                      child: Container(
+                                        width: 16,
+                                        height: 16,
+                                        decoration: BoxDecoration(
+                                          color: _accent,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: _accent.withOpacity(0.5),
+                                              blurRadius: 4,
+                                              spreadRadius: 1,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           );
                         },
                       ),
                     const SizedBox(height: 22),
-                    Text('Archive', style: TextStyle(color: _accent, fontSize: 28, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Archive',
+                      style: TextStyle(
+                        color: _accent,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -777,18 +960,32 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           child: GestureDetector(
                             onTap: _pickFromDate,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _card,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: Row(
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      _fromDate == null ? 'From date' : _formatDate(_fromDate!),
-                                      style: const TextStyle(color: Colors.white),
+                                      _fromDate == null
+                                          ? 'From date'
+                                          : _formatDate(_fromDate!),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  Icon(Icons.calendar_today, color: _accent, size: 18),
+                                  Icon(
+                                    Icons.calendar_today,
+                                    color: _accent,
+                                    size: 18,
+                                  ),
                                 ],
                               ),
                             ),
@@ -799,18 +996,32 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                           child: GestureDetector(
                             onTap: _pickToDate,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _card,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: Row(
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      _toDate == null ? 'To date' : _formatDate(_toDate!),
-                                      style: const TextStyle(color: Colors.white),
+                                      _toDate == null
+                                          ? 'To date'
+                                          : _formatDate(_toDate!),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  Icon(Icons.calendar_today, color: _accent, size: 18),
+                                  Icon(
+                                    Icons.calendar_today,
+                                    color: _accent,
+                                    size: 18,
+                                  ),
                                 ],
                               ),
                             ),
@@ -822,8 +1033,15 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                             onTap: _clearDateFilter,
                             child: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(12)),
-                              child: Icon(Icons.close, color: _accent, size: 18),
+                              decoration: BoxDecoration(
+                                color: _card,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                color: _accent,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ],
@@ -836,15 +1054,34 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                         children: [
                           Expanded(
                             flex: 2,
-                            child: Text('Order ID#', style: TextStyle(color: _muted, fontWeight: FontWeight.w700)),
+                            child: Text(
+                              'Order ID#',
+                              style: TextStyle(
+                                color: _muted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text('# of product', style: TextStyle(color: _muted, fontWeight: FontWeight.w700)),
+                            child: Text(
+                              '# of product',
+                              style: TextStyle(
+                                color: _muted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text('Date', style: TextStyle(color: _accent, fontWeight: FontWeight.w800), textAlign: TextAlign.right),
+                            child: Text(
+                              'Date',
+                              style: TextStyle(
+                                color: _accent,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
                           ),
                         ],
                       ),
@@ -860,28 +1097,51 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                       itemBuilder: (context, idx) {
                         final item = _deliveredOrders[idx];
                         return GestureDetector(
-                          onTap: () => _showOrderDetails(item, isDelivered: true),
+                          onTap: () =>
+                              _showOrderDetails(item, isDelivered: true),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: _card,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
                                   flex: 2,
-                                  child: Text('${item['id']}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                    '${item['id']}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                                 Expanded(
                                   flex: 2,
-                                  child: Text('${item['count']}',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                    '${item['count']}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                                 Expanded(
                                   flex: 2,
-                                  child: Text(item['dateLabel'] as String,
-                                      textAlign: TextAlign.right,
-                                      style: TextStyle(color: _accent, fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                    item['dateLabel'] as String,
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      color: _accent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -893,7 +1153,10 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                 ),
               ),
       ),
-      bottomNavigationBar: BottomNavBar(currentIndex: _currentIndex, onTap: _onNavTap),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: _onNavTap,
+      ),
     );
   }
 }

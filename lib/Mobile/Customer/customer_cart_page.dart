@@ -27,7 +27,10 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
   Color get _muted => Colors.white70;
 
   double get _total {
-    return _items.fold(0.0, (s, i) => s + (i['price'] as double) * (i['qty'] as int));
+    return _items.fold(
+      0.0,
+      (s, i) => s + (i['price'] as double) * (i['qty'] as int),
+    );
   }
 
   // ===== navigation handler for bottom bar (Customer layout indices) =====
@@ -165,16 +168,16 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item removed from cart')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Item removed from cart')));
       }
     } catch (e) {
       debugPrint('Error deleting item: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove item: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to remove item: $e')));
       }
     }
   }
@@ -185,9 +188,9 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
 
   Future<void> _submitOrder() async {
     if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No items to send')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No items to send')));
       return;
     }
 
@@ -196,9 +199,9 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       final userIdStr = prefs.getString('current_user_id');
       final customerId = userIdStr != null ? int.tryParse(userIdStr) : null;
       if (customerId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No customer id found')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No customer id found')));
         return;
       }
 
@@ -210,11 +213,16 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
           .maybeSingle();
 
       final actorName = (customerRow?['name'] as String?)?.trim();
-      final actionBy = (actorName != null && actorName.isNotEmpty) ? actorName : 'customer_$customerId';
+      final actionBy = (actorName != null && actorName.isNotEmpty)
+          ? actorName
+          : 'customer_$customerId';
       final actionTime = DateTime.now().toIso8601String();
 
       // Create order and insert items
       double totalCost = _total;
+      const int taxPercent = 16;
+      double totalBalance = totalCost * (1 + taxPercent / 100);
+
       final createOrder = await supabase
           .from('customer_order')
           .insert({
@@ -222,7 +230,8 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
             'order_status': 'Received',
             'order_date': actionTime,
             'total_cost': totalCost,
-            'total_balance': totalCost,
+            'tax_percent': taxPercent,
+            'total_balance': totalBalance,
             'last_action_by': actionBy,
             'last_action_time': actionTime,
           })
@@ -253,15 +262,15 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order sent and saved to database')),
+          const SnackBar(content: Text('Order Sent Successfully')),
         );
         await _loadCart();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send order: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to send order: $e')));
       }
     }
   }
@@ -275,10 +284,16 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF2D2D2D),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text(
             "Edit Quantity",
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           content: TextField(
             controller: controller,
@@ -287,14 +302,21 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
             decoration: const InputDecoration(
               hintText: "Enter quantity",
               hintStyle: TextStyle(color: Colors.white70),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFB7A447))),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white38),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFB7A447)),
+              ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel", style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -307,7 +329,10 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
                 }
                 Navigator.pop(context);
               },
-              child: const Text("Save", style: TextStyle(color: Color(0xFFB7A447))),
+              child: const Text(
+                "Save",
+                style: TextStyle(color: Color(0xFFB7A447)),
+              ),
             ),
           ],
         );
@@ -322,188 +347,268 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFB7A447),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : Column(
-          children: [
-            const SizedBox(height: 12),
-
-            // Header labels row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
                 children: [
-                  Row(
-                    children: const [
-                      Expanded(flex: 3, child: Text('Name', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-                      Expanded(flex: 2, child: Text('Brand', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-                      Expanded(flex: 2, child: Text('Price', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-                      SizedBox(width: 86, child: Text('Quantity', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFF9D949), fontWeight: FontWeight.w700))),
-                      SizedBox(width: 40, child: Text(' ', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(color: Colors.white24, thickness: 1),
-                ],
-              ),
-            ),
+                  const SizedBox(height: 12),
 
-            // Product list
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: _items.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Cart is empty',
-                          style: TextStyle(color: Colors.white70, fontSize: 16),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: _items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, i) {
-                          final item = _items[i];
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: _card,
-                              borderRadius: BorderRadius.circular(14),
+                  // Header labels row
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: const [
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                'Name',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            child: Row(
-                              children: [
-                                // Name (two lines)
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    item['name'] as String,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                                  ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Brand',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
-
-                                // Brand
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    item['brand'] as String,
-                                    style: TextStyle(color: _muted, fontWeight: FontWeight.w700),
-                                    textAlign: TextAlign.left,
-                                  ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Price',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
-
-                                // Price
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '${(item['price'] as double).toStringAsFixed(0)}\$',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                                    textAlign: TextAlign.left,
-                                  ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 86,
+                              child: Text(
+                                'Quantity',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFFF9D949),
+                                  fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 40,
+                              child: Text(
+                                ' ',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(color: Colors.white24, thickness: 1),
+                      ],
+                    ),
+                  ),
 
-                                // Quantity pill + unit (tappable)
-                                SizedBox(
-                                  width: 86,
+                  // Product list
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: _items.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Cart is empty',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: _items.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, i) {
+                                final item = _items[i];
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: _card,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      GestureDetector(
-                                        onTap: () => _editQuantity(i),
-                                        child: Container(
-                                          width: 44,
-                                          height: 36,
-                                          decoration: BoxDecoration(
-                                            color: _accent,
-                                            borderRadius: BorderRadius.circular(10),
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            '${item['qty']}',
-                                            style: const TextStyle(
-                                              color: Color(0xFF202020),
-                                              fontWeight: FontWeight.w900,
-                                            ),
+                                      // Name (two lines)
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          item['name'] as String,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      const Text('cm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+
+                                      // Brand
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          item['brand'] as String,
+                                          style: TextStyle(
+                                            color: _muted,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          textAlign: TextAlign.left,
+                                        ),
+                                      ),
+
+                                      // Price
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          '${(item['price'] as double).toStringAsFixed(0)}\$',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          textAlign: TextAlign.left,
+                                        ),
+                                      ),
+
+                                      // Quantity pill + unit (tappable)
+                                      SizedBox(
+                                        width: 86,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () => _editQuantity(i),
+                                              child: Container(
+                                                width: 44,
+                                                height: 36,
+                                                decoration: BoxDecoration(
+                                                  color: _accent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  '${item['qty']}',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF202020),
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            const Text(
+                                              'cm',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // Delete button (X)
+                                      SizedBox(
+                                        width: 40,
+                                        child: IconButton(
+                                          onPressed: () => _deleteItem(i),
+                                          icon: const Icon(
+                                            Icons.close,
+                                            color: Color(0xFFFF6B6B),
+                                            size: 22,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        ),
+                                      ),
                                     ],
                                   ),
-                                ),
-
-                                // Delete button (X)
-                                SizedBox(
-                                  width: 40,
-                                  child: IconButton(
-                                    onPressed: () => _deleteItem(i),
-                                    icon: const Icon(Icons.close, color: Color(0xFFFF6B6B), size: 22),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                ),
-                              ],
+                                );
+                              },
                             ),
-                          );
-                        },
+                    ),
+                  ),
+
+                  // Spacer to visually match screenshot
+                  const SizedBox(height: 18),
+
+                  // Total price
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Tolat Price : ${_formatNumber(_total)}\$',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-              ),
-            ),
-
-            // Spacer to visually match screenshot
-            const SizedBox(height: 18),
-
-            // Total price
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'Tolat Price : ${_formatNumber(_total)}\$',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-            // Send Order button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14.0),
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _sendOrder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      SizedBox(width: 12),
-                      Text(
-                        'S e n d   O r d e r',
-                        style: TextStyle(color: Color(0xFF202020), fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 2),
+                  // Send Order button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                    child: SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _sendOrder,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            SizedBox(width: 12),
+                            Text(
+                              'Send  Order',
+                              style: TextStyle(
+                                color: Color(0xFF202020),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Icon(Icons.send, color: Color(0xFF202020)),
+                          ],
+                        ),
                       ),
-                      SizedBox(width: 12),
-                      Icon(Icons.send, color: Color(0xFF202020)),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
 
-            const SizedBox(height: 10),
-          ],
-        ),
+                  const SizedBox(height: 10),
+                ],
+              ),
       ),
 
       bottomNavigationBar: BottomNavBar(
