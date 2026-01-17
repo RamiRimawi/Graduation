@@ -171,19 +171,46 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
                               ),
                             ),
                           )
-                        : GridView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 14,
-                                  childAspectRatio: 0.75,
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Calculate number of columns based on width
+                              int crossAxisCount;
+                              double childAspectRatio;
+
+                              if (constraints.maxWidth >= 650) {
+                                crossAxisCount = 3;
+                                childAspectRatio = 0.65;
+                              } else if (constraints.maxWidth >= 450) {
+                                crossAxisCount = 2;
+                                childAspectRatio = 0.60;
+                              } else if (constraints.maxWidth >= 350) {
+                                crossAxisCount = 2;
+                                childAspectRatio = 0.58;
+                              } else {
+                                crossAxisCount = 1;
+                                childAspectRatio = 0.75;
+                              }
+
+                              return GridView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  8,
                                 ),
-                            itemCount: visibleProducts.length,
-                            itemBuilder: (context, index) {
-                              final product = visibleProducts[index];
-                              return _buildCard(product);
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 14,
+                                      childAspectRatio: childAspectRatio,
+                                    ),
+                                itemCount: visibleProducts.length,
+                                itemBuilder: (context, index) {
+                                  final product = visibleProducts[index];
+                                  return _buildCard(product);
+                                },
+                              );
                             },
                           ),
                   ),
@@ -235,71 +262,97 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
     final alreadyInCart =
         productId != null && _cartProductIds.contains(productId);
 
-    return GestureDetector(
-      onTap: () => _showProductSheet(product),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF2D2D2D),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 1,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Scale down elements on very small screens
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isVerySmall = screenWidth < 350;
+        final isSingleColumn = screenWidth < 350;
+        final cardPadding = isVerySmall ? 8.0 : 10.0;
+        final imageRadius = isVerySmall ? 10.0 : 14.0;
+        final imageAspectRatio = isSingleColumn ? 1.2 : 1.0;
+        final nameFontSize = isVerySmall ? 11.0 : 13.0;
+        final brandFontSize = isVerySmall ? 10.0 : 12.0;
+        final buttonPadding = isVerySmall ? 4.0 : 6.0;
+        final buttonFontSize = isVerySmall ? 11.0 : 13.0;
+        final spacing = isVerySmall ? 4.0 : 6.0;
+
+        return GestureDetector(
+          onTap: () => _showProductSheet(product),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 1,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildProductImage(imageUrl),
-              const SizedBox(height: 8),
-              Text(
-                product['name'] ?? '',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            child: Padding(
+              padding: EdgeInsets.all(cardPadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildProductImage(imageUrl, imageRadius, imageAspectRatio),
+                  SizedBox(height: spacing),
+                  Text(
+                    product['name'] ?? '',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: nameFontSize,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    brandName,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: brandFontSize,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: spacing),
+                  _buildAddToCartButton(
+                    product,
+                    disabled: alreadyInCart,
+                    buttonPadding: buttonPadding,
+                    buttonFontSize: buttonFontSize,
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                brandName,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              _buildAddToCartButton(product, disabled: alreadyInCart),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildProductImage(String? imageUrl) {
+  Widget _buildProductImage(
+    String? imageUrl, [
+    double radius = 14.0,
+    double aspectRatio = 1.0,
+  ]) {
     final placeholder = Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFF262626),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: AspectRatio(
-        aspectRatio: 1,
-        child: const Icon(
+        aspectRatio: aspectRatio,
+        child: Icon(
           Icons.image_outlined,
-          color: Color(0xFFB7A447),
-          size: 40,
+          color: const Color(0xFFB7A447),
+          size: radius * 2.8,
         ),
       ),
     );
@@ -309,9 +362,9 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(radius),
       child: AspectRatio(
-        aspectRatio: 1,
+        aspectRatio: aspectRatio,
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
@@ -336,6 +389,8 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
   Widget _buildAddToCartButton(
     Map<String, dynamic> product, {
     bool disabled = false,
+    double buttonPadding = 6.0,
+    double buttonFontSize = 13.0,
   }) {
     return SizedBox(
       width: double.infinity,
@@ -345,7 +400,7 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
               ? Colors.grey.shade600
               : const Color(0xFFB7A447),
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: buttonPadding),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
@@ -359,14 +414,17 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
           children: [
             Text(
               disabled ? 'Added' : 'Add',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: buttonFontSize,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(width: 6),
             Icon(
               disabled
                   ? Icons.check_circle
                   : Icons.shopping_cart_checkout_outlined,
-              size: 16,
+              size: buttonFontSize + 3,
             ),
           ],
         ),

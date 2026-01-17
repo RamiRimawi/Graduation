@@ -27,69 +27,82 @@ class Sidebar extends StatelessWidget {
           bottomRight: Radius.circular(30),
         ),
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-
-          // اللوجو
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Image.asset(
-              'assets/images/Logo.png',
-              width: 158,
-              fit: BoxFit.contain,
-            ),
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height,
           ),
-
-          const SizedBox(height: 10),
-
-          // الأيقونات العلوية
-          SizedBox(
-            width: barWidth,
+          child: IntrinsicHeight(
             child: Column(
               children: [
-                for (int i = 0; i < topIcons.length; i++) ...[
-                  _HoverIcon(
-                    path: topIcons[i],
-                    isActive: activeIndex == i,
-                    onTap: () => _onItemTap(context, i),
+                const SizedBox(height: 16),
+
+                // اللوجو
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 5,
+                    horizontal: 8,
                   ),
-                  if (i != topIcons.length - 1) const SizedBox(height: itemGap),
-                ],
+                  child: Image.asset(
+                    'assets/images/Logo.png',
+                    width: 134,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // الأيقونات العلوية
+                SizedBox(
+                  width: barWidth,
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < topIcons.length; i++) ...[
+                        _HoverIcon(
+                          path: topIcons[i],
+                          isActive: activeIndex == i,
+                          onTap: () => _onItemTap(context, i),
+                        ),
+                        if (i != topIcons.length - 1)
+                          const SizedBox(height: itemGap),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const Spacer(),
+
+                // الأيقونات السفلية
+                SizedBox(
+                  width: barWidth,
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < bottomIcons.length; i++) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: _HoverIcon(
+                            path: bottomIcons[i],
+                            isActive: activeIndex == 6 + i,
+                            onTap: () => _onItemTap(context, 6 + i),
+                          ),
+                        ),
+                        if (i != bottomIcons.length - 1)
+                          const SizedBox(height: itemGap),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 22),
+
+                // الصورة السفلية (Account)
+                const _HoverProfileImage(),
+
+                const SizedBox(height: 18),
               ],
             ),
           ),
-
-          const Spacer(),
-
-          // الأيقونات السفلية
-          SizedBox(
-            width: barWidth,
-            child: Column(
-              children: [
-                for (int i = 0; i < bottomIcons.length; i++) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: _HoverIcon(
-                      path: bottomIcons[i],
-                      isActive: activeIndex == 6 + i,
-                      onTap: () => _onItemTap(context, 6 + i),
-                    ),
-                  ),
-                  if (i != bottomIcons.length - 1)
-                    const SizedBox(height: itemGap),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 22),
-
-          // الصورة السفلية (Account)
-          const _HoverProfileImage(),
-
-          const SizedBox(height: 18),
-        ],
+        ),
       ),
     );
   }
