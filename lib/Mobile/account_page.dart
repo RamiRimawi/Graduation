@@ -325,7 +325,7 @@ class _AccountPageState extends State<AccountPage> {
     final profile = await supabase
         .from('sales_representative')
         .select(
-          'sales_rep_id,name,mobile_number,telephone_number,email,accounts!sales_representative_sales_rep_id_fkey(profile_image)',
+          'sales_rep_id,name,mobile_number,telephone_number,email,sales_rep_city!sales_representative_sales_rep_city_fkey(name),accounts!sales_representative_sales_rep_id_fkey(profile_image)',
         )
         .eq('sales_rep_id', id)
         .maybeSingle();
@@ -342,11 +342,18 @@ class _AccountPageState extends State<AccountPage> {
         }
       }
 
+      // Extract city name
+      String? cityName;
+      final city = profile['sales_rep_city'];
+      if (city is Map<String, dynamic>) {
+        cityName = city['name'] as String?;
+      }
+
       if (mounted) {
         setState(() {
           _name = profile['name'] as String?;
           _role = 'Sales Representative';
-          _address = profile['email'] as String?; // show email in address field
+          _address = cityName ?? '--';
           _mobile = profile['mobile_number']?.toString();
           _telephone = profile['telephone_number']?.toString();
           _idLabel = profile['sales_rep_id']?.toString();
@@ -699,12 +706,16 @@ class _AccountPageState extends State<AccountPage> {
                 } else if (i == 2) {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
+                    MaterialPageRoute(
+                      builder: (_) => const SalesRepArchivePage(),
+                    ),
                   );
                 } else if (i == 3) {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const SalesRepCustomersPage()),
+                    MaterialPageRoute(
+                      builder: (_) => const SalesRepCustomersPage(),
+                    ),
                   );
                 } else if (i == 4) {
                   // already on AccountPage
@@ -738,25 +749,41 @@ class _AccountPageState extends State<AccountPage> {
           ? Builder(
               builder: (context) {
                 return BottomNavBar(
-                  currentIndex: (_userRole == 'delivery_driver' || _userRole == 'delivery') ? 2 : 1,
+                  currentIndex:
+                      (_userRole == 'delivery_driver' ||
+                          _userRole == 'delivery')
+                      ? 2
+                      : 1,
                   onTap: (i) async {
                     if (i == 0) {
                       // Home button
-                      if (_userRole == 'delivery_driver' || _userRole == 'delivery') {
+                      if (_userRole == 'delivery_driver' ||
+                          _userRole == 'delivery') {
                         final prefs = await SharedPreferences.getInstance();
-                        final String? userIdStr = prefs.getString('current_user_id');
-                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
-                        
+                        final String? userIdStr = prefs.getString(
+                          'current_user_id',
+                        );
+                        final int? userId = userIdStr != null
+                            ? int.tryParse(userIdStr)
+                            : null;
+
                         if (userId != null && mounted) {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => HomeDeleviry(deliveryDriverId: userId)),
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  HomeDeleviry(deliveryDriverId: userId),
+                            ),
                           );
                         }
                       } else {
                         final prefs = await SharedPreferences.getInstance();
-                        final String? userIdStr = prefs.getString('current_user_id');
-                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
+                        final String? userIdStr = prefs.getString(
+                          'current_user_id',
+                        );
+                        final int? userId = userIdStr != null
+                            ? int.tryParse(userIdStr)
+                            : null;
 
                         Widget homePage;
                         if (_userRole == 'storage_staff') {
@@ -773,15 +800,23 @@ class _AccountPageState extends State<AccountPage> {
                       }
                     } else if (i == 1) {
                       // Archive button - only for delivery drivers
-                      if (_userRole == 'delivery_driver' || _userRole == 'delivery') {
+                      if (_userRole == 'delivery_driver' ||
+                          _userRole == 'delivery') {
                         final prefs = await SharedPreferences.getInstance();
-                        final String? userIdStr = prefs.getString('current_user_id');
-                        final int? userId = userIdStr != null ? int.tryParse(userIdStr) : null;
-                        
+                        final String? userIdStr = prefs.getString(
+                          'current_user_id',
+                        );
+                        final int? userId = userIdStr != null
+                            ? int.tryParse(userIdStr)
+                            : null;
+
                         if (userId != null && mounted) {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (_) => DeliveryArchive(deliveryDriverId: userId)),
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  DeliveryArchive(deliveryDriverId: userId),
+                            ),
                           );
                         }
                       }
