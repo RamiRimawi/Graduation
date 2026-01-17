@@ -60,15 +60,18 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
       final fetched = List<Map<String, dynamic>>.from(response);
       final normalized = fetched
-          .map((product) => {
-                'id': product['product_id'],
-                'name': product['name'] ?? '',
-                'brand': (product['brand'] as Map?)?['name'] ?? 'Unknown brand',
-                'category': (product['category'] as Map?)?['name'] ?? 'Unknown category',
-                'selling_price': product['selling_price'],
-                'image': product['product_image'] as String?,
-                'inventory': product['total_quantity'] ?? 0,
-              })
+          .map(
+            (product) => {
+              'id': product['product_id'],
+              'name': product['name'] ?? '',
+              'brand': (product['brand'] as Map?)?['name'] ?? 'Unknown brand',
+              'category':
+                  (product['category'] as Map?)?['name'] ?? 'Unknown category',
+              'selling_price': product['selling_price'],
+              'image': product['product_image'] as String?,
+              'inventory': product['total_quantity'] ?? 0,
+            },
+          )
           .toList();
 
       if (!mounted) return;
@@ -146,9 +149,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFB7A447),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : Column(
                 children: [
@@ -163,15 +164,19 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                               ),
                             ),
                           )
-                        : ListView.builder(
+                        : GridView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 14,
+                                  childAspectRatio: 0.75,
+                                ),
                             itemCount: visibleProducts.length,
                             itemBuilder: (context, index) {
                               final product = visibleProducts[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: _buildCard(product),
-                              );
+                              return _buildCard(product);
                             },
                           ),
                   ),
@@ -220,7 +225,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     final imageUrl = (product['image'] as String?)?.trim();
     final brandName = product['brand'] as String? ?? 'Unknown brand';
     final productId = product['id'] as int?;
-    final alreadyInCart = productId != null && _cartProductIds.contains(productId);
+    final alreadyInCart =
+        productId != null && _cartProductIds.contains(productId);
 
     return GestureDetector(
       onTap: () => _showProductSheet(product),
@@ -238,20 +244,17 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildProductImage(imageUrl),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
-                'Name : ${product['name'] ?? ''}',
+                product['name'] ?? '',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
                 maxLines: 2,
@@ -259,16 +262,16 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Brand : $brandName',
+                brandName,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildAddToCartButton(product, disabled: alreadyInCart),
             ],
           ),
@@ -279,16 +282,18 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
   Widget _buildProductImage(String? imageUrl) {
     final placeholder = Container(
-      height: 150,
       width: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFF262626),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: const Icon(
-        Icons.image_outlined,
-        color: Color(0xFFB7A447),
-        size: 48,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: const Icon(
+          Icons.image_outlined,
+          color: Color(0xFFB7A447),
+          size: 40,
+        ),
       ),
     );
 
@@ -298,9 +303,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        height: 150,
-        width: double.infinity,
+      child: AspectRatio(
+        aspectRatio: 1,
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
@@ -322,36 +326,40 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     );
   }
 
-  Widget _buildAddToCartButton(Map<String, dynamic> product, {bool disabled = false}) {
+  Widget _buildAddToCartButton(
+    Map<String, dynamic> product, {
+    bool disabled = false,
+  }) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: disabled ? Colors.grey.shade600 : const Color(0xFFB7A447),
+          backgroundColor: disabled
+              ? Colors.grey.shade600
+              : const Color(0xFFB7A447),
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
-        onPressed: disabled ? null : () async {
-          await _addToCart(product);
-        },
+        onPressed: disabled
+            ? null
+            : () async {
+                await _addToCart(product);
+              },
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              disabled ? 'Added' : 'Add to cart',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+              disabled ? 'Added' : 'Add',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Icon(
-              disabled ? Icons.check_circle : Icons.shopping_cart_checkout_outlined,
-              size: 20,
+              disabled
+                  ? Icons.check_circle
+                  : Icons.shopping_cart_checkout_outlined,
+              size: 16,
             ),
           ],
         ),
@@ -365,13 +373,13 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // Get existing cart items from local storage
       final cartJson = prefs.getString('cart_items') ?? '{}';
       final cartMap = jsonDecode(cartJson) as Map<String, dynamic>;
-      
+
       debugPrint('Current cart items: $cartMap');
-      
+
       // Add or update product in cart
       cartMap[productId.toString()] = {
         'product_id': product['id'],
@@ -380,14 +388,14 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
         'price': product['selling_price'],
         'qty': (cartMap[productId.toString()]?['qty'] as int? ?? 0) + 1,
       };
-      
+
       debugPrint('Updated cart items: $cartMap');
-      
+
       // Save back to local storage
       await prefs.setString('cart_items', jsonEncode(cartMap));
-      
+
       debugPrint('Saved cart items to local storage');
-      
+
       setState(() {
         _cartProductIds.add(productId);
       });
@@ -403,9 +411,9 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     } catch (e) {
       debugPrint('Error adding to cart: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding to cart: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error adding to cart: $e')));
       }
     }
   }
@@ -416,7 +424,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     final categoryName = product['category'] as String? ?? 'Unknown category';
     final sellingPrice = product['selling_price'];
     final productId = product['id'] as int?;
-    final alreadyInCart = productId != null && _cartProductIds.contains(productId);
+    final alreadyInCart =
+        productId != null && _cartProductIds.contains(productId);
 
     showModalBottomSheet(
       context: context,
@@ -439,7 +448,10 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
               const SizedBox(height: 8),
               _infoRow('Brand', brandName),
               const SizedBox(height: 8),
-              _infoRow('Selling Price', sellingPrice != null ? sellingPrice.toString() : '—'),
+              _infoRow(
+                'Selling Price',
+                sellingPrice != null ? sellingPrice.toString() : '—',
+              ),
               const SizedBox(height: 16),
               _buildAddToCartButton(product, disabled: alreadyInCart),
             ],
