@@ -610,7 +610,10 @@ class _PreparedSection extends StatelessWidget {
                           if (result == true && context.mounted) {
                             final stockOutState = context
                                 .findAncestorStateOfType<_StockOutPageState>();
-                            stockOutState?._fetchPreparedOrders();
+                            if (stockOutState != null) {
+                              await stockOutState._fetchPreparedOrders();
+                              await stockOutState._fetchDeliveryDrivers();
+                            }
                           }
                         },
                         child: _OrderCard(

@@ -570,8 +570,7 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
   @override
   void initState() {
     super.initState();
-    // Initialize with Part 1 containing all items and Part 2 empty
-    _splits.add(_SplitAssignment());
+    // Initialize with Part 1 containing all items
     _splits.add(_SplitAssignment());
     for (int i = 0; i < widget.orderData.items.length; i++) {
       _splits[0].quantitiesByItem[i] = widget.orderData.items[i].qty;

@@ -135,7 +135,15 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
     _products = List<Map<String, dynamic>>.from(widget.products);
     _productAvailableQty = {};
     _insufficientProducts = {};
-    _discountCtrl = TextEditingController();
+    // Initialize discount value from widget parameter
+    _discountValue = (widget.discountValue ?? 0.0).toDouble();
+    // Format the discount value properly for display
+    final discountText = _discountValue > 0
+        ? (_discountValue % 1 == 0
+              ? _discountValue.toInt().toString()
+              : _discountValue.toString())
+        : '';
+    _discountCtrl = TextEditingController(text: discountText);
     // Store original quantities to detect changes
     _originalQuantities = {};
     for (final product in _products) {
@@ -262,8 +270,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
     // Calculate tax
     final taxPercent = widget.taxPercent ?? 0;
     final taxAmount = subtotal * taxPercent / 100;
-    // Calculate total with tax and discount
-    final totalBalance = subtotal + taxAmount - discount;
+    // Calculate total_balance as: total_cost * (1 + tax_percent/100) - discount
+    final totalBalance = (subtotal * (1 + taxPercent / 100)) - discount;
     // Map of product IDs to their new total prices
     final Map<int, num> productTotals = {};
     for (final product in _products) {
@@ -297,7 +305,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
             (widget.status == "NEW" || widget.status == "HOLD"))
         ? _discountValue
         : 0;
-    final total = subtotal + taxAmount - discount;
+    // Calculate total_balance as: total_cost * (1 + tax_percent/100) - discount
+    final total = (subtotal * (1 + taxPercent / 100)) - discount;
     return total <= 0 ? '-' : _formatMoney(total);
   }
 
@@ -422,6 +431,91 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
         SnackBar(
           content: const Text('Order set to Hold'),
           backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error setting order to Hold: $e'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleLaterNewOut(BuildContext context) async {
+    try {
+      if (widget.orderId == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error: Order ID not found'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // Get accountant information
+      final accountantId = await getAccountantId();
+      String? accountantName;
+      if (accountantId != null) {
+        accountantName = await getAccountantName(accountantId);
+      }
+      accountantName ??= 'System';
+
+      final quantityChanged = _hasQuantityChanged();
+      final priceData = _calculateUpdatedPrices();
+      final productTotals = priceData['product_totals'] as Map<int, num>;
+      final discountValue = priceData['discount_value'] as double;
+
+      // Update customer_order to Hold
+      await supabase
+          .from('customer_order')
+          .update({
+            'order_status': 'Hold',
+            'total_cost': priceData['subtotal'],
+            'total_balance': priceData['total_balance'],
+            'discount_value': discountValue,
+            'last_action_by': accountantName,
+            'last_action_time': DateTime.now().toIso8601String(),
+          })
+          .eq('customer_order_id', widget.orderId!);
+
+      // Update quantities if changed
+      if (quantityChanged) {
+        for (final product in _products) {
+          final productId = _getProductId(product['id']);
+          final currentQty = (product['quantity'] ?? 0) as int;
+          final originalQty = _originalQuantities[productId] ?? 0;
+          if (currentQty != originalQty) {
+            await supabase
+                .from('customer_order_description')
+                .update({
+                  'quantity': currentQty,
+                  'total_price': productTotals[productId],
+                  'last_action_by': accountantName,
+                  'last_action_time': DateTime.now().toIso8601String(),
+                })
+                .eq('customer_order_id', widget.orderId!)
+                .eq('product_id', productId);
+          }
+        }
+      }
+
+      widget.onOrderUpdated?.call();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Order set to Hold'),
+          backgroundColor: Colors.white70,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -772,11 +866,14 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
           ),
         );
       } else {
-        // No quantity or discount changes, just update status to Pinned
+        // No quantity or discount changes, but still update totals with correct formula
         await supabase
             .from('customer_order')
             .update({
               'order_status': 'Pinned',
+              'total_cost': priceData['subtotal'],
+              'total_balance': priceData['total_balance'],
+              'discount_value': discountValue,
               'last_action_by': accountantName,
               'last_action_time': DateTime.now().toIso8601String(),
             })
@@ -789,9 +886,12 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
         // Show success message in parent context
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Order status updated to "Pinned"'),
+            content: Text(
+              'Order status updated to "Pinned"\n'
+              'Total: ${_formatMoney(priceData['total_balance'])}',
+            ),
             backgroundColor: Colors.green.shade700,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -1972,7 +2072,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                             label: "Later",
                             color: Colors.grey.shade600,
                             icon: Icons.access_time,
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () => _handleLaterNewOut(context),
                           ),
                           const SizedBox(width: 14),
                         ],

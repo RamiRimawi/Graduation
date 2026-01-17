@@ -238,7 +238,8 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
       // حساب المجاميع
       final totalCost = subtotal;
-      final totalBalance = totalPrice;
+      // Calculate total_balance as: total_cost * (1 + tax_percent/100) - discount
+      final totalBalance = (totalCost * (1 + taxPercent / 100)) - discountValue;
 
       // إنشاء الطلب في customer_order مع حالة Pinned وإضافة قيمة الخصم
       final orderData = {
@@ -366,7 +367,8 @@ class _CreateStockOutPageState extends State<CreateStockOutPage> {
 
       // حساب المجاميع
       final totalCost = subtotal;
-      final totalBalance = totalPrice;
+      // Calculate total_balance as: total_cost * (1 + tax_percent/100) - discount
+      final totalBalance = (totalCost * (1 + taxPercent / 100)) - discountValue;
 
       // Get accountant info
       final accountantId = await getAccountantId();

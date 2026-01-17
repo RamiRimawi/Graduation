@@ -26,6 +26,7 @@ class OrderSplitPage extends StatefulWidget {
 class _OrderSplitPageState extends State<OrderSplitPage> {
   // Split assignments state
   final List<_SplitAssignment> _splits = [];
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -78,12 +79,134 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
                 _splits[index].staffId = staffId;
                 _splits[index].inventoryId = inventoryId;
                 _splits[index].staffName = displayName;
+                // Clear batch selections for this part when staff changes
+                _splits[index].batchIdByItem.clear();
+                _splits[index].batchDisplayByItem.clear();
               });
+              // Auto-select batches for this part
+              _autoSelectBatchesForPart(index);
             },
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _autoSelectBatchesForPart(int partIndex) async {
+    final split = _splits[partIndex];
+    if (split.inventoryId == null) return;
+
+    for (final entry in split.quantitiesByItem.entries) {
+      final itemIndex = entry.key;
+      final requiredQty = entry.value;
+      if (requiredQty <= 0) continue;
+
+      final item = widget.items[itemIndex];
+      await _autoSelectBatchForItem(
+        partIndex,
+        itemIndex,
+        item.productId,
+        requiredQty,
+      );
+    }
+
+    // Sort items: those with batches first, then those without
+    setState(() {
+      final entries = split.quantitiesByItem.entries.toList();
+      entries.sort((a, b) {
+        final aHasBatch =
+            split.batchIdByItem.containsKey(a.key) &&
+            split.batchIdByItem[a.key] != null;
+        final bHasBatch =
+            split.batchIdByItem.containsKey(b.key) &&
+            split.batchIdByItem[b.key] != null;
+
+        if (aHasBatch && !bHasBatch) return -1;
+        if (!aHasBatch && bHasBatch) return 1;
+        return 0;
+      });
+
+      split.quantitiesByItem.clear();
+      for (final entry in entries) {
+        split.quantitiesByItem[entry.key] = entry.value;
+      }
+    });
+  }
+
+  Future<void> _autoSelectBatchForItem(
+    int partIndex,
+    int itemIndex,
+    int productId,
+    int requiredQty,
+  ) async {
+    try {
+      final split = _splits[partIndex];
+      if (split.inventoryId == null) return;
+
+      final supabase = Supabase.instance.client;
+      final now = DateTime.now();
+
+      // Fetch batches for this product and inventory
+      final response = await supabase
+          .from('batch')
+          .select(
+            'batch_id, quantity, storage_location_descrption, production_date, expiry_date',
+          )
+          .eq('product_id', productId)
+          .eq('inventory_id', split.inventoryId!)
+          .order('batch_id');
+
+      final batches = List<Map<String, dynamic>>.from(response);
+
+      // Filter suitable batches
+      final suitableBatches = batches.where((batch) {
+        final quantity = batch['quantity'] as int;
+        if (quantity < requiredQty) return false;
+
+        final expiryDateStr = batch['expiry_date'] as String?;
+        if (expiryDateStr != null) {
+          final expiryDate = DateTime.parse(expiryDateStr);
+          if (expiryDate.isBefore(now)) return false;
+        }
+        return true;
+      }).toList();
+
+      if (suitableBatches.isEmpty) return;
+
+      // Sort by production_date (oldest first)
+      suitableBatches.sort((a, b) {
+        final aDateStr = a['production_date'] as String?;
+        final bDateStr = b['production_date'] as String?;
+
+        if (aDateStr != null && bDateStr == null) return -1;
+        if (aDateStr == null && bDateStr != null) return 1;
+
+        if (aDateStr != null && bDateStr != null) {
+          final aDate = DateTime.parse(aDateStr);
+          final bDate = DateTime.parse(bDateStr);
+          return aDate.compareTo(bDate);
+        }
+        return 0;
+      });
+
+      // Select the first suitable batch
+      final selectedBatch = suitableBatches.first;
+      final batchId = selectedBatch['batch_id'] as int;
+      final quantity = selectedBatch['quantity'] as int;
+      final location =
+          selectedBatch['storage_location_descrption'] as String? ??
+          'Unknown Location';
+      final displayText = 'Batch #$batchId - $location (Qty: $quantity)';
+
+      setState(() {
+        _splits[partIndex].batchIdByItem[itemIndex] = batchId;
+        _splits[partIndex].batchDisplayByItem[itemIndex] = displayText;
+      });
+    } catch (e) {
+      debugPrint(
+        'Error auto-selecting batch for part $partIndex item $itemIndex: $e',
+      );
+    }
   }
 
   void _pickBatchForItem(int splitIndex, int itemIndex) {
@@ -275,25 +398,27 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
       }
     }
 
-    // Show batch selection modal
-    _showBatchSelectionModal(items);
-  }
+    // Validate all items have batches selected
+    for (int partIdx = 0; partIdx < _splits.length; partIdx++) {
+      final split = _splits[partIdx];
+      for (final itemIndex in split.quantitiesByItem.keys) {
+        if (!split.batchIdByItem.containsKey(itemIndex) ||
+            split.batchIdByItem[itemIndex] == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Part ${partIdx + 1}: Please select batch for all products',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
+    }
 
-  void _showBatchSelectionModal(List<OrderItem> items) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _SplitBatchSelectionModal(
-        orderId: widget.orderId,
-        splits: _splits,
-        items: items,
-        onConfirm: () {
-          Navigator.pop(context);
-          _showSplitSummary(items);
-        },
-      ),
-    );
+    // Show confirmation dialog
+    _showSplitSummary(items);
   }
 
   void _showSplitSummary(List<OrderItem> items) {
@@ -451,6 +576,12 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgDark,
@@ -516,6 +647,7 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
 
               Expanded(
                 child: ListView.builder(
+                  controller: _scrollController,
                   itemCount: _splits.length,
                   itemBuilder: (_, i) {
                     final split = _splits[i];
@@ -566,7 +698,7 @@ class _OrderSplitPageState extends State<OrderSplitPage> {
 
 // ===== SPLIT PART TABLE WIDGET =====
 
-class _SplitPartTable extends StatelessWidget {
+class _SplitPartTable extends StatefulWidget {
   final int partIndex;
   final _SplitAssignment split;
   final List<OrderItem> allItems;
@@ -592,12 +724,56 @@ class _SplitPartTable extends StatelessWidget {
   });
 
   @override
+  State<_SplitPartTable> createState() => _SplitPartTableState();
+}
+
+class _SplitPartTableState extends State<_SplitPartTable> {
+  void _handleDragUpdate(DragUpdateDetails details) {
+    // Get screen height
+    final screenHeight = MediaQuery.of(context).size.height;
+    final globalY = details.globalPosition.dy;
+
+    // Auto-scroll threshold (100 pixels from top/bottom of screen)
+    const scrollThreshold = 100.0;
+    const scrollSpeed = 10.0;
+
+    // Find the nearest ScrollController
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable != null) {
+      final scrollPosition = scrollable.position;
+
+      // Scroll down when dragging near bottom of screen
+      if (globalY > screenHeight - scrollThreshold) {
+        if (scrollPosition.pixels < scrollPosition.maxScrollExtent) {
+          scrollPosition.jumpTo(
+            (scrollPosition.pixels + scrollSpeed).clamp(
+              0.0,
+              scrollPosition.maxScrollExtent,
+            ),
+          );
+        }
+      }
+      // Scroll up when dragging near top of screen
+      else if (globalY < scrollThreshold) {
+        if (scrollPosition.pixels > 0) {
+          scrollPosition.jumpTo(
+            (scrollPosition.pixels - scrollSpeed).clamp(
+              0.0,
+              scrollPosition.maxScrollExtent,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return DragTarget<Map<String, dynamic>>(
-      onWillAcceptWithDetails: (details) => partIndex > 0,
+      onWillAcceptWithDetails: (details) => widget.partIndex > 0,
       onAcceptWithDetails: (details) {
-        if (partIndex > 0) {
-          onProductDropped(details.data, partIndex);
+        if (widget.partIndex > 0) {
+          widget.onProductDropped(details.data, widget.partIndex);
         }
       },
       builder: (context, candidateData, rejectedData) {
@@ -622,7 +798,7 @@ class _SplitPartTable extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Part ${partIndex + 1}',
+                    'Part ${widget.partIndex + 1}',
                     style: const TextStyle(
                       color: AppColors.gold,
                       fontSize: 14,
@@ -630,7 +806,7 @@ class _SplitPartTable extends StatelessWidget {
                     ),
                   ),
                   GestureDetector(
-                    onTap: onStaffTap,
+                    onTap: widget.onStaffTap,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -649,7 +825,7 @@ class _SplitPartTable extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            split.staffName ?? 'Select Staff',
+                            widget.split.staffName ?? 'Select Staff',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -664,7 +840,7 @@ class _SplitPartTable extends StatelessWidget {
               const SizedBox(height: 10),
 
               // Rows
-              if (split.quantitiesByItem.isEmpty)
+              if (widget.split.quantitiesByItem.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Center(
@@ -680,17 +856,18 @@ class _SplitPartTable extends StatelessWidget {
                   ),
                 )
               else
-                ...split.quantitiesByItem.entries.map((entry) {
+                ...widget.split.quantitiesByItem.entries.map((entry) {
                   final itemIndex = entry.key;
                   final qty = entry.value;
-                  final item = allItems[itemIndex];
+                  final item = widget.allItems[itemIndex];
 
                   // Only allow dragging from Part 1
-                  if (partIndex == 0) {
-                    return Draggable<Map<String, dynamic>>(
+                  if (widget.partIndex == 0) {
+                    return LongPressDraggable<Map<String, dynamic>>(
+                      onDragUpdate: _handleDragUpdate,
                       data: {
                         'itemIndex': itemIndex,
-                        'fromPartIndex': partIndex,
+                        'fromPartIndex': widget.partIndex,
                         'quantity': qty,
                       },
                       feedback: Material(
@@ -731,15 +908,27 @@ class _SplitPartTable extends StatelessWidget {
                           item,
                           qty,
                           itemIndex,
-                          partIndex,
-                          split,
+                          widget.partIndex,
+                          widget.split,
                         ),
                       ),
-                      child: _buildRow(item, qty, itemIndex, partIndex, split),
+                      child: _buildRow(
+                        item,
+                        qty,
+                        itemIndex,
+                        widget.partIndex,
+                        widget.split,
+                      ),
                     );
                   } else {
                     // Parts 2+ are not draggable
-                    return _buildRow(item, qty, itemIndex, partIndex, split);
+                    return _buildRow(
+                      item,
+                      qty,
+                      itemIndex,
+                      widget.partIndex,
+                      widget.split,
+                    );
                   }
                 }),
             ],
@@ -747,9 +936,9 @@ class _SplitPartTable extends StatelessWidget {
         );
 
         // Only allow dismissing parts 2+
-        if (partIndex > 0) {
+        if (widget.partIndex > 0) {
           return Dismissible(
-            key: ValueKey(split.id),
+            key: ValueKey(widget.split.id),
             direction: DismissDirection.endToStart,
             background: Container(
               margin: const EdgeInsets.only(bottom: 16),
@@ -784,7 +973,7 @@ class _SplitPartTable extends StatelessWidget {
               ),
             ),
             onDismissed: (direction) {
-              onRemovePart();
+              widget.onRemovePart();
             },
             child: partContainer,
           );
@@ -802,6 +991,9 @@ class _SplitPartTable extends StatelessWidget {
     int partIndex,
     _SplitAssignment split,
   ) {
+    final batchDisplay = split.batchDisplayByItem[itemIndex];
+    final hasBatch = batchDisplay != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -809,127 +1001,179 @@ class _SplitPartTable extends StatelessWidget {
         color: AppColors.bgDark.withOpacity(0.5),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.brand,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Editable quantity for parts 2+ only
-          if (partIndex > 0)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 50,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.gold,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: TextField(
-                    controller: TextEditingController(text: qty.toString()),
-                    onChanged: (value) {
-                      final newQty = int.tryParse(value);
-                      if (newQty != null && newQty >= 0) {
-                        onQuantityChanged(partIndex, itemIndex, newQty);
-                      }
-                    },
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                      contentPadding: EdgeInsets.zero,
+                    const SizedBox(height: 4),
+                    Text(
+                      item.brand,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  item.unit,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            )
-          else
-            // Non-editable for Part 1
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    qty.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  item.unit,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          if (partIndex > 0) ...[
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => onRemoveItem(partIndex, itemIndex),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.remove_circle_outline,
-                  color: Colors.red,
-                  size: 20,
+                  ],
                 ),
               ),
+              const SizedBox(width: 12),
+              // Editable quantity for parts 2+ only
+              if (partIndex > 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.gold,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: TextField(
+                        controller: TextEditingController(text: qty.toString()),
+                        onChanged: (value) {
+                          final newQty = int.tryParse(value);
+                          if (newQty != null && newQty >= 0) {
+                            widget.onQuantityChanged(
+                              partIndex,
+                              itemIndex,
+                              newQty,
+                            );
+                          }
+                        },
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isCollapsed: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      item.unit,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                // Non-editable for Part 1
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        qty.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      item.unit,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              if (partIndex > 0) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => widget.onRemoveItem(partIndex, itemIndex),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      Icons.remove_circle_outline,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Batch selection row
+          GestureDetector(
+            onTap: () => widget.onPickBatch(partIndex, itemIndex),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: hasBatch
+                    ? AppColors.gold.withOpacity(0.2)
+                    : Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: hasBatch ? AppColors.gold : Colors.orange,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2,
+                    color: hasBatch ? AppColors.gold : Colors.orange,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      batchDisplay ?? 'Select Batch',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasBatch ? AppColors.gold : Colors.orange,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -1063,418 +1307,6 @@ class _QuantityDialogState extends State<_QuantityDialog> {
           child: const Text('Confirm'),
         ),
       ],
-    );
-  }
-}
-
-// ===== SPLIT BATCH SELECTION MODAL =====
-
-class _SplitBatchSelectionModal extends StatefulWidget {
-  final int orderId;
-  final List<_SplitAssignment> splits;
-  final List<OrderItem> items;
-  final VoidCallback onConfirm;
-
-  const _SplitBatchSelectionModal({
-    required this.orderId,
-    required this.splits,
-    required this.items,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_SplitBatchSelectionModal> createState() =>
-      _SplitBatchSelectionModalState();
-}
-
-class _SplitBatchSelectionModalState extends State<_SplitBatchSelectionModal> {
-  late Map<int, Map<int, String>>
-  _selectedBatchDisplays; // splitIdx -> (itemIdx -> display)
-  bool _autoSelectionDone = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedBatchDisplays = {};
-    for (int i = 0; i < widget.splits.length; i++) {
-      _selectedBatchDisplays[i] = Map.from(widget.splits[i].batchDisplayByItem);
-    }
-    // Auto-select batches for all splits
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_autoSelectionDone) {
-        _autoSelectAllBatches();
-      }
-    });
-  }
-
-  Future<void> _autoSelectAllBatches() async {
-    _autoSelectionDone = true;
-    for (int splitIdx = 0; splitIdx < widget.splits.length; splitIdx++) {
-      final split = widget.splits[splitIdx];
-      if (split.quantitiesByItem.isEmpty || split.inventoryId == null) continue;
-
-      for (final entry in split.quantitiesByItem.entries) {
-        final itemIndex = entry.key;
-        final requiredQty = entry.value;
-
-        // Skip if already selected
-        if (split.batchIdByItem.containsKey(itemIndex) &&
-            split.batchIdByItem[itemIndex] != null) {
-          continue;
-        }
-
-        await _autoSelectBatchForItem(splitIdx, itemIndex, requiredQty);
-      }
-    }
-  }
-
-  Future<void> _autoSelectBatchForItem(
-    int splitIdx,
-    int itemIndex,
-    int requiredQty,
-  ) async {
-    try {
-      final split = widget.splits[splitIdx];
-      final item = widget.items[itemIndex];
-      final supabase = Supabase.instance.client;
-      final now = DateTime.now();
-
-      // Fetch batches for this product and inventory
-      final response = await supabase
-          .from('batch')
-          .select(
-            'batch_id, quantity, storage_location_descrption, production_date, expiry_date',
-          )
-          .eq('product_id', item.productId)
-          .eq('inventory_id', split.inventoryId!)
-          .order('batch_id');
-
-      final batches = List<Map<String, dynamic>>.from(response);
-
-      // Filter suitable batches
-      final suitableBatches = batches.where((batch) {
-        final quantity = batch['quantity'] as int;
-        if (quantity < requiredQty) return false;
-
-        final expiryDateStr = batch['expiry_date'] as String?;
-        if (expiryDateStr != null) {
-          final expiryDate = DateTime.parse(expiryDateStr);
-          if (expiryDate.isBefore(now)) return false;
-        }
-        return true;
-      }).toList();
-
-      if (suitableBatches.isEmpty) return;
-
-      // Sort by production_date (oldest first)
-      suitableBatches.sort((a, b) {
-        final aDateStr = a['production_date'] as String?;
-        final bDateStr = b['production_date'] as String?;
-
-        if (aDateStr != null && bDateStr == null) return -1;
-        if (aDateStr == null && bDateStr != null) return 1;
-
-        if (aDateStr != null && bDateStr != null) {
-          final aDate = DateTime.parse(aDateStr);
-          final bDate = DateTime.parse(bDateStr);
-          return aDate.compareTo(bDate);
-        }
-        return 0;
-      });
-
-      // Select the first suitable batch
-      final selectedBatch = suitableBatches.first;
-      final batchId = selectedBatch['batch_id'] as int;
-      final quantity = selectedBatch['quantity'] as int;
-      final location =
-          selectedBatch['storage_location_descrption'] as String? ??
-          'Unknown Location';
-      final displayText = 'Batch #$batchId - $location (Qty: $quantity)';
-
-      setState(() {
-        _selectedBatchDisplays[splitIdx]![itemIndex] = displayText;
-        widget.splits[splitIdx].batchIdByItem[itemIndex] = batchId;
-        widget.splits[splitIdx].batchDisplayByItem[itemIndex] = displayText;
-      });
-    } catch (e) {
-      debugPrint(
-        'Error auto-selecting batch for split $splitIdx item $itemIndex: $e',
-      );
-    }
-  }
-
-  void _pickBatchForItem(int splitIndex, int itemIndex) {
-    final split = widget.splits[splitIndex];
-    if (split.inventoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select staff for this part first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    final item = widget.items[itemIndex];
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => SelectBatchSheet(
-        productId: item.productId,
-        inventoryId: split.inventoryId!,
-        requiredQty: widget.splits[splitIndex].quantitiesByItem[itemIndex],
-        isStockOut: true,
-        currentlySelectedBatchId:
-            widget.splits[splitIndex].batchIdByItem[itemIndex],
-        onSelected: (batchId, displayText) {
-          Navigator.pop(context);
-          setState(() {
-            _selectedBatchDisplays[splitIndex]![itemIndex] = displayText;
-            widget.splits[splitIndex].batchIdByItem[itemIndex] = batchId;
-            widget.splits[splitIndex].batchDisplayByItem[itemIndex] =
-                displayText;
-          });
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bgDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Select Batches',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Choose batch for each product per part',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: widget.splits.length,
-              itemBuilder: (_, splitIdx) {
-                final split = widget.splits[splitIdx];
-                if (split.quantitiesByItem.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12, top: 8),
-                      child: Text(
-                        'Part ${splitIdx + 1} - ${split.staffName}',
-                        style: const TextStyle(
-                          color: AppColors.gold,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    ...split.quantitiesByItem.entries.map((entry) {
-                      final itemIdx = entry.key;
-                      final qty = entry.value;
-                      final item = widget.items[itemIdx];
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 4,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.name,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        item.brand,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFB7A447),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '$qty ${item.unit}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            GestureDetector(
-                              onTap: () => _pickBatchForItem(splitIdx, itemIdx),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      _selectedBatchDisplays[splitIdx]![itemIdx] !=
-                                          null
-                                      ? AppColors.gold.withOpacity(0.2)
-                                      : Colors.orange.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color:
-                                        _selectedBatchDisplays[splitIdx]![itemIdx] !=
-                                            null
-                                        ? AppColors.gold
-                                        : Colors.orange,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.inventory_2,
-                                      color:
-                                          _selectedBatchDisplays[splitIdx]![itemIdx] !=
-                                              null
-                                          ? AppColors.gold
-                                          : Colors.orange,
-                                      size: 14,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _selectedBatchDisplays[splitIdx]![itemIdx] ??
-                                            'Select Batch',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color:
-                                              _selectedBatchDisplays[splitIdx]![itemIdx] !=
-                                                  null
-                                              ? AppColors.gold
-                                              : Colors.orange,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 12),
-                  ],
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: widget.onConfirm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.gold,
-                  minimumSize: const Size.fromHeight(54),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  'Confirm & Send',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

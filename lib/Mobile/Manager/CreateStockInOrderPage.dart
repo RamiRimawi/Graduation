@@ -479,7 +479,15 @@ class _CreateStockInOrderPageState extends State<CreateStockInOrderPage> {
       const taxPercent = 16;
       final totalBalance = totalCost * (1 + taxPercent / 100);
 
-      // Insert into supplier_order
+      // Fix sequence by syncing it with max order_id before inserting
+      try {
+        await supabase.rpc('fix_supplier_order_sequence');
+      } catch (e) {
+        // If RPC doesn't exist, try alternative approach
+        debugPrint('Could not call fix_supplier_order_sequence: $e');
+      }
+
+      // Insert into supplier_order (let database auto-generate order_id)
       final orderInsertResponse = await supabase
           .from('supplier_order')
           .insert({

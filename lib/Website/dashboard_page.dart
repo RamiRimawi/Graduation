@@ -867,6 +867,7 @@ class _OrdersCardState extends State<_OrdersCard> {
                 updateDescription:
                     orderDetails['update_description'] as String?,
                 orderId: int.parse(order['id']),
+                onOrderUpdated: _fetchReceivesOrders,
               );
             }
           } else {

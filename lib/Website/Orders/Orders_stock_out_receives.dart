@@ -519,6 +519,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
         discountValue: detail.discountValue,
         updateDescription: detail.updateDescription,
         orderId: int.tryParse(order.id) ?? detail.orderId,
+        onOrderUpdated: _fetchOrders,
       );
     } catch (e) {
       if (mounted) {
