@@ -177,6 +177,9 @@ class _LiveNavigationState extends State<LiveNavigation>
           _currentBearing = initialBearing;
         });
 
+        // ✅ Zoom على موقع السائق عند بداية الصفحة
+        _mapController?.move(initLoc, 17.0);
+
         await _updateRoute(); // initial route
 
         const LocationSettings locationSettings = LocationSettings(

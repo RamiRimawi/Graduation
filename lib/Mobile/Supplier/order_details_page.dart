@@ -59,9 +59,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       }
     }
 
-    setState(() {
-      supplierName = name.isEmpty ? 'Supplier' : name;
-    });
+    if (mounted) {
+      setState(() {
+        supplierName = name.isEmpty ? 'Supplier' : name;
+      });
+    }
   }
 
   Future<void> _loadOrderProducts() async {
@@ -128,14 +130,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         debugPrint('Error fetching tax percent: $e');
       }
 
-      setState(() {
-        products = productsList;
-        isLoading = false;
-        taxPercent = fetchedTax;
-      });
+      if (mounted) {
+        setState(() {
+          products = productsList;
+          isLoading = false;
+          taxPercent = fetchedTax;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading order products: $e');
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -602,16 +606,18 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               onPressed: () {
                 final val = int.tryParse(controller.text);
                 if (val != null && val > 0) {
-                  setState(() {
-                    products[index]['quantity'] = val;
-                    // Only mark as updated if any quantity differs from original
-                    isUpdated = products.any((p) {
-                      final currentQty = (p['quantity'] as num).toInt();
-                      final originalQty = (p['original_quantity'] as num)
-                          .toInt();
-                      return currentQty != originalQty;
+                  if (mounted) {
+                    setState(() {
+                      products[index]['quantity'] = val;
+                      // Only mark as updated if any quantity differs from original
+                      isUpdated = products.any((p) {
+                        final currentQty = (p['quantity'] as num).toInt();
+                        final originalQty = (p['original_quantity'] as num)
+                            .toInt();
+                        return currentQty != originalQty;
+                      });
                     });
-                  });
+                  }
                 }
                 Navigator.pop(context);
               },

@@ -37,7 +37,7 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
           : null;
 
       if (supplierId == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -72,13 +72,15 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
         });
       }
 
-      setState(() {
-        _orders = ordersWithProducts;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _orders = ordersWithProducts;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading orders: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

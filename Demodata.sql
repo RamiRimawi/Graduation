@@ -143,6 +143,8 @@ INSERT INTO accounts (user_id, password, type, is_active, profile_image, last_ac
 (422222222, '1234', 'Delivery Driver', true, '', 'system', NOW()),
 (433333333, '1234', 'Delivery Driver', true, '', 'system', NOW()),
 (444444444, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+(455555555, '1234', 'Delivery Driver', true, '', 'system', NOW()),
+(466666666, '1234', 'Delivery Driver', true, '', 'system', NOW()),
 
 -- Sales Representatives
 (511111111, '1234', 'Sales Rep', true, '', 'system', NOW()),
@@ -294,7 +296,10 @@ INSERT INTO delivery_driver (delivery_driver_id, name, mobile_number, telephone_
 (411111111, 'Mahmoud Shehab', '0591234578', '022345689', 'Ramallah', 'system', NOW(), 31.9038, 35.2034),
 (422222222, 'Jamal Ramadan', '0591234579', '022345690', 'Gaza', 'system', NOW(), 31.5017, 34.4668),
 (433333333, 'Omar Khoury', '0591234580', '022345691', 'Hebron', 'system', NOW(), 31.5326, 35.0998),
-(444444444, 'Ziad Jabr', '0591234581', '022345692', 'Nablus', 'system', NOW(), 32.2211, 35.2544);
+(444444444, 'Ziad Jabr', '0591234581', '022345692', 'Nablus', 'system', NOW(), 32.2211, 35.2544),
+(455555555, 'Ramadan Abu Syam', '0594434580', '022845691', 'Ramallah', 'system', NOW(), 31.20349283, 35.20349283),
+(466666666, 'Ayman Rimawi', '0597723381', '022398692', 'Ramallah', 'system', NOW(), 31.28889283, 35.20349283);
+
 
 -- Sales representatives
 INSERT INTO sales_representative (sales_rep_id, sales_rep_city, name, mobile_number, telephone_number, email, last_action_by, last_action_time) VALUES
