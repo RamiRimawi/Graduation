@@ -665,7 +665,7 @@ class _LiveNavigationState extends State<LiveNavigation>
                 maxZoom: 19.0,
                 keepAlive: true,
                 interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all,
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
                 onPositionChanged: (position, hasGesture) {
                   if (hasGesture) {
