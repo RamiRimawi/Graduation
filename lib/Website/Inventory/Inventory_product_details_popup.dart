@@ -462,6 +462,7 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                 borderRadius: BorderRadius.circular(25),
               ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 🔹 العنوان + زر Edit + X
@@ -522,10 +523,14 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                   ),
 
                   // 🔹 المحتوى (صور + تفاصيل) قابل للسكرول
-                  Expanded(
+                  Flexible(
+                    fit: FlexFit.loose,
                     child: SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 24,
+                      ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -540,19 +545,25 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                             ),
                             child: Stack(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Center(
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    width: double.infinity,
+                                    height: double.infinity,
                                     child: _selectedImageBytes != null
                                         ? Image.memory(
                                             _selectedImageBytes!,
-                                            fit: BoxFit.contain,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            height: double.infinity,
                                           )
                                         : productImageUrl != null &&
                                               productImageUrl!.isNotEmpty
                                         ? Image.network(
                                             productImageUrl!,
-                                            fit: BoxFit.contain,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            height: double.infinity,
                                             errorBuilder:
                                                 (context, error, stackTrace) {
                                                   return const Icon(
@@ -579,10 +590,12 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                                               );
                                             },
                                           )
-                                        : const Icon(
-                                            Icons.image_not_supported,
-                                            size: 100,
-                                            color: Colors.grey,
+                                        : const Center(
+                                            child: Icon(
+                                              Icons.image_not_supported,
+                                              size: 100,
+                                              color: Colors.grey,
+                                            ),
                                           ),
                                   ),
                                 ),
