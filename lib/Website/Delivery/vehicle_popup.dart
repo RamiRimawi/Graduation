@@ -28,6 +28,7 @@ class _VehiclePopupState extends State<VehiclePopup> {
   Map<String, dynamic>? currentDriver;
   List<Map<String, dynamic>> driverHistory = [];
   bool _loading = true;
+  int? hoveredRow;
 
   @override
   void initState() {
@@ -403,7 +404,13 @@ class _VehiclePopupState extends State<VehiclePopup> {
       );
     }
 
-    return SingleChildScrollView(
+    const headerStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 14,
+      fontWeight: FontWeight.w700,
+    );
+
+    return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,55 +424,123 @@ class _VehiclePopupState extends State<VehiclePopup> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // Table Header
+          Row(
+            children: const [
+              Expanded(flex: 4, child: Text('Driver Name', style: headerStyle)),
+              Expanded(
+                flex: 3,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('From Date', style: headerStyle),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('To Date', style: headerStyle),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
+          // Line under header
           Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF202020),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Table(
-              columnWidths: const {
-                0: FlexColumnWidth(2),
-                1: FlexColumnWidth(1.5),
-                2: FlexColumnWidth(1.5),
-              },
-              children: [
-                // Header
-                TableRow(
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Colors.white24, width: 1),
+            height: 1,
+            width: double.infinity,
+            color: Colors.white.withOpacity(0.4),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Table Rows with zebra striping
+          Expanded(
+            child: ListView.builder(
+              itemCount: driverHistory.length,
+              padding: const EdgeInsets.only(top: 6),
+              itemBuilder: (context, index) {
+                final record = driverHistory[index];
+                final isEven = index % 2 == 0;
+
+                return Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => setState(() => hoveredRow = index),
+                    onExit: (_) => setState(() => hoveredRow = null),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 18,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isEven
+                            ? const Color(0xFF262626)
+                            : const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(26),
+                        border: hoveredRow == index
+                            ? Border.all(
+                                color: const Color(0xFF50B2E7),
+                                width: 1.5,
+                              )
+                            : null,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              record['driver_name'],
+                              style: GoogleFonts.roboto(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              DateFormat(
+                                'MMM dd, yyyy',
+                              ).format(DateTime.parse(record['from_date'])),
+                              style: GoogleFonts.roboto(
+                                color: const Color(0xFF50B2E7),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              DateFormat(
+                                'MMM dd, yyyy',
+                              ).format(DateTime.parse(record['to_date'])),
+                              style: GoogleFonts.roboto(
+                                color: const Color(0xFF50B2E7),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  children: [
-                    _buildTableHeader('Driver Name'),
-                    _buildTableHeader('From Date'),
-                    _buildTableHeader('To Date'),
-                  ],
-                ),
-                // Rows
-                ...driverHistory.map((record) {
-                  return TableRow(
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Colors.white12, width: 0.5),
-                      ),
-                    ),
-                    children: [
-                      _buildTableCell(record['driver_name']),
-                      _buildTableCell(
-                        DateFormat(
-                          'MMM dd, yyyy',
-                        ).format(DateTime.parse(record['from_date'])),
-                      ),
-                      _buildTableCell(
-                        DateFormat(
-                          'MMM dd, yyyy',
-                        ).format(DateTime.parse(record['to_date'])),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -490,30 +565,6 @@ class _VehiclePopupState extends State<VehiclePopup> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTableHeader(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        text,
-        style: GoogleFonts.roboto(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTableCell(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        text,
-        style: GoogleFonts.roboto(color: Colors.white70, fontSize: 14),
-      ),
     );
   }
 
