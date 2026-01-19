@@ -43,6 +43,8 @@ class _ReportDestroyedProductPageContentState
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
   int? _hoveredRow;
+  String _sortColumn = 'meeting_id';
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -75,6 +77,7 @@ class _ReportDestroyedProductPageContentState
           _meetings = List<Map<String, dynamic>>.from(result);
           _filteredMeetings = _meetings;
           _loading = false;
+          _sortMeetings();
         });
       }
     } catch (e) {
@@ -101,6 +104,37 @@ class _ReportDestroyedProductPageContentState
           return topics.contains(query) || address.contains(query);
         }).toList();
       }
+      _sortMeetings();
+    });
+  }
+
+  void _sortMeetings() {
+    _filteredMeetings.sort((a, b) {
+      dynamic aValue = a[_sortColumn];
+      dynamic bValue = b[_sortColumn];
+
+      if (_sortColumn == 'meeting_id') {
+        aValue = aValue as int? ?? 0;
+        bValue = bValue as int? ?? 0;
+      } else {
+        aValue = aValue?.toString().toLowerCase() ?? '';
+        bValue = bValue?.toString().toLowerCase() ?? '';
+      }
+
+      final comparison = aValue.compareTo(bValue);
+      return _sortAscending ? comparison : -comparison;
+    });
+  }
+
+  void _onHeaderTap(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+      _sortMeetings();
     });
   }
 
@@ -239,11 +273,23 @@ class _ReportDestroyedProductPageContentState
                             const SizedBox(height: 14),
 
                             Row(
-                              children: const [
-                                _HeaderText('ID #', flex: 1),
-                                _HeaderText('Meeting Topics', flex: 3),
-                                _HeaderText('Address', flex: 3),
-                                _HeaderText('Date & Time', flex: 2),
+                              children: [
+                                _SortableHeader(
+                                  'ID #',
+                                  flex: 1,
+                                  isActive: _sortColumn == 'meeting_id',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('meeting_id'),
+                                ),
+                                _SortableHeader(
+                                  'Meeting Topics',
+                                  flex: 3,
+                                  isActive: _sortColumn == 'meeting_topics',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('meeting_topics'),
+                                ),
+                                const _HeaderText('Address', flex: 3),
+                                const _HeaderText('Date & Time', flex: 2),
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -688,6 +734,56 @@ class _HeaderText extends StatelessWidget {
             color: color,
             fontWeight: FontWeight.bold,
             fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Sortable Header Text
+class _SortableHeader extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool isActive;
+  final bool isAscending;
+  final VoidCallback onTap;
+
+  const _SortableHeader(
+    this.text, {
+    this.flex = 1,
+    required this.isActive,
+    required this.isAscending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  color: isActive ? AppColors.blue : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isActive)
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: AppColors.blue,
+                ),
+            ],
           ),
         ),
       ),

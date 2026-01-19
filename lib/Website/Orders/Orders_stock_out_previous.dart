@@ -52,6 +52,8 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
   DateTime? _fromDate;
   DateTime? _toDate;
   final GlobalKey _filterButtonKey = GlobalKey();
+  String _sortColumn = 'date';
+  bool _sortAscending = false;
   OverlayEntry? _filterOverlay;
   final TextEditingController _fromDateController = TextEditingController();
   final TextEditingController _toDateController = TextEditingController();
@@ -192,7 +194,42 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
       );
     }
 
-    return filtered.toList(growable: false);
+    final result = filtered.toList(growable: false);
+    _sortOrders(result);
+    return result;
+  }
+
+  void _sortOrders(List<OrderPreviousRow> orders) {
+    orders.sort((a, b) {
+      dynamic aValue, bValue;
+
+      if (_sortColumn == 'id') {
+        aValue = int.tryParse(a.id) ?? 0;
+        bValue = int.tryParse(b.id) ?? 0;
+      } else if (_sortColumn == 'customerName') {
+        aValue = a.customerName.toLowerCase();
+        bValue = b.customerName.toLowerCase();
+      } else if (_sortColumn == 'date') {
+        aValue = _parseDate(a.date) ?? DateTime(1900);
+        bValue = _parseDate(b.date) ?? DateTime(1900);
+      } else {
+        return 0;
+      }
+
+      final comparison = aValue.compareTo(bValue);
+      return _sortAscending ? comparison : -comparison;
+    });
+  }
+
+  void _onHeaderTap(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+    });
   }
 
   List<String> get _driverNames {
@@ -608,7 +645,12 @@ class _StockOutPreviousState extends State<StockOutPrevious> {
                             ),
                             const SizedBox(height: 20),
 
-                            _TableHeader(isWide: width > 800),
+                            _TableHeader(
+                              isWide: width > 800,
+                              sortColumn: _sortColumn,
+                              sortAscending: _sortAscending,
+                              onHeaderTap: _onHeaderTap,
+                            ),
                             const SizedBox(height: 6),
 
                             // 🔹 الجدول
@@ -989,7 +1031,16 @@ class _DateInputFieldState extends State<_DateInputField> {
 // 🔹 هيدر الجدول (Order ID / Customer / Inventory / Date)
 class _TableHeader extends StatelessWidget {
   final bool isWide;
-  const _TableHeader({required this.isWide});
+  final String sortColumn;
+  final bool sortAscending;
+  final Function(String) onHeaderTap;
+
+  const _TableHeader({
+    required this.isWide,
+    required this.sortColumn,
+    required this.sortAscending,
+    required this.onHeaderTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -997,10 +1048,32 @@ class _TableHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            _hCell('Order ID #', flex: 2),
-            _hCell('Customer Name', flex: 4),
+            _SortableHeaderCell(
+              text: 'Order ID #',
+              flex: 2,
+              column: 'id',
+              isActive: sortColumn == 'id',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('id'),
+            ),
+            _SortableHeaderCell(
+              text: 'Customer Name',
+              flex: 4,
+              column: 'customerName',
+              isActive: sortColumn == 'customerName',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('customerName'),
+            ),
             _hCell('Delivery Driver', flex: 8),
-            _hCell('Date', flex: 4, alignEnd: true),
+            _SortableHeaderCell(
+              text: 'Date',
+              flex: 4,
+              column: 'date',
+              isActive: sortColumn == 'date',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('date'),
+              alignEnd: true,
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -1019,6 +1092,62 @@ class _TableHeader extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.white,
             fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Sortable Header Cell
+class _SortableHeaderCell extends StatelessWidget {
+  final String text;
+  final int flex;
+  final String column;
+  final bool isActive;
+  final bool isAscending;
+  final VoidCallback onTap;
+  final bool alignEnd;
+
+  const _SortableHeaderCell({
+    required this.text,
+    required this.flex,
+    required this.column,
+    required this.isActive,
+    required this.isAscending,
+    required this.onTap,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: alignEnd
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  color: isActive ? AppColors.gold : AppColors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isActive)
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: AppColors.gold,
+                ),
+            ],
           ),
         ),
       ),
