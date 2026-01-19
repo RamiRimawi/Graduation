@@ -139,6 +139,9 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
       final batches = await supabase.from('batch').select('''
         batch_id,
         product_id,
+        quantity,
+        production_date,
+        expiry_date,
         product:product_id(name),
         inventory:inventory_id(inventory_name),
         storage_location_descrption
@@ -151,6 +154,9 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
               'batch_id': batch['batch_id'],
               'product_id': batch['product_id'],
               'product_name': batch['product']?['name'] ?? 'Unknown',
+              'quantity': batch['quantity'] ?? 0,
+              'production_date': batch['production_date'],
+              'expiry_date': batch['expiry_date'],
               'inventory_name': batch['inventory']?['inventory_name'] ?? 'N/A',
               'storage_location': batch['storage_location_descrption'] ?? 'N/A',
             };
@@ -303,6 +309,28 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
       }).toList();
 
       await supabase.from('damaged_products').insert(productInserts);
+
+      // Update batch quantities - subtract damaged product quantities
+      for (final product in addedProducts) {
+        final batchId = product['batch_id'];
+        final damagedQty = product['quantity'] as int;
+
+        // Get current batch quantity
+        final batchData = await supabase
+            .from('batch')
+            .select('quantity')
+            .eq('batch_id', batchId)
+            .single();
+
+        final currentQty = (batchData['quantity'] as num?)?.toInt() ?? 0;
+        final newQty = currentQty - damagedQty;
+
+        // Update batch quantity
+        await supabase
+            .from('batch')
+            .update({'quantity': newQty >= 0 ? newQty : 0})
+            .eq('batch_id', batchId);
+      }
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -716,42 +744,131 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
                 _buildLabel('Select Product/Batch'),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  height: 300,
                   decoration: BoxDecoration(
                     color: AppColors.card,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: DropdownButton<Map<String, dynamic>>(
-                    value: selectedBatch,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    dropdownColor: AppColors.card,
-                    hint: Text(
-                      'Select a batch',
-                      style: GoogleFonts.roboto(
-                        color: AppColors.textGrey,
-                        fontSize: 14,
-                      ),
-                    ),
-                    items: allBatches.map((batch) {
-                      return DropdownMenuItem(
-                        value: batch,
-                        child: Text(
-                          '${batch['product_name']} (Batch #${batch['batch_id']})',
-                          style: GoogleFonts.roboto(
-                            color: AppColors.white,
-                            fontSize: 14,
+                  child: allBatches.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No batches available',
+                            style: GoogleFonts.roboto(
+                              color: AppColors.textGrey,
+                              fontSize: 14,
+                            ),
                           ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          itemCount: allBatches.length,
+                          itemBuilder: (context, index) {
+                            final batch = allBatches[index];
+                            final isSelected =
+                                selectedBatch?['batch_id'] == batch['batch_id'];
+
+                            String formatDate(String? dateStr) {
+                              if (dateStr == null) return 'N/A';
+                              try {
+                                final date = DateTime.parse(dateStr);
+                                return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+                              } catch (e) {
+                                return 'N/A';
+                              }
+                            }
+
+                            return GestureDetector(
+                              onTap: () {
+                                setDialogState(() {
+                                  selectedBatch = batch;
+                                });
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.blue.withOpacity(0.2)
+                                      : AppColors.panel,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppColors.blue
+                                        : AppColors.divider,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            batch['product_name'],
+                                            style: GoogleFonts.roboto(
+                                              color: AppColors.white,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.blue,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Batch #${batch['batch_id']}',
+                                            style: GoogleFonts.roboto(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _buildBatchInfo(
+                                            'Production',
+                                            formatDate(
+                                              batch['production_date'],
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: _buildBatchInfo(
+                                            'Expiry',
+                                            formatDate(batch['expiry_date']),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildBatchInfo(
+                                      'Quantity',
+                                      '${batch['quantity']} units',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        selectedBatch = value;
-                      });
-                    },
-                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -858,6 +975,25 @@ class _AddMeetingPopupState extends State<AddMeetingPopup> {
         fontSize: 14,
         fontWeight: FontWeight.w600,
       ),
+    );
+  }
+
+  Widget _buildBatchInfo(String label, String value) {
+    return Row(
+      children: [
+        Text(
+          '$label: ',
+          style: GoogleFonts.roboto(color: AppColors.textGrey, fontSize: 12),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.roboto(
+            color: AppColors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 
