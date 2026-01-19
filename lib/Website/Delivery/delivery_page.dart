@@ -73,7 +73,11 @@ class _DeliveryPageState extends State<DeliveryPage> {
           });
         } else {
           // Driver is idle (no active deliveries)
-          idle.add({'name': driverName, 'profile_image': profileImage});
+          idle.add({
+            'name': driverName,
+            'profile_image': profileImage,
+            'delivery_driver_id': driverId,
+          });
         }
       }
 
@@ -212,6 +216,20 @@ class _DeliveryPageState extends State<DeliveryPage> {
                                             name: d["name"]!,
                                             profileImage: d["profile_image"],
                                             isIdle: true,
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                barrierDismissible: true,
+                                                builder: (ctx) => DeliveryLivePopup(
+                                                  driverId:
+                                                      d["delivery_driver_id"] ??
+                                                      0,
+                                                  driverName: d["name"]!,
+                                                  profileImage:
+                                                      d["profile_image"],
+                                                ),
+                                              );
+                                            },
                                           ),
                                         )
                                         .toList(),
@@ -252,7 +270,7 @@ class _DeliveryCardState extends State<_DeliveryCard> {
 
   @override
   Widget build(BuildContext context) {
-    final hoverEnabled = !widget.isIdle && widget.onTap != null;
+    final hoverEnabled = widget.onTap != null;
     final scale = hoverEnabled && _hovered ? 1.05 : 1.0;
     final avatarScale = hoverEnabled && _hovered ? 1.08 : 1.0;
 

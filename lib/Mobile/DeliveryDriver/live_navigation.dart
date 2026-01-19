@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
@@ -50,6 +51,7 @@ class _LiveNavigationState extends State<LiveNavigation>
 
   double _currentBearing = 0; // exposed to UI
   double _smoothedBearing = 0; // internal smoothing
+  double _routeBearing = 0; // bearing based on route direction
   double _currentSpeed = 0; // km/h
   double _gpsAccuracy = 0;
 
@@ -145,17 +147,57 @@ class _LiveNavigationState extends State<LiveNavigation>
   // -------------------- LIVE GPS --------------------
   Future<void> _startLiveTracking() async {
     try {
+      // ✅ Check if location services are enabled (especially for web)
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled && !kIsWeb) {
+        debugPrint('⚠️ Location services are disabled');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('يرجى تفعيل خدمات الموقع')),
+          );
+        }
+        return;
+      }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         permission = await Geolocator.requestPermission();
       }
 
+      // ✅ Handle permission denial
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ Location permission denied');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(kIsWeb 
+                ? 'يجب السماح للموقع بالوصول إلى موقعك في المتصفح' 
+                : 'يجب السماح للتطبيق بالوصول إلى موقعك'),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
+        
+        // ✅ Use different accuracy for web vs mobile
+        final accuracy = kIsWeb 
+          ? LocationAccuracy.high 
+          : LocationAccuracy.bestForNavigation;
+        
+        debugPrint('📍 Getting initial position... (Web: $kIsWeb)');
+        
         final initialPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.bestForNavigation,
+          desiredAccuracy: accuracy,
+          timeLimit: const Duration(seconds: 10), // ✅ Timeout for web
         );
+
+        debugPrint('✅ Got initial position: ${initialPosition.latitude}, ${initialPosition.longitude}');
 
         final initLoc = LatLng(
           initialPosition.latitude,
@@ -182,19 +224,40 @@ class _LiveNavigationState extends State<LiveNavigation>
 
         await _updateRoute(); // initial route
 
-        const LocationSettings locationSettings = LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 5,
-        );
+        // ✅ Different settings for web vs mobile
+        final LocationSettings locationSettings = kIsWeb 
+          ? const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 8, // Slightly higher for web to reduce noise
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 5,
+            );
+
+        debugPrint('🎯 Starting position stream... (Web: $kIsWeb)');
 
         _positionStream = Geolocator.getPositionStream(
           locationSettings: locationSettings,
         ).listen((Position position) {
+          debugPrint('📍 New position: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
           _handleNewPosition(position);
+        }, onError: (error) {
+          debugPrint('❌ Position stream error: $error');
         });
       }
     } catch (e) {
-      debugPrint('Error starting live tracking: $e');
+      debugPrint('❌ Error starting live tracking: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(kIsWeb 
+              ? 'خطأ في الحصول على الموقع. تأكد من:\n1. السماح بالوصول للموقع في المتصفح\n2. استخدام HTTPS أو localhost' 
+              : 'خطأ في الحصول على الموقع: $e'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -202,10 +265,13 @@ class _LiveNavigationState extends State<LiveNavigation>
     final newLocation = LatLng(position.latitude, position.longitude);
     _gpsAccuracy = position.accuracy;
 
+    // ✅ Web browsers typically have lower accuracy, so be more lenient
+    final maxAccuracy = kIsWeb ? 50.0 : _maxGpsAccuracyMeters;
+
     // ignore bad accuracy
-    if (position.accuracy > _maxGpsAccuracyMeters) {
+    if (position.accuracy > maxAccuracy) {
       debugPrint(
-        '⏳ Ignoring update (poor GPS accuracy): ${position.accuracy.toStringAsFixed(1)}m',
+        '⏳ Ignoring update (poor GPS accuracy): ${position.accuracy.toStringAsFixed(1)}m (max: $maxAccuracy)',
       );
       return;
     }
@@ -251,12 +317,21 @@ class _LiveNavigationState extends State<LiveNavigation>
       factor: 0.18, // smaller = smoother
     );
 
+    // ✅ حساب اتجاه المسار
+    final routeBearing = _calculateRouteBearing(newLocation);
+    final smoothRouteBearing = _smoothAngleDegrees(
+      current: _routeBearing,
+      target: routeBearing,
+      factor: 0.22,
+    );
+
     setState(() {
       _previousLocation = _currentDriverLocation;
       _currentDriverLocation = newLocation;
 
       _smoothedBearing = smooth;
       _currentBearing = smooth;
+      _routeBearing = smoothRouteBearing;
     });
 
     if (!isStationary) {
@@ -484,6 +559,41 @@ class _LiveNavigationState extends State<LiveNavigation>
     return (bearing + 360) % 360;
   }
 
+  // ✅ حساب اتجاه المسار من أقرب segment
+  double _calculateRouteBearing(LatLng currentLocation) {
+    if (_routePoints.isEmpty || _routePoints.length < 2) {
+      return _calculateBearing(
+        currentLocation,
+        LatLng(widget.customerLatitude, widget.customerLongitude),
+      );
+    }
+
+    // إيجاد أقرب segment في المسار
+    double minDistance = double.infinity;
+    int closestSegmentIndex = 0;
+    final Distance distance = Distance();
+
+    for (int i = 0; i < _routePoints.length - 1; i++) {
+      final segmentDist = _distanceToSegmentMeters(
+        currentLocation,
+        _routePoints[i],
+        _routePoints[i + 1],
+        distance,
+      );
+
+      if (segmentDist < minDistance) {
+        minDistance = segmentDist;
+        closestSegmentIndex = i;
+      }
+    }
+
+    // حساب الاتجاه من ال segment الأقرب
+    final segmentStart = _routePoints[closestSegmentIndex];
+    final segmentEnd = _routePoints[closestSegmentIndex + 1];
+
+    return _calculateBearing(segmentStart, segmentEnd);
+  }
+
   double _smoothAngleDegrees({
     required double current,
     required double target,
@@ -702,7 +812,7 @@ class _LiveNavigationState extends State<LiveNavigation>
                         height: 70.0,
                         alignment: Alignment.center,
                         child: Transform.rotate(
-                          angle: _currentBearing * math.pi / 180,
+                          angle: _routeBearing * math.pi / 180,
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
