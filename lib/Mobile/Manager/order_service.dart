@@ -298,6 +298,9 @@ class OrderService {
     required int driverId,
   }) async {
     try {
+      print('========================================');
+      print('Assigning driver $driverId to order $orderId');
+
       // Get manager name and ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final managerIdStr = prefs.getString('current_user_id');
@@ -322,6 +325,8 @@ class OrderService {
         }
       }
 
+      print('Manager name: $managerName');
+
       final now = DateTime.now().toIso8601String();
 
       // Fetch all inventory items for this order to update quantities
@@ -329,6 +334,8 @@ class OrderService {
           .from('customer_order_inventory')
           .select('product_id, batch_id, prepared_quantity')
           .eq('customer_order_id', orderId);
+
+      print('Found ${inventoryItems.length} inventory items');
 
       final productIds = <int>{};
 
@@ -361,6 +368,8 @@ class OrderService {
               .update({'quantity': newBatchQty})
               .eq('batch_id', batchId)
               .eq('product_id', productId);
+
+          print('Updated batch $batchId: $currentBatchQty -> $newBatchQty');
         }
 
         // Update product total_quantity
@@ -377,6 +386,10 @@ class OrderService {
             .from('product')
             .update({'total_quantity': newTotalQty})
             .eq('product_id', productId);
+
+        print(
+          'Updated product $productId total_quantity: $currentTotalQty -> $newTotalQty',
+        );
       }
 
       // Update customer_order_description for all products in this order
@@ -391,6 +404,10 @@ class OrderService {
             .eq('product_id', productId);
       }
 
+      print(
+        'Updated customer_order_description for ${productIds.length} products',
+      );
+
       // Update order status
       await supabase
           .from('customer_order')
@@ -402,9 +419,76 @@ class OrderService {
           })
           .eq('customer_order_id', orderId);
 
+      print('Updated order $orderId status to Delivery with driver $driverId');
+      print('Order assignment completed successfully');
+      print('========================================');
+
       return true;
     } catch (e) {
-      print('Error assigning delivery driver: $e');
+      print('========================================');
+      print('ERROR assigning delivery driver: $e');
+      print('========================================');
+      return false;
+    }
+  }
+
+  /// Check if a driver currently has an assigned vehicle
+  static Future<bool> driverHasVehicle(int driverId) async {
+    try {
+      final now = DateTime.now();
+      final todayStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      print('========================================');
+      print('Checking vehicle for driver $driverId on date: $todayStr');
+
+      final result = await supabase
+          .from('delivery_vehicle')
+          .select('plate_id, from_date, to_date')
+          .eq('delivery_driver_id', driverId)
+          .lte('from_date', todayStr)
+          .gte('to_date', todayStr)
+          .maybeSingle();
+
+      print('Vehicle query result: $result');
+      print('Result is null: ${result == null}');
+      print('Has vehicle: ${result != null}');
+      print('========================================');
+
+      final hasVehicle = result != null;
+      return hasVehicle;
+    } catch (e) {
+      print('========================================');
+      print('ERROR checking driver vehicle: $e');
+      print('Returning false (no vehicle) due to error');
+      print('========================================');
+      return false;
+    }
+  }
+
+  /// Assign a vehicle to a driver for a specific date range
+  static Future<bool> assignVehicleToDriver({
+    required int driverId,
+    required int vehicleId,
+    required DateTime fromDate,
+    required DateTime toDate,
+  }) async {
+    try {
+      final fromDateStr =
+          '${fromDate.year}-${fromDate.month.toString().padLeft(2, '0')}-${fromDate.day.toString().padLeft(2, '0')}';
+      final toDateStr =
+          '${toDate.year}-${toDate.month.toString().padLeft(2, '0')}-${toDate.day.toString().padLeft(2, '0')}';
+
+      await supabase.from('delivery_vehicle').insert({
+        'plate_id': vehicleId,
+        'delivery_driver_id': driverId,
+        'from_date': fromDateStr,
+        'to_date': toDateStr,
+      });
+
+      return true;
+    } catch (e) {
+      print('Error assigning vehicle to driver: $e');
       return false;
     }
   }
