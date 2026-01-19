@@ -92,6 +92,7 @@ class _ReportDestroyedProductPageContentState
 
   void _filterMeetings() {
     final query = _searchController.text.toLowerCase();
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredMeetings = _meetings;
@@ -127,6 +128,7 @@ class _ReportDestroyedProductPageContentState
   }
 
   void _onHeaderTap(String column) {
+    if (!mounted) return;
     setState(() {
       if (_sortColumn == column) {
         _sortAscending = !_sortAscending;
@@ -229,44 +231,49 @@ class _ReportDestroyedProductPageContentState
                           children: [
                             // 🔹 Title + Search bar + Generate Report button
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Destroyed Products Meetings',
-                                    style: TextStyle(
-                                      color: AppColors.blue,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 22,
-                                    ),
+                                const Text(
+                                  'Destroyed Products Meetings',
+                                  style: TextStyle(
+                                    color: AppColors.blue,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 22,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                ElevatedButton.icon(
-                                  onPressed: _showGenerateReportDialog,
-                                  icon: const Icon(
-                                    Icons.picture_as_pdf,
-                                    size: 18,
-                                  ),
-                                  label: const Text('Generate Report'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.blue,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 14,
+                                Row(
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: _showGenerateReportDialog,
+                                      icon: const Icon(
+                                        Icons.picture_as_pdf,
+                                        size: 18,
+                                      ),
+                                      label: const Text('Generate Report'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.blue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(28),
+                                    const SizedBox(width: 12),
+                                    SizedBox(
+                                      width: 250,
+                                      child: _SearchField(
+                                        hint: 'Search Meeting',
+                                        icon: Icons.manage_search_rounded,
+                                        controller: _searchController,
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Flexible(
-                                  child: _SearchField(
-                                    hint: 'Search Meeting',
-                                    icon: Icons.manage_search_rounded,
-                                    controller: _searchController,
-                                  ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -969,7 +976,7 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
     );
   }
 
-  Future<void> _generateReport() async {
+  Future<void> _goToMeetingSelection() async {
     if (_fromDate == null) {
       setState(() {
         _showError = true;
@@ -985,7 +992,7 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
       // Use today's date if to date is not specified
       final toDate = _toDate ?? DateTime.now();
 
-      // Fetch destroyed products data within date range
+      // Fetch meetings within date range
       final meetingsResult = await supabase
           .from('damaged_products_meeting')
           .select('''
@@ -1001,58 +1008,44 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
 
       final meetings = List<Map<String, dynamic>>.from(meetingsResult);
 
-      // Extract meeting IDs
-      final meetingIds = meetings.map((m) => m['meeting_id']).toList();
-
-      // Fetch damaged products for these meetings
-      List<Map<String, dynamic>> damagedProducts = [];
-      if (meetingIds.isNotEmpty) {
-        final damagedProductsResult = await supabase
-            .from('damaged_products')
-            .select('''
-              meeting_id,
-              quantity,
-              reason,
-              batch(product:product_id(name, selling_price, brand:brand_id(name), category:category_id(name)))
-            ''')
-            .inFilter('meeting_id', meetingIds);
-
-        damagedProducts = List<Map<String, dynamic>>.from(
-          damagedProductsResult,
-        );
-      }
-
-      // Generate PDF
-      final pdf = await _createPDF(
-        meetings,
-        damagedProducts,
-        _fromDate!,
-        toDate,
-      );
-
-      // Show PDF preview/download
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-      );
-
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      print('Error generating report: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating report: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
       if (mounted) {
         setState(() {
           _generating = false;
         });
+
+        if (meetings.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No meetings found in the selected date range'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
+
+        // Close current dialog and show meeting selection dialog
+        Navigator.of(context).pop();
+        showDialog(
+          context: context,
+          builder: (context) => _MeetingSelectionDialog(
+            meetings: meetings,
+            fromDate: _fromDate!,
+            toDate: toDate,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error fetching meetings: $e');
+      if (mounted) {
+        setState(() {
+          _generating = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error fetching meetings: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -1658,11 +1651,11 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                   ),
                   const SizedBox(height: 30),
 
-                  // Generate Button
+                  // Next Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _generating ? null : _generateReport,
+                      onPressed: _generating ? null : _goToMeetingSelection,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.blue,
                         foregroundColor: Colors.white,
@@ -1684,7 +1677,7 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                               ),
                             )
                           : const Text(
-                              'Generate',
+                              'Next',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -1693,6 +1686,805 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Meeting Selection Dialog
+class _MeetingSelectionDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> meetings;
+  final DateTime fromDate;
+  final DateTime toDate;
+
+  const _MeetingSelectionDialog({
+    required this.meetings,
+    required this.fromDate,
+    required this.toDate,
+  });
+
+  @override
+  State<_MeetingSelectionDialog> createState() =>
+      _MeetingSelectionDialogState();
+}
+
+class _MeetingSelectionDialogState extends State<_MeetingSelectionDialog> {
+  Set<int> selectedMeetingIds = {};
+  bool _generating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Select all by default
+    selectedMeetingIds = widget.meetings
+        .map((m) => m['meeting_id'] as int)
+        .toSet();
+  }
+
+  void _toggleSelectAll() {
+    setState(() {
+      if (selectedMeetingIds.length == widget.meetings.length) {
+        // Deselect all
+        selectedMeetingIds.clear();
+      } else {
+        // Select all
+        selectedMeetingIds = widget.meetings
+            .map((m) => m['meeting_id'] as int)
+            .toSet();
+      }
+    });
+  }
+
+  void _toggleMeeting(int meetingId) {
+    setState(() {
+      if (selectedMeetingIds.contains(meetingId)) {
+        selectedMeetingIds.remove(meetingId);
+      } else {
+        selectedMeetingIds.add(meetingId);
+      }
+    });
+  }
+
+  String _formatDateTime(String? dateTime) {
+    if (dateTime == null) return 'N/A';
+    try {
+      final dt = DateTime.parse(dateTime);
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateTime;
+    }
+  }
+
+  Future<void> _generateReport() async {
+    if (selectedMeetingIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one meeting'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _generating = true;
+    });
+
+    try {
+      // Filter selected meetings
+      final selectedMeetings = widget.meetings
+          .where((m) => selectedMeetingIds.contains(m['meeting_id']))
+          .toList();
+
+      // Fetch damaged products for selected meetings only
+      final damagedProductsResult = await supabase
+          .from('damaged_products')
+          .select('''
+            meeting_id,
+            quantity,
+            reason,
+            batch(product:product_id(name, selling_price, brand:brand_id(name), category:category_id(name)))
+          ''')
+          .inFilter('meeting_id', selectedMeetingIds.toList());
+
+      final damagedProducts = List<Map<String, dynamic>>.from(
+        damagedProductsResult,
+      );
+
+      // Generate PDF
+      final pdf = await _createPDF(
+        selectedMeetings,
+        damagedProducts,
+        widget.fromDate,
+        widget.toDate,
+      );
+
+      // Show PDF preview/download
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print('Error generating report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating report: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generating = false;
+        });
+      }
+    }
+  }
+
+  Future<pw.Document> _createPDF(
+    List<Map<String, dynamic>> meetings,
+    List<Map<String, dynamic>> damagedProducts,
+    DateTime fromDate,
+    DateTime toDate,
+  ) async {
+    final pdf = pw.Document();
+
+    // Calculate statistics
+    final totalMeetings = meetings.length;
+    final totalDestroyedQty = damagedProducts.fold<int>(
+      0,
+      (sum, item) => sum + (item['quantity'] as int? ?? 0),
+    );
+
+    // Calculate total losses
+    double totalLosses = 0;
+    for (var item in damagedProducts) {
+      final quantity = item['quantity'] as int? ?? 0;
+      final batchData = item['batch'] as Map?;
+      final productData = batchData?['product'] as Map?;
+      final sellingPrice = productData?['selling_price'] as num? ?? 0;
+      totalLosses += quantity * sellingPrice;
+    }
+
+    // Group products by name
+    final Map<String, int> productQuantities = {};
+    for (var item in damagedProducts) {
+      final batchData = item['batch'] as Map?;
+      final productData = batchData?['product'] as Map?;
+      final productName = productData?['name']?.toString() ?? 'Unknown';
+      productQuantities[productName] =
+          (productQuantities[productName] ?? 0) +
+          (item['quantity'] as int? ?? 0);
+    }
+
+    // Get top 3 destroyed products
+    final topProducts = productQuantities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top3 = topProducts.take(3).toList();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            // Title
+            pw.Container(
+              alignment: pw.Alignment.center,
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    'DESTROYED PRODUCTS REPORT',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Period: ${DateFormat('dd/MM/yyyy').format(fromDate)} - ${DateFormat('dd/MM/yyyy').format(toDate)}',
+                    style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Generated on: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 30),
+
+            // Executive Summary
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'EXECUTIVE SUMMARY',
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue900,
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
+                  pw.Text(
+                    'This report provides a comprehensive analysis of destroyed products during the specified period. '
+                    'It includes detailed information about meetings held to address product damage issues, '
+                    'the total quantity of products destroyed, and key statistics to help improve quality control measures.',
+                    style: const pw.TextStyle(fontSize: 11, lineSpacing: 1.5),
+                  ),
+                  pw.SizedBox(height: 16),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatBox('Total Meetings', totalMeetings.toString()),
+                      _buildStatBox(
+                        'Total Destroyed',
+                        '$totalDestroyedQty units',
+                      ),
+                      _buildStatBox(
+                        'Unique Products',
+                        productQuantities.length.toString(),
+                      ),
+                      _buildStatBox(
+                        'Total Losses',
+                        '-\$${totalLosses.toStringAsFixed(2)}',
+                        isLoss: true,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 24),
+
+            // Top Destroyed Products
+            if (top3.isNotEmpty) ...[
+              pw.Text(
+                'TOP DESTROYED PRODUCTS',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue900,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child: pw.Column(
+                  children: top3.map((entry) {
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text(
+                            entry.key,
+                            style: const pw.TextStyle(fontSize: 11),
+                          ),
+                          pw.Text(
+                            '${entry.value} units',
+                            style: pw.TextStyle(
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.red700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              pw.SizedBox(height: 24),
+            ],
+
+            // Meetings and their Damaged Products
+            pw.Text(
+              'MEETINGS AND DAMAGED PRODUCTS DETAILS',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue900,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // Group damaged products by meeting_id
+            ...meetings.map((meeting) {
+              final meetingId = meeting['meeting_id'];
+              final meetingProducts = damagedProducts
+                  .where((item) => item['meeting_id'] == meetingId)
+                  .toList();
+              final dateTime = meeting['meeting_time'] != null
+                  ? DateFormat(
+                      'dd/MM/yyyy HH:mm',
+                    ).format(DateTime.parse(meeting['meeting_time']))
+                  : 'N/A';
+
+              // Calculate meeting total losses
+              double meetingLoss = 0;
+              for (var item in meetingProducts) {
+                final quantity = item['quantity'] as int? ?? 0;
+                final batchData = item['batch'] as Map?;
+                final productData = batchData?['product'] as Map?;
+                final sellingPrice = productData?['selling_price'] as num? ?? 0;
+                meetingLoss += quantity * sellingPrice;
+              }
+
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // Meeting Header
+                  pw.Container(
+                    width: double.infinity,
+                    padding: const pw.EdgeInsets.all(12),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.blue100,
+                      borderRadius: pw.BorderRadius.circular(6),
+                      border: pw.Border.all(
+                        color: PdfColors.blue300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'Meeting #$meetingId',
+                              style: pw.TextStyle(
+                                fontSize: 13,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.blue900,
+                              ),
+                            ),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.end,
+                              children: [
+                                pw.Text(
+                                  dateTime,
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    color: PdfColors.grey800,
+                                  ),
+                                ),
+                                pw.SizedBox(height: 2),
+                                pw.Text(
+                                  'Loss: -\$${meetingLoss.toStringAsFixed(2)}',
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.red700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'Topics: ',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey800,
+                              ),
+                            ),
+                            pw.Expanded(
+                              child: pw.Text(
+                                meeting['meeting_topics']?.toString() ?? 'N/A',
+                                style: const pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'Address: ',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.grey800,
+                              ),
+                            ),
+                            pw.Expanded(
+                              child: pw.Text(
+                                meeting['meeting_address']?.toString() ?? 'N/A',
+                                style: const pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (meeting['result_of_meeting'] != null &&
+                            meeting['result_of_meeting']
+                                .toString()
+                                .isNotEmpty) ...[
+                          pw.SizedBox(height: 4),
+                          pw.Row(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
+                                'Result: ',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
+                              pw.Expanded(
+                                child: pw.Text(
+                                  meeting['result_of_meeting']?.toString() ??
+                                      '',
+                                  style: const pw.TextStyle(
+                                    fontSize: 10,
+                                    color: PdfColors.grey800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+
+                  // Products Table for this meeting
+                  if (meetingProducts.isNotEmpty)
+                    pw.Table.fromTextArray(
+                      headerStyle: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                        fontSize: 10,
+                      ),
+                      cellStyle: const pw.TextStyle(fontSize: 9),
+                      headerDecoration: const pw.BoxDecoration(
+                        color: PdfColors.blue800,
+                      ),
+                      cellHeight: 22,
+                      cellAlignments: {
+                        0: pw.Alignment.centerLeft,
+                        1: pw.Alignment.centerLeft,
+                        2: pw.Alignment.centerLeft,
+                        3: pw.Alignment.center,
+                        4: pw.Alignment.centerRight,
+                        5: pw.Alignment.centerRight,
+                      },
+                      headers: [
+                        'Product',
+                        'Brand',
+                        'Reason',
+                        'Qty',
+                        'Price',
+                        'Loss',
+                      ],
+                      data: meetingProducts.map((item) {
+                        final batchData = item['batch'] as Map?;
+                        final productData = batchData?['product'] as Map?;
+                        final brandData = productData?['brand'] as Map?;
+                        final quantity = item['quantity'] as int? ?? 0;
+                        final sellingPrice =
+                            productData?['selling_price'] as num? ?? 0;
+                        final loss = quantity * sellingPrice;
+                        return [
+                          productData?['name']?.toString() ?? 'N/A',
+                          brandData?['name']?.toString() ?? 'N/A',
+                          item['reason']?.toString() ?? 'N/A',
+                          quantity.toString(),
+                          '\$${sellingPrice.toStringAsFixed(2)}',
+                          '-\$${loss.toStringAsFixed(2)}',
+                        ];
+                      }).toList(),
+                    )
+                  else
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(12),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.grey200,
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Text(
+                        'No damaged products recorded for this meeting',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontStyle: pw.FontStyle.italic,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
+
+                  pw.SizedBox(height: 15),
+                  // Separator line between meetings
+                  pw.Container(height: 1, color: PdfColors.grey400),
+                  pw.SizedBox(height: 15),
+                ],
+              );
+            }).toList(),
+          ];
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+  pw.Widget _buildStatBox(String label, String value, {bool isLoss = false}) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(6),
+        border: pw.Border.all(color: PdfColors.blue300, width: 1.5),
+      ),
+      child: pw.Column(
+        children: [
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: isLoss ? PdfColors.red700 : PdfColors.blue800,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 700,
+        height: 600,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header with close button
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: AppColors.blue,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select Meetings',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${widget.meetings.length} meeting(s) found',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+
+            // Select All Button
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _toggleSelectAll,
+                      icon: Icon(
+                        selectedMeetingIds.length == widget.meetings.length
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        size: 20,
+                      ),
+                      label: Text(
+                        selectedMeetingIds.length == widget.meetings.length
+                            ? 'Deselect All'
+                            : 'Select All',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.dark,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.blue.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.blue),
+                    ),
+                    child: Text(
+                      '${selectedMeetingIds.length} selected',
+                      style: const TextStyle(
+                        color: AppColors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Meetings List
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: widget.meetings.length,
+                itemBuilder: (context, index) {
+                  final meeting = widget.meetings[index];
+                  final meetingId = meeting['meeting_id'] as int;
+                  final isSelected = selectedMeetingIds.contains(meetingId);
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.blue.withOpacity(0.1)
+                          : AppColors.dark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? AppColors.blue : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: CheckboxListTile(
+                      value: isSelected,
+                      onChanged: (value) => _toggleMeeting(meetingId),
+                      checkColor: Colors.white,
+                      activeColor: AppColors.blue,
+                      title: Text(
+                        meeting['meeting_topics']?.toString() ?? 'N/A',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(
+                            'ID: #$meetingId',
+                            style: TextStyle(
+                              color: AppColors.blue.withOpacity(0.8),
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatDateTime(meeting['meeting_time']),
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Generate Button
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _generating ? null : _generateReport,
+                  icon: _generating
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Icon(Icons.picture_as_pdf, size: 20),
+                  label: Text(
+                    _generating ? 'Generating...' : 'Generate Report',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    disabledBackgroundColor: AppColors.grey,
+                  ),
+                ),
               ),
             ),
           ],

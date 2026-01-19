@@ -84,6 +84,7 @@ class _ReportCustomerPageContentState extends State<ReportCustomerPageContent> {
 
   void _filterCustomers() {
     final query = _searchController.text.toLowerCase();
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredCustomers = _customers;
@@ -116,6 +117,7 @@ class _ReportCustomerPageContentState extends State<ReportCustomerPageContent> {
   }
 
   void _onHeaderTap(String column) {
+    if (!mounted) return;
     setState(() {
       if (_sortColumn == column) {
         _sortAscending = !_sortAscending;

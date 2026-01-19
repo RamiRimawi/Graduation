@@ -84,6 +84,7 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
 
   void _filterSuppliers() {
     final query = _searchController.text.toLowerCase();
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredSuppliers = _suppliers;
@@ -116,6 +117,7 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
   }
 
   void _onHeaderTap(String column) {
+    if (!mounted) return;
     setState(() {
       if (_sortColumn == column) {
         _sortAscending = !_sortAscending;
