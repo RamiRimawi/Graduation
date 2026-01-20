@@ -474,14 +474,14 @@ class _GenerateProductReportDialogState
           // Get supplier orders via batch with quantities
           final supplierOrderInventory = await supabase
               .from('supplier_order_inventory')
-              .select('supplier_order_id, receipt_quantity')
+              .select('supplier_order_id, quantity')
               .inFilter('batch_id', batchIds);
 
           // Group by supplier_order_id and sum quantities
           final Map<int, int> orderQuantities = {};
           for (final item in supplierOrderInventory) {
             final orderId = item['supplier_order_id'] as int;
-            final quantity = (item['receipt_quantity'] as num?)?.toInt() ?? 0;
+            final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
             orderQuantities[orderId] =
                 (orderQuantities[orderId] ?? 0) + quantity;
           }
