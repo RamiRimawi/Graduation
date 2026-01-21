@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -492,39 +493,46 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     final alreadyInCart =
         productId != null && _cartProductIds.contains(productId);
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: const Color(0xFF2D2D2D),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      isScrollControlled: true,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.7),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 200,
-                  child: Center(child: _buildProductImage(imageUrl)),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Dialog(
+            backgroundColor: const Color(0xFF2D2D2D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 200,
+                      child: Center(child: _buildProductImage(imageUrl)),
+                    ),
+                    const SizedBox(height: 16),
+                    _infoRow('Name', product['name'] ?? ''),
+                    const SizedBox(height: 8),
+                    _infoRow('Category', categoryName),
+                    const SizedBox(height: 8),
+                    _infoRow('Brand', brandName),
+                    const SizedBox(height: 8),
+                    _infoRow(
+                      'Selling Price',
+                      sellingPrice != null ? sellingPrice.toString() : '—',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildAddToCartButton(product, disabled: alreadyInCart),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _infoRow('Name', product['name'] ?? ''),
-                const SizedBox(height: 8),
-                _infoRow('Category', categoryName),
-                const SizedBox(height: 8),
-                _infoRow('Brand', brandName),
-                const SizedBox(height: 8),
-                _infoRow(
-                  'Selling Price',
-                  sellingPrice != null ? sellingPrice.toString() : '—',
-                ),
-                const SizedBox(height: 16),
-                _buildAddToCartButton(product, disabled: alreadyInCart),
-              ],
+              ),
             ),
           ),
         );

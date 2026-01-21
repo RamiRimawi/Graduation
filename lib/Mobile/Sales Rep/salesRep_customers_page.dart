@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
@@ -280,29 +281,42 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     final mobile = (customer['mobile'] as String?) ?? '—';
     final telephone = (customer['telephone'] as String?) ?? '—';
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: const Color(0xFF2D2D2D),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withOpacity(0.7),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: _buildProfileImage(imageUrl)),
-              const SizedBox(height: 16),
-              _infoRow('Name', name),
-              const SizedBox(height: 8),
-              _infoRow('Address', address),
-              const SizedBox(height: 8),
-              _infoRow('Mobile Number', mobile),
-              const SizedBox(height: 8),
-              _infoRow('Telephone Number', telephone),
-            ],
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Dialog(
+            backgroundColor: const Color(0xFF2D2D2D),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 400),
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      height: 200,
+                      child: Center(child: _buildProfileImage(imageUrl)),
+                    ),
+                    const SizedBox(height: 16),
+                    _infoRow('Name', name),
+                    const SizedBox(height: 8),
+                    _infoRow('Address', address),
+                    const SizedBox(height: 8),
+                    _infoRow('Mobile Number', mobile),
+                    const SizedBox(height: 8),
+                    _infoRow('Telephone Number', telephone),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       },
@@ -341,11 +355,15 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
 
   Widget _buildProfileImage(String? imageUrl) {
     final placeholder = Container(
+      width: double.infinity,
+      height: double.infinity,
       decoration: BoxDecoration(
         color: const Color(0xFF262626),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: const Icon(Icons.person, color: Color(0xFFB7A447), size: 64),
+      child: const Center(
+        child: Icon(Icons.person, color: Color(0xFFB7A447), size: 64),
+      ),
     );
 
     if (imageUrl == null || imageUrl.isEmpty) {
@@ -353,9 +371,11 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     }
 
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: BorderRadius.circular(16),
       child: Image.network(
         imageUrl,
+        width: double.infinity,
+        height: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => placeholder,
         loadingBuilder: (context, child, progress) {
