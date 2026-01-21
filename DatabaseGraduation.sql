@@ -391,6 +391,7 @@ CREATE TABLE public.supplier_order (
   accountant_id integer,
   last_tracing_by text,
   last_tracing_time timestamp without time zone,
+  updated_description text,
   CONSTRAINT supplier_order_pkey PRIMARY KEY (order_id),
   CONSTRAINT supplier_order_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(supplier_id),
   CONSTRAINT supplier_order_receives_by_id_fkey FOREIGN KEY (receives_by_id) REFERENCES public.storage_manager(storage_manager_id),
@@ -404,6 +405,7 @@ CREATE TABLE public.supplier_order_description (
   price_per_product numeric,
   last_tracing_by text,
   last_tracing_time timestamp without time zone,
+  updated_quantity integer,
   CONSTRAINT supplier_order_description_pkey PRIMARY KEY (order_id, product_id),
   CONSTRAINT supplier_order_description_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.supplier_order(order_id),
   CONSTRAINT supplier_order_description_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.product(product_id)

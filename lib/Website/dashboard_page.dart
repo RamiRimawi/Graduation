@@ -874,7 +874,9 @@ class _OrdersCardState extends State<_OrdersCard> {
             // Fetch supplier order details
             final orderDetails = await supabase
                 .from('supplier_order')
-                .select('order_date, supplier:supplier_id(name)')
+                .select(
+                  'order_date, updated_description, supplier:supplier_id(name)',
+                )
                 .eq('order_id', int.parse(order['id']))
                 .maybeSingle();
 
@@ -882,7 +884,7 @@ class _OrdersCardState extends State<_OrdersCard> {
               final items = await supabase
                   .from('supplier_order_description')
                   .select(
-                    'product_id, quantity, price_per_product, product:product_id(name, brand:brand_id(name), unit:unit_id(unit_name))',
+                    'product_id, quantity, price_per_product, updated_quantity, product:product_id(name, brand:brand_id(name), unit:unit_id(unit_name))',
                   )
                   .eq('order_id', int.parse(order['id']));
 
@@ -899,6 +901,8 @@ class _OrdersCardState extends State<_OrdersCard> {
                   'brand': brand?['name'] ?? '-',
                   'price': price == 0 ? '-' : '${price.toStringAsFixed(2)}\$',
                   'quantity': quantity,
+                  'updated_quantity': item['updated_quantity'],
+                  'original_quantity': quantity,
                   'total': (price * quantity) == 0
                       ? '-'
                       : '${(price * quantity).toStringAsFixed(2)}\$',
@@ -916,6 +920,8 @@ class _OrdersCardState extends State<_OrdersCard> {
                 partyName: orderDetails['supplier']?['name'] ?? 'Unknown',
                 orderDate: DateTime.parse(orderDetails['order_date']),
                 orderId: int.parse(order['id']),
+                updateDescription:
+                    orderDetails['updated_description'] as String?,
               );
             }
           }

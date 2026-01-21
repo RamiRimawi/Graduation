@@ -638,13 +638,37 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
       }
       accountantName ??= 'System';
 
+      final nowIso = DateTime.now().toIso8601String().split('.').first;
+
+      // Apply updated quantities to actual quantities
+      for (final product in _products) {
+        final productId = _getProductId(product['id']);
+        final updatedQty = product['updated_quantity'];
+
+        if (updatedQty != null) {
+          await supabase
+              .from('supplier_order_description')
+              .update({
+                'quantity': updatedQty,
+                'updated_quantity':
+                    null, // Clear updated_quantity after applying
+                'last_tracing_by': accountantName,
+                'last_tracing_time': nowIso,
+              })
+              .eq('order_id', widget.orderId!)
+              .eq('product_id', productId);
+        }
+      }
+
       // Update supplier_order to Sent
       await supabase
           .from('supplier_order')
           .update({
             'order_status': 'Sent',
+            'accountant_id': accountantId,
+            'updated_description': null, // Clear description after applying
             'last_tracing_by': accountantName,
-            'last_tracing_time': DateTime.now().toIso8601String(),
+            'last_tracing_time': nowIso,
           })
           .eq('order_id', widget.orderId!);
 
@@ -1497,7 +1521,8 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                       flex: 2,
                                       child: Center(
                                         child:
-                                            (widget.orderType == 'out' &&
+                                            ((widget.orderType == 'out' ||
+                                                    widget.orderType == 'in') &&
                                                 widget.status == 'UPDATE' &&
                                                 product['updated_quantity'] !=
                                                     null)
@@ -1511,7 +1536,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
-                                                    // Connected grey box for original quantity (now on left)
+                                                    // Connected red box for original quantity (now on left)
                                                     Container(
                                                       padding:
                                                           const EdgeInsets.symmetric(
@@ -1554,7 +1579,7 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                                         ),
                                                       ),
                                                     ),
-                                                    // Editable updated quantity with unit (now on right)
+                                                    // Updated quantity with unit (now on right) - Read-only for 'in' orders
                                                     Container(
                                                       padding:
                                                           const EdgeInsets.symmetric(
@@ -1583,79 +1608,99 @@ class _OrderDetailDialogState extends State<_OrderDetailDialog> {
                                                         children: [
                                                           SizedBox(
                                                             width: 40,
-                                                            child: TextFormField(
-                                                              key: ValueKey(
-                                                                'qty_${product["id"]}',
-                                                              ),
-                                                              initialValue:
-                                                                  (product['updated_quantity'] ??
-                                                                          product['quantity'] ??
-                                                                          0)
-                                                                      .toString(),
-                                                              keyboardType:
-                                                                  TextInputType
-                                                                      .number,
-                                                              cursorColor:
-                                                                  Colors.white,
-                                                              inputFormatters: [
-                                                                FilteringTextInputFormatter
-                                                                    .digitsOnly,
-                                                              ],
-                                                              textAlign:
-                                                                  TextAlign
-                                                                      .center,
-                                                              style: const TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 14,
-                                                              ),
-                                                              decoration: const InputDecoration(
-                                                                border:
-                                                                    InputBorder
-                                                                        .none,
-                                                                contentPadding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                                isDense: true,
-                                                              ),
-                                                              onChanged: (value) {
-                                                                setState(() {
-                                                                  final newQty =
-                                                                      int.tryParse(
-                                                                        value,
-                                                                      ) ??
-                                                                      0;
-                                                                  product["quantity"] =
-                                                                      newQty;
+                                                            child:
+                                                                widget.orderType ==
+                                                                    'in'
+                                                                ? Center(
+                                                                    child: Text(
+                                                                      (product['updated_quantity'] ??
+                                                                              product['quantity'] ??
+                                                                              0)
+                                                                          .toString(),
+                                                                      style: const TextStyle(
+                                                                        color: Colors
+                                                                            .black,
+                                                                        fontWeight:
+                                                                            FontWeight.bold,
+                                                                        fontSize:
+                                                                            14,
+                                                                      ),
+                                                                    ),
+                                                                  )
+                                                                : TextFormField(
+                                                                    key: ValueKey(
+                                                                      'qty_${product["id"]}',
+                                                                    ),
+                                                                    initialValue:
+                                                                        (product['updated_quantity'] ??
+                                                                                product['quantity'] ??
+                                                                                0)
+                                                                            .toString(),
+                                                                    keyboardType:
+                                                                        TextInputType
+                                                                            .number,
+                                                                    cursorColor:
+                                                                        Colors
+                                                                            .white,
+                                                                    inputFormatters: [
+                                                                      FilteringTextInputFormatter
+                                                                          .digitsOnly,
+                                                                    ],
+                                                                    textAlign:
+                                                                        TextAlign
+                                                                            .center,
+                                                                    style: const TextStyle(
+                                                                      color: Colors
+                                                                          .black,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      fontSize:
+                                                                          14,
+                                                                    ),
+                                                                    decoration: const InputDecoration(
+                                                                      border: InputBorder
+                                                                          .none,
+                                                                      contentPadding:
+                                                                          EdgeInsets
+                                                                              .zero,
+                                                                      isDense:
+                                                                          true,
+                                                                    ),
+                                                                    onChanged: (value) {
+                                                                      setState(() {
+                                                                        final newQty =
+                                                                            int.tryParse(
+                                                                              value,
+                                                                            ) ??
+                                                                            0;
+                                                                        product["quantity"] =
+                                                                            newQty;
 
-                                                                  // Update total price
-                                                                  final priceStr =
-                                                                      product['price']
-                                                                          ?.toString() ??
-                                                                      '0';
-                                                                  final price =
-                                                                      num.tryParse(
-                                                                        priceStr.replaceAll(
-                                                                          RegExp(
-                                                                            r'[^0-9.-]',
-                                                                          ),
-                                                                          '',
-                                                                        ),
-                                                                      ) ??
-                                                                      0;
-                                                                  final newTotal =
-                                                                      price *
-                                                                      newQty;
-                                                                  product["total"] =
-                                                                      _formatMoney(
-                                                                        newTotal,
-                                                                      );
-                                                                });
-                                                              },
-                                                            ),
+                                                                        // Update total price
+                                                                        final priceStr =
+                                                                            product['price']?.toString() ??
+                                                                            '0';
+                                                                        final price =
+                                                                            num.tryParse(
+                                                                              priceStr.replaceAll(
+                                                                                RegExp(
+                                                                                  r'[^0-9.-]',
+                                                                                ),
+                                                                                '',
+                                                                              ),
+                                                                            ) ??
+                                                                            0;
+                                                                        final newTotal =
+                                                                            price *
+                                                                            newQty;
+                                                                        product["total"] =
+                                                                            _formatMoney(
+                                                                              newTotal,
+                                                                            );
+                                                                      });
+                                                                    },
+                                                                  ),
                                                           ),
                                                           const SizedBox(
                                                             width: 4,

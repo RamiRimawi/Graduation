@@ -442,19 +442,75 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   // ============= HANDLE SEND UPDATE BUTTON =============
   Future<void> _handleSendUpdate() async {
+    // First, show description dialog
+    final descriptionController = TextEditingController();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "Update Description",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: TextField(
+            controller: descriptionController,
+            maxLines: 3,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: "Enter reason for update...",
+              hintStyle: TextStyle(color: Colors.white70),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.white38),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Color(0xFFB7A447)),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                "Send",
+                style: TextStyle(color: Color(0xFFB7A447)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
     try {
       final nowIso = DateTime.now()
           .toIso8601String()
           .split('.')
           .first; // Trim to seconds
 
-      // Update quantities for changed products
+      // Update quantities for changed products - save to updated_quantity column
       for (final product in products) {
         if (product['quantity'] != product['original_quantity']) {
           await supabase
               .from('supplier_order_description')
               .update({
-                'quantity': product['quantity'],
+                'updated_quantity': product['quantity'],
                 'last_tracing_by': supplierName,
                 'last_tracing_time': nowIso,
               })
@@ -463,7 +519,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         }
       }
 
-      // Calculate total cost from current quantities and prices
+      // Calculate total cost from updated quantities and prices
       final double totalCost = products.fold<double>(0.0, (sum, product) {
         final qty = (product['quantity'] as num?)?.toDouble() ?? 0.0;
         final price = (product['price_per_product'] as num?)?.toDouble() ?? 0.0;
@@ -484,13 +540,14 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
       final double totalBalance = totalCost + (totalCost * taxPercent / 100.0);
 
-      // Update order status to 'Updated' and update totals (cost + balance)
+      // Update order status to 'Updated' and update totals (cost + balance) and description
       final orderUpdate = await supabase
           .from('supplier_order')
           .update({
             'order_status': 'Updated',
             'total_cost': totalCost,
             'total_balance': totalBalance,
+            'updated_description': descriptionController.text,
             'last_tracing_by': supplierName,
             'last_tracing_time': nowIso,
           })

@@ -61,6 +61,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
             created_by_id,
             accountant_id,
             last_tracing_by,
+            updated_description,
             supplier:supplier_id (
               name
             )
@@ -183,6 +184,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
             product_id,
             quantity,
             price_per_product,
+            updated_quantity,
             product:product_id (
               name,
               brand:brand_id(name),
@@ -197,6 +199,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
       return products.map((product) {
         final productData = product['product'] as Map<String, dynamic>? ?? {};
         final brandData = productData['brand'] as Map<String, dynamic>? ?? {};
+        final unitData = productData['unit'] as Map<String, dynamic>? ?? {};
 
         return {
           'id': product['product_id'],
@@ -204,6 +207,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
           'brand': brandData['name'] ?? 'Unknown Brand',
           'price': '${product['price_per_product'] ?? 0}\$',
           'quantity': product['quantity'] ?? 0,
+          'updated_quantity': product['updated_quantity'],
+          'original_quantity': product['quantity'] ?? 0,
+          'unit_name': unitData['unit_name'],
           'total':
               '${((product['price_per_product'] ?? 0) * (product['quantity'] ?? 0)).toStringAsFixed(2)}\$',
         };
@@ -246,6 +252,8 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
       partyName: order['supplier']['name'] ?? 'Unknown Supplier',
       orderDate: DateTime.parse(order['order_date']),
       orderId: orderId,
+      updateDescription: order['updated_description'],
+      onOrderUpdated: _loadReceivesOrders,
     );
   }
 

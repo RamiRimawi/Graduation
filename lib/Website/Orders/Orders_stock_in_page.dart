@@ -198,6 +198,7 @@ class _StockInPageState extends State<StockInPage> {
           taxPercent: detail.taxPercent,
           totalPrice: detail.totalPrice,
           orderId: int.tryParse(order.id) ?? detail.orderId,
+          updateDescription: detail.updateDescription,
           onOrderUpdated: _loadTodayOrders,
         );
       } else {
@@ -254,6 +255,7 @@ class _StockInPageState extends State<StockInPage> {
           total_balance,
           accountant_id,
           receives_by_id,
+          updated_description,
           supplier:supplier_id(name, address, supplier_city(name)),
           accountant:accountant_id(name),
           storage_manager:receives_by_id(name)
@@ -268,7 +270,7 @@ class _StockInPageState extends State<StockInPage> {
     final items = await supabase
         .from('supplier_order_description')
         .select(
-          'product_id, quantity, price_per_product, product:product_id(name, brand:brand_id(name, brand_id), unit:unit_id(unit_name, unit_id))',
+          'product_id, quantity, price_per_product, updated_quantity, product:product_id(name, brand:brand_id(name, brand_id), unit:unit_id(unit_name, unit_id))',
         )
         .eq('order_id', parsedId ?? orderId);
 
@@ -287,6 +289,9 @@ class _StockInPageState extends State<StockInPage> {
         'brand': brand?['name'] ?? 'Unknown Brand',
         'price': '${price.toStringAsFixed(2)}\$',
         'quantity': quantity,
+        'updated_quantity': item['updated_quantity'],
+        'original_quantity': quantity,
+        'unit_name': unit?['unit_name'],
         'total': price * quantity,
         'unit': unit?['unit_name'] ?? 'Unknown Unit',
       });
@@ -306,6 +311,7 @@ class _StockInPageState extends State<StockInPage> {
       totalPrice: order['total_balance'] as num?,
       orderId: parsedId ?? int.tryParse(orderId) ?? 0,
       products: products,
+      updateDescription: order['updated_description'] as String?,
       manager:
           order['accountant'] != null &&
               order['accountant'] is Map<String, dynamic>
@@ -611,6 +617,7 @@ class _OrderDetailData {
   final Map<String, dynamic>? manager;
   final Map<String, dynamic>? storageStaff;
   final Map<String, dynamic>? deliveryDriver;
+  final String? updateDescription;
 
   _OrderDetailData({
     required this.partyName,
@@ -624,6 +631,7 @@ class _OrderDetailData {
     this.manager,
     this.storageStaff,
     this.deliveryDriver,
+    this.updateDescription,
   });
 }
 
@@ -656,8 +664,6 @@ class _RoundIconButton extends StatelessWidget {
     );
   }
 }
-
-
 
 // 🔹 تبويبات
 // 🔹 التبويبات
@@ -761,8 +767,6 @@ class _SearchField extends StatelessWidget {
     );
   }
 }
-
-
 
 // 🔹 عنوان الجدول
 class _TableHeader extends StatelessWidget {
