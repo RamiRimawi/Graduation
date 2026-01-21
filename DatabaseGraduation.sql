@@ -207,6 +207,15 @@ CREATE TABLE public.delivery_driver (
   CONSTRAINT delivery_driver_current_order_id_fkey FOREIGN KEY (current_order_id) REFERENCES public.customer_order(customer_order_id),
   CONSTRAINT delivery_driver_delivery_driver_id_fkey FOREIGN KEY (delivery_driver_id) REFERENCES public.accounts(user_id)
 );
+CREATE TABLE public.delivery_vehicle (
+  plate_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  delivery_driver_id integer NOT NULL,
+  from_date date NOT NULL,
+  to_date date NOT NULL,
+  CONSTRAINT delivery_vehicle_pkey PRIMARY KEY (plate_id, delivery_driver_id, from_date, to_date),
+  CONSTRAINT delivery_vehicle_delivery_driver_id_fkey FOREIGN KEY (delivery_driver_id) REFERENCES public.delivery_driver(delivery_driver_id),
+  CONSTRAINT delivery_vehicle_plate_id_fkey FOREIGN KEY (plate_id) REFERENCES public.vehicle(plate_id)
+);
 CREATE TABLE public.incoming_payment (
   payment_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   customer_id integer,
@@ -417,4 +426,12 @@ CREATE TABLE public.unit (
   unit_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   unit_name USER-DEFINED,
   CONSTRAINT unit_pkey PRIMARY KEY (unit_id)
+);
+CREATE TABLE public.vehicle (
+  plate_id bigint NOT NULL,
+  model text,
+  brand text,
+  is_active boolean,
+  vehicle_image text,
+  CONSTRAINT vehicle_pkey PRIMARY KEY (plate_id)
 );

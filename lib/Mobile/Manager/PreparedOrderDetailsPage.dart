@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../manager_theme.dart';
 import 'order_item.dart';
 import 'SelectDeliveryDriverSheet.dart';
+import 'SelectVehicleSheet.dart';
 import 'order_service.dart';
 
 class PreparedOrderDetailsPage extends StatefulWidget {
@@ -222,32 +223,120 @@ class _PreparedOrderDetailsPageState extends State<PreparedOrderDetailsPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => SelectDeliveryDriverSheet(
+      builder: (sheetContext) => SelectDeliveryDriverSheet(
         onSelected: (driverId, driverName) async {
-          // Close the sheet first
-          Navigator.of(context).pop();
+          // Check if driver has a vehicle BEFORE closing the sheet
+          final hasVehicle = await OrderService.driverHasVehicle(driverId);
 
-          // Assign driver to order
-          final ok = await OrderService.assignDeliveryDriver(
-            orderId: widget.orderId,
-            driverId: driverId,
+          debugPrint(
+            'Driver $driverName (ID: $driverId) has vehicle: $hasVehicle',
           );
 
-          // Show feedback if still mounted
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  ok ? "Sent to $driverName" : "Failed to assign $driverName",
-                ),
-              ),
-            );
-            // Return to previous page with result
-            Navigator.of(context).pop(ok);
+          // Close the driver selection sheet
+          if (sheetContext.mounted) {
+            Navigator.of(sheetContext).pop();
+          }
+
+          // Wait for sheet animation to complete
+          await Future.delayed(const Duration(milliseconds: 300));
+
+          if (!hasVehicle) {
+            // Driver doesn't have a vehicle - show vehicle selection
+            debugPrint('Opening vehicle selector for $driverName');
+            if (context.mounted) {
+              _openVehicleSelector(context, driverId, driverName);
+            } else {
+              debugPrint('ERROR: Context not mounted for vehicle selector');
+            }
+          } else {
+            // Driver has vehicle - proceed with assignment
+            debugPrint('Driver has vehicle, proceeding with order assignment');
+            if (context.mounted) {
+              await _assignOrderToDriver(context, driverId, driverName);
+            }
           }
         },
       ),
     );
+  }
+
+  void _openVehicleSelector(
+    BuildContext context,
+    int driverId,
+    String driverName,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => SelectVehicleSheet(
+        driverId: driverId,
+        driverName: driverName,
+        onSelected: (vehicleId, fromDate, toDate) async {
+          // Close the vehicle selection sheet
+          Navigator.of(context).pop();
+
+          // Assign vehicle to driver
+          final vehicleAssigned = await OrderService.assignVehicleToDriver(
+            driverId: driverId,
+            vehicleId: vehicleId,
+            fromDate: fromDate,
+            toDate: toDate,
+          );
+
+          if (context.mounted) {
+            if (vehicleAssigned) {
+              // Vehicle assigned successfully - now assign order
+              await _assignOrderToDriver(context, driverId, driverName);
+            } else {
+              // Failed to assign vehicle
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to assign vehicle'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _assignOrderToDriver(
+    BuildContext context,
+    int driverId,
+    String driverName,
+  ) async {
+    // Assign driver to order
+    final ok = await OrderService.assignDeliveryDriver(
+      orderId: widget.orderId,
+      driverId: driverId,
+    );
+
+    debugPrint('Order assignment result: $ok');
+
+    // Show feedback if still mounted
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? "Sent to $driverName" : "Failed to assign $driverName",
+          ),
+          backgroundColor: ok ? Colors.green : Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // Return to previous page with result after a short delay
+      if (ok) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (context.mounted) {
+          debugPrint('Popping back to StockOutPage with result: $ok');
+          Navigator.of(context).pop(ok);
+        }
+      }
+    }
   }
 
   @override

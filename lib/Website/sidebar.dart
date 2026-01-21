@@ -161,6 +161,9 @@ class Sidebar extends StatelessWidget {
 
   // Show report menu popup
   void _showReportMenu(BuildContext context) {
+    // Get current route before showing dialog
+    final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
+
     // Calculate position for report icon (index 5)
     // Logo area: ~194px (16 top padding + 10 spacing + 158 logo + 10 gap)
     // Each icon with gap: 29px icon + 32px gap = 61px
@@ -187,7 +190,11 @@ class Sidebar extends StatelessWidget {
               onTap: () => Navigator.of(context).pop(),
               child: Container(color: Colors.transparent),
             ),
-            Positioned(left: 160, top: topPosition, child: _ReportMenuPopup()),
+            Positioned(
+              left: 160,
+              top: topPosition,
+              child: _ReportMenuPopup(currentRoute: currentRoute),
+            ),
           ],
         );
       },
@@ -263,6 +270,10 @@ class _HoverProfileImage extends StatefulWidget {
 
 // 🎨 Report Menu Popup
 class _ReportMenuPopup extends StatelessWidget {
+  final String currentRoute;
+
+  const _ReportMenuPopup({required this.currentRoute});
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -286,6 +297,8 @@ class _ReportMenuPopup extends StatelessWidget {
             _ReportMenuItem(
               icon: Icons.inventory_2_outlined,
               label: 'Product',
+              route: '/report',
+              isActive: currentRoute == '/report',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.pushReplacementNamed(context, '/report').catchError((
@@ -299,6 +312,8 @@ class _ReportMenuPopup extends StatelessWidget {
             _ReportMenuItem(
               icon: Icons.people_outline,
               label: 'Customer',
+              route: '/reportCustomer',
+              isActive: currentRoute == '/reportCustomer',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.pushReplacementNamed(
@@ -313,6 +328,8 @@ class _ReportMenuPopup extends StatelessWidget {
             _ReportMenuItem(
               icon: Icons.local_shipping_outlined,
               label: 'Supplier',
+              route: '/reportSupplier',
+              isActive: currentRoute == '/reportSupplier',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.pushReplacementNamed(
@@ -327,6 +344,8 @@ class _ReportMenuPopup extends StatelessWidget {
             _ReportMenuItem(
               icon: Icons.delete_outline,
               label: 'Destroyed Product',
+              route: '/reportDestroyedProduct',
+              isActive: currentRoute == '/reportDestroyedProduct',
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.pushReplacementNamed(
@@ -356,12 +375,16 @@ class _ReportMenuPopup extends StatelessWidget {
 class _ReportMenuItem extends StatefulWidget {
   final IconData icon;
   final String label;
+  final String? route;
+  final bool isActive;
   final bool comingSoon;
   final VoidCallback? onTap;
 
   const _ReportMenuItem({
     required this.icon,
     required this.label,
+    this.route,
+    this.isActive = false,
     this.comingSoon = false,
     this.onTap,
   });
@@ -375,6 +398,8 @@ class _ReportMenuItemState extends State<_ReportMenuItem> {
 
   @override
   Widget build(BuildContext context) {
+    const activeColor = Color(0xFF50B2E7);
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -382,8 +407,10 @@ class _ReportMenuItemState extends State<_ReportMenuItem> {
         onTap: widget.comingSoon ? null : widget.onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          color: _isHovered && !widget.comingSoon
-              ? const Color(0xFF50B2E7).withOpacity(0.1)
+          color: widget.isActive
+              ? activeColor.withOpacity(0.15)
+              : _isHovered && !widget.comingSoon
+              ? activeColor.withOpacity(0.1)
               : Colors.transparent,
           child: Row(
             children: [
@@ -391,8 +418,10 @@ class _ReportMenuItemState extends State<_ReportMenuItem> {
                 widget.icon,
                 color: widget.comingSoon
                     ? Colors.white.withOpacity(0.3)
+                    : widget.isActive
+                    ? activeColor
                     : _isHovered
-                    ? const Color(0xFF50B2E7)
+                    ? activeColor
                     : Colors.white,
                 size: 22,
               ),
@@ -403,6 +432,8 @@ class _ReportMenuItemState extends State<_ReportMenuItem> {
                   style: TextStyle(
                     color: widget.comingSoon
                         ? Colors.white.withOpacity(0.3)
+                        : widget.isActive
+                        ? activeColor
                         : Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

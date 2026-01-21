@@ -36,6 +36,8 @@ class _ReportPageContentState extends State<ReportPageContent> {
   List<Map<String, dynamic>> _filteredProducts = [];
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
+  String _sortColumn = 'product_id';
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -66,6 +68,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
           _products = List<Map<String, dynamic>>.from(result);
           _filteredProducts = _products;
           _loading = false;
+          _sortProducts();
         });
       }
     } catch (e) {
@@ -80,6 +83,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
 
   void _filterProducts() {
     final query = _searchController.text.toLowerCase();
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredProducts = _products;
@@ -89,6 +93,38 @@ class _ReportPageContentState extends State<ReportPageContent> {
           return name.startsWith(query);
         }).toList();
       }
+      _sortProducts();
+    });
+  }
+
+  void _sortProducts() {
+    _filteredProducts.sort((a, b) {
+      dynamic aValue = a[_sortColumn];
+      dynamic bValue = b[_sortColumn];
+
+      if (_sortColumn == 'product_id') {
+        aValue = aValue as int? ?? 0;
+        bValue = bValue as int? ?? 0;
+      } else {
+        aValue = aValue?.toString().toLowerCase() ?? '';
+        bValue = bValue?.toString().toLowerCase() ?? '';
+      }
+
+      final comparison = aValue.compareTo(bValue);
+      return _sortAscending ? comparison : -comparison;
+    });
+  }
+
+  void _onHeaderTap(String column) {
+    if (!mounted) return;
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+      _sortProducts();
     });
   }
 
@@ -115,7 +151,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
                         Text(
-                          'Report Page',
+                          'Product Reports',
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: 18,
@@ -181,10 +217,22 @@ class _ReportPageContentState extends State<ReportPageContent> {
                             const SizedBox(height: 14),
 
                             Row(
-                              children: const [
-                                _HeaderText('Product ID #', flex: 2),
-                                _HeaderText('Product Name', flex: 4),
-                                _HeaderText('Brand', flex: 3),
+                              children: [
+                                _SortableHeader(
+                                  'Product ID #',
+                                  flex: 2,
+                                  isActive: _sortColumn == 'product_id',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('product_id'),
+                                ),
+                                _SortableHeader(
+                                  'Product Name',
+                                  flex: 4,
+                                  isActive: _sortColumn == 'name',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('name'),
+                                ),
+                                const _HeaderText('Brand', flex: 3),
                                 _HeaderText('Category', flex: 3),
                                 _HeaderText('Selling Price', flex: 3),
                                 _HeaderText(
@@ -647,6 +695,56 @@ class _HeaderText extends StatelessWidget {
             color: color,
             fontWeight: FontWeight.bold,
             fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Sortable Header Text
+class _SortableHeader extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool isActive;
+  final bool isAscending;
+  final VoidCallback onTap;
+
+  const _SortableHeader(
+    this.text, {
+    this.flex = 1,
+    required this.isActive,
+    required this.isAscending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  color: isActive ? AppColors.blue : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isActive)
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: AppColors.blue,
+                ),
+            ],
           ),
         ),
       ),

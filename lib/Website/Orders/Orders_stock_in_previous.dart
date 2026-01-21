@@ -108,6 +108,8 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
   final TextEditingController _toDateController = TextEditingController();
   List<String> _inventories = [];
   bool _isInventoryDropdownExpanded = false;
+  String _sortColumn = 'date';
+  bool _sortAscending = false;
 
   @override
   void initState() {
@@ -277,7 +279,46 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
       });
     }
 
-    return filtered.toList(growable: false);
+    final result = filtered.toList(growable: false);
+    _sortOrders(result);
+    return result;
+  }
+
+  void _sortOrders(List<Map<String, dynamic>> orders) {
+    orders.sort((a, b) {
+      dynamic aValue, bValue;
+
+      if (_sortColumn == 'order_id') {
+        aValue = a['order_id'] as int? ?? 0;
+        bValue = b['order_id'] as int? ?? 0;
+      } else if (_sortColumn == 'supplier_name') {
+        aValue = (a['supplier']?['name'] ?? '').toString().toLowerCase();
+        bValue = (b['supplier']?['name'] ?? '').toString().toLowerCase();
+      } else if (_sortColumn == 'date') {
+        aValue = a['order_date'] != null
+            ? DateTime.parse(a['order_date'])
+            : DateTime(1900);
+        bValue = b['order_date'] != null
+            ? DateTime.parse(b['order_date'])
+            : DateTime(1900);
+      } else {
+        return 0;
+      }
+
+      final comparison = aValue.compareTo(bValue);
+      return _sortAscending ? comparison : -comparison;
+    });
+  }
+
+  void _onHeaderTap(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+    });
   }
 
   void _toggleFilterPopup() {
@@ -661,7 +702,11 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
                               ],
                             ),
                             const SizedBox(height: 20),
-                            const _TableHeader(),
+                            _TableHeader(
+                              sortColumn: _sortColumn,
+                              sortAscending: _sortAscending,
+                              onHeaderTap: _onHeaderTap,
+                            ),
                             const SizedBox(height: 6),
 
                             // 🔹 جدول الطلبات
@@ -822,18 +867,48 @@ class _StockInPreviousPageState extends State<StockInPreviousPage> {
 
 // 🔹 هيدر الجدول (Order / Supplier / Inventory / Date)
 class _TableHeader extends StatelessWidget {
-  const _TableHeader();
+  final String sortColumn;
+  final bool sortAscending;
+  final Function(String) onHeaderTap;
+
+  const _TableHeader({
+    required this.sortColumn,
+    required this.sortAscending,
+    required this.onHeaderTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Row(
-          children: const [
-            _HeaderCell(text: 'Order ID #', flex: 2),
-            _HeaderCell(text: 'Supplier Name', flex: 4),
-            _HeaderCell(text: 'Inventory ', flex: 8),
-            _HeaderCell(text: 'Date', flex: 3, alignEnd: true),
+          children: [
+            _SortableHeaderCell(
+              text: 'Order ID #',
+              flex: 2,
+              column: 'order_id',
+              isActive: sortColumn == 'order_id',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('order_id'),
+            ),
+            _SortableHeaderCell(
+              text: 'Supplier Name',
+              flex: 4,
+              column: 'supplier_name',
+              isActive: sortColumn == 'supplier_name',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('supplier_name'),
+            ),
+            const _HeaderCell(text: 'Inventory ', flex: 8),
+            _SortableHeaderCell(
+              text: 'Date',
+              flex: 3,
+              column: 'date',
+              isActive: sortColumn == 'date',
+              isAscending: sortAscending,
+              onTap: () => onHeaderTap('date'),
+              alignEnd: true,
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -867,6 +942,62 @@ class _HeaderCell extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.white,
             fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Sortable Header Cell
+class _SortableHeaderCell extends StatelessWidget {
+  final String text;
+  final int flex;
+  final String column;
+  final bool isActive;
+  final bool isAscending;
+  final VoidCallback onTap;
+  final bool alignEnd;
+
+  const _SortableHeaderCell({
+    required this.text,
+    required this.flex,
+    required this.column,
+    required this.isActive,
+    required this.isAscending,
+    required this.onTap,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: alignEnd
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  color: isActive ? AppColors.gold : AppColors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isActive)
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: AppColors.gold,
+                ),
+            ],
           ),
         ),
       ),

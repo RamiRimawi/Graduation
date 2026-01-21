@@ -27,6 +27,7 @@ class _GenerateProductReportDialogState
   DateTime? _toDate;
   bool _includeStockIn = false;
   bool _includeStockOut = false;
+  bool _includeDamagedProducts = false;
   bool _isGenerating = false;
 
   // For validation
@@ -132,6 +133,13 @@ class _GenerateProductReportDialogState
               value: _includeStockOut,
               onChanged: (val) =>
                   setState(() => _includeStockOut = val ?? false),
+            ),
+            const SizedBox(height: 8),
+            _buildCheckbox(
+              label: 'Damaged Products',
+              value: _includeDamagedProducts,
+              onChanged: (val) =>
+                  setState(() => _includeDamagedProducts = val ?? false),
             ),
 
             const SizedBox(height: 24),
@@ -450,6 +458,7 @@ class _GenerateProductReportDialogState
 
       List<Map<String, dynamic>> stockInOrders = [];
       List<Map<String, dynamic>> stockOutOrders = [];
+      List<Map<String, dynamic>> damagedProductsMeetings = [];
 
       // Query Stock-In orders if selected
       if (_includeStockIn) {
@@ -462,34 +471,46 @@ class _GenerateProductReportDialogState
         final batchIds = batches.map((b) => b['batch_id'] as int).toList();
 
         if (batchIds.isNotEmpty) {
-          // Get supplier orders via batch
+          // Get supplier orders via batch with quantities
           final supplierOrderInventory = await supabase
               .from('supplier_order_inventory')
-              .select('supplier_order_id')
+              .select('supplier_order_id, quantity')
               .inFilter('batch_id', batchIds);
 
-          final supplierOrderIds = supplierOrderInventory
-              .map((s) => s['supplier_order_id'] as int)
-              .toSet()
-              .toList();
+          // Group by supplier_order_id and sum quantities
+          final Map<int, int> orderQuantities = {};
+          for (final item in supplierOrderInventory) {
+            final orderId = item['supplier_order_id'] as int;
+            final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+            orderQuantities[orderId] =
+                (orderQuantities[orderId] ?? 0) + quantity;
+          }
+
+          final supplierOrderIds = orderQuantities.keys.toList();
 
           if (supplierOrderIds.isNotEmpty) {
-            stockInOrders = List<Map<String, dynamic>>.from(
-              await supabase
-                  .from('supplier_order')
-                  .select('''
-                    order_id,
-                    order_date,
-                    order_status,
-                    total_cost,
-                    supplier:supplier_id(name, mobile_number)
-                  ''')
-                  .inFilter('order_id', supplierOrderIds)
-                  .eq('order_status', 'Delivered')
-                  .gte('order_date', _fromDate!.toIso8601String())
-                  .lte('order_date', toDate.toIso8601String())
-                  .order('order_date', ascending: false),
-            );
+            final orders = await supabase
+                .from('supplier_order')
+                .select('''
+                  order_id,
+                  order_date,
+                  order_status,
+                  total_cost,
+                  supplier:supplier_id(name)
+                ''')
+                .inFilter('order_id', supplierOrderIds)
+                .eq('order_status', 'Delivered')
+                .gte('order_date', _fromDate!.toIso8601String())
+                .lte('order_date', toDate.toIso8601String())
+                .order('order_date', ascending: false);
+
+            // Add quantity to each order
+            for (final order in orders) {
+              final orderId = order['order_id'] as int;
+              order['quantity'] = orderQuantities[orderId] ?? 0;
+            }
+
+            stockInOrders = List<Map<String, dynamic>>.from(orders);
           }
         }
       }
@@ -498,7 +519,7 @@ class _GenerateProductReportDialogState
       if (_includeStockOut) {
         final orderDescriptions = await supabase
             .from('customer_order_description')
-            .select('customer_order_id, quantity, total_price')
+            .select('customer_order_id, delivered_quantity, total_price')
             .eq('product_id', int.parse(widget.productId));
 
         final customerOrderIds = orderDescriptions
@@ -526,13 +547,59 @@ class _GenerateProductReportDialogState
             final orderId = order['customer_order_id'];
             final desc = orderDescriptions.firstWhere(
               (d) => d['customer_order_id'] == orderId,
-              orElse: () => {'quantity': 0, 'total_price': 0},
+              orElse: () => {'delivered_quantity': 0, 'total_price': 0},
             );
-            order['quantity'] = desc['quantity'];
+            order['quantity'] = desc['delivered_quantity'];
             order['total_price'] = desc['total_price'];
           }
 
           stockOutOrders = List<Map<String, dynamic>>.from(orders);
+        }
+      }
+
+      // Query Damaged Products if selected
+      if (_includeDamagedProducts) {
+        // Get damaged products for this product
+        final damagedProducts = await supabase
+            .from('damaged_products')
+            .select('quantity, reason, meeting_id, batch_id')
+            .eq('product_id', int.parse(widget.productId));
+
+        // Get unique meeting IDs
+        final meetingIds = damagedProducts
+            .map((item) => item['meeting_id'] as int?)
+            .where((id) => id != null)
+            .toSet()
+            .toList();
+
+        // Fetch meeting details
+        Map<int, Map<String, dynamic>> meetingsMap = {};
+        if (meetingIds.isNotEmpty) {
+          final meetings = await supabase
+              .from('damaged_products_meeting')
+              .select(
+                'meeting_id, meeting_topics, meeting_address, meeting_time',
+              )
+              .inFilter('meeting_id', meetingIds)
+              .gte('meeting_time', _fromDate!.toIso8601String())
+              .lte('meeting_time', toDate.toIso8601String());
+
+          for (final meeting in meetings) {
+            meetingsMap[meeting['meeting_id'] as int] = meeting;
+          }
+        }
+
+        // Combine damaged products with meeting details
+        for (final item in damagedProducts) {
+          final meetingId = item['meeting_id'] as int?;
+          if (meetingId != null && meetingsMap.containsKey(meetingId)) {
+            damagedProductsMeetings.add({
+              'quantity': item['quantity'],
+              'reason': item['reason'],
+              'batch_id': item['batch_id'],
+              'meeting': meetingsMap[meetingId],
+            });
+          }
         }
       }
 
@@ -542,6 +609,7 @@ class _GenerateProductReportDialogState
         batches: List<Map<String, dynamic>>.from(batchesData),
         stockInOrders: stockInOrders,
         stockOutOrders: stockOutOrders,
+        damagedProductsMeetings: damagedProductsMeetings,
       );
 
       // Show print dialog
@@ -573,6 +641,7 @@ class _GenerateProductReportDialogState
     required List<Map<String, dynamic>> batches,
     required List<Map<String, dynamic>> stockInOrders,
     required List<Map<String, dynamic>> stockOutOrders,
+    required List<Map<String, dynamic>> damagedProductsMeetings,
   }) async {
     final pdf = pw.Document();
     final dateFormat = DateFormat('dd/MM/yyyy');
@@ -664,6 +733,17 @@ class _GenerateProductReportDialogState
                 ),
               ],
             ),
+            if (_includeDamagedProducts) pw.SizedBox(height: 10),
+            if (_includeDamagedProducts)
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.start,
+                children: [
+                  _buildStatBox(
+                    'Damaged Products',
+                    damagedProductsMeetings.length.toString(),
+                  ),
+                ],
+              ),
             pw.SizedBox(height: 30),
 
             // Batches Section
@@ -770,7 +850,7 @@ class _GenerateProductReportDialogState
                       children: [
                         _buildTableHeader('Order ID'),
                         _buildTableHeader('Supplier'),
-                        _buildTableHeader('Mobile'),
+                        _buildTableHeader('Quantity'),
                         _buildTableHeader('Date'),
                         _buildTableHeader('Status'),
                         _buildTableHeader('Total Cost'),
@@ -785,11 +865,7 @@ class _GenerateProductReportDialogState
                             (order['supplier'] as Map?)?['name']?.toString() ??
                                 'N/A',
                           ),
-                          _buildTableCell(
-                            (order['supplier'] as Map?)?['mobile_number']
-                                    ?.toString() ??
-                                'N/A',
-                          ),
+                          _buildTableCell(order['quantity']?.toString() ?? '0'),
                           _buildTableCell(
                             order['order_date'] != null
                                 ? dateFormat.format(
@@ -884,6 +960,97 @@ class _GenerateProductReportDialogState
                           _buildTableCell(
                             '\$${(order['total_price'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
                           ),
+                        ],
+                      ),
+                  ],
+                ),
+            ],
+
+            // Damaged Products Section
+            if (_includeDamagedProducts) ...[
+              pw.SizedBox(height: 30),
+              pw.Header(
+                level: 1,
+                child: pw.Text(
+                  'Damaged Products',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue800,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              if (damagedProductsMeetings.isEmpty)
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(20),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey200,
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      'No damaged products found for the selected date range.',
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.grey400),
+                  children: [
+                    // Header
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey300,
+                      ),
+                      children: [
+                        _buildTableHeader('Meeting ID'),
+                        _buildTableHeader('Meeting Topics'),
+                        _buildTableHeader('Meeting Date'),
+                        _buildTableHeader('Batch ID'),
+                        _buildTableHeader('Quantity'),
+                        _buildTableHeader('Reason'),
+                      ],
+                    ),
+                    // Data rows
+                    for (final item in damagedProductsMeetings)
+                      pw.TableRow(
+                        children: [
+                          _buildTableCell(
+                            (item['meeting'] is Map
+                                    ? item['meeting']['meeting_id']?.toString()
+                                    : '') ??
+                                'N/A',
+                          ),
+                          _buildTableCell(
+                            (item['meeting'] is Map
+                                    ? item['meeting']['meeting_topics']
+                                          ?.toString()
+                                    : '') ??
+                                'N/A',
+                          ),
+                          _buildTableCell(
+                            (item['meeting'] is Map &&
+                                    item['meeting']['meeting_time'] != null)
+                                ? dateFormat.format(
+                                    DateTime.parse(
+                                      item['meeting']['meeting_time'],
+                                    ),
+                                  )
+                                : 'N/A',
+                          ),
+                          _buildTableCell(
+                            (item['batch'] is Map
+                                    ? item['batch']['batch_id']?.toString()
+                                    : '') ??
+                                'N/A',
+                          ),
+                          _buildTableCell(item['quantity']?.toString() ?? '0'),
+                          _buildTableCell(item['reason']?.toString() ?? 'N/A'),
                         ],
                       ),
                   ],

@@ -36,6 +36,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   List<Map<String, dynamic>> _deliveredOrders = [];
   List<LatLng> _routePoints = const [];
   bool _isRouting = false;
+  String? _currentVehicleBrand;
+  String? _currentVehicleModel;
 
   Timer? _pollingTimer;
   RealtimeChannel? _driverChannel;
@@ -70,8 +72,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     for (int i = 0; i < route.length - 1; i++) {
       final segmentStart = route[i];
       final segmentEnd = route[i + 1];
-      final distToSegment =
-          _distanceToSegment(point, segmentStart, segmentEnd, distance);
+      final distToSegment = _distanceToSegment(
+        point,
+        segmentStart,
+        segmentEnd,
+        distance,
+      );
       if (distToSegment < minDistance) {
         minDistance = distToSegment;
       }
@@ -88,7 +94,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     Distance distance,
   ) {
     final double distToStart = distance.as(LengthUnit.Meter, point, segStart);
-    final double segmentLength = distance.as(LengthUnit.Meter, segStart, segEnd);
+    final double segmentLength = distance.as(
+      LengthUnit.Meter,
+      segStart,
+      segEnd,
+    );
 
     if (segmentLength < 0.1) return distToStart;
 
@@ -146,7 +156,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           _currentPollingInterval = newInterval;
           _restartPollingTimer();
           debugPrint(
-              '🚗 السرعة: ${_currentSpeed.toStringAsFixed(1)} كم/س - فترة التحديث: ${newInterval.inMilliseconds}ms');
+            '🚗 السرعة: ${_currentSpeed.toStringAsFixed(1)} كم/س - فترة التحديث: ${newInterval.inMilliseconds}ms',
+          );
         }
       }
     }
@@ -173,8 +184,10 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       return;
     }
 
-    final distanceToRoute =
-        _getMinDistanceToRoute(_driverLocation, _routePoints);
+    final distanceToRoute = _getMinDistanceToRoute(
+      _driverLocation,
+      _routePoints,
+    );
     final bool wasOffRoute = _isOffRoute;
     final bool isNowOffRoute = distanceToRoute > _routeThresholdMeters;
 
@@ -185,7 +198,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
 
       if (_isOffRoute) {
         debugPrint(
-            '⚠️ السائق خارج المسار! المسافة: ${distanceToRoute.toStringAsFixed(1)} متر');
+          '⚠️ السائق خارج المسار! المسافة: ${distanceToRoute.toStringAsFixed(1)} متر',
+        );
       } else {
         debugPrint('✅ السائق عاد إلى المسار');
       }
@@ -337,23 +351,53 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     _lastRouteUpdateAt = now;
     _lastRouteFrom = _driverLocation;
 
-    debugPrint(fast
-        ? '⚡ Smart route update (FAST) speed=${_currentSpeed.toStringAsFixed(1)} offRoute=$_isOffRoute'
-        : '🧠 Smart route update (NORMAL)');
+    debugPrint(
+      fast
+          ? '⚡ Smart route update (FAST) speed=${_currentSpeed.toStringAsFixed(1)} offRoute=$_isOffRoute'
+          : '🧠 Smart route update (NORMAL)',
+    );
   }
 
   Future<void> _fetchLocations({bool updateOnly = false}) async {
     if (!mounted) return;
 
     try {
+      // Fetch current vehicle assignment
+      final now = DateTime.now();
+      final todayStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      final vehicleDataList =
+          await supabase
+                  .from('delivery_vehicle')
+                  .select(
+                    'vehicle!delivery_vehicle_plate_id_fkey(brand, model)',
+                  )
+                  .eq('delivery_driver_id', widget.driverId)
+                  .lte('from_date', todayStr)
+                  .gte('to_date', todayStr)
+                  .order('from_date', ascending: false)
+                  .limit(1)
+              as List<dynamic>;
+
+      if (vehicleDataList.isNotEmpty && mounted) {
+        final vehicleData = vehicleDataList.first as Map<String, dynamic>;
+        final vehicle = vehicleData['vehicle'] as Map<String, dynamic>?;
+        setState(() {
+          _currentVehicleBrand = vehicle?['brand'] as String?;
+          _currentVehicleModel = vehicle?['model'] as String?;
+        });
+      }
+
       final driverData = await supabase
           .from('delivery_driver')
           .select(
-              'delivery_driver_id, latitude_location, longitude_location, current_order_id')
+            'delivery_driver_id, latitude_location, longitude_location, current_order_id',
+          )
           .eq('delivery_driver_id', widget.driverId)
           .maybeSingle();
 
-      if (driverData == null) {
+      if (driverData == null || !mounted) {
         debugPrint('⚠️ Driver data not found');
         return;
       }
@@ -362,7 +406,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       final lng = driverData['longitude_location'] as num?;
       final currentOrderId = driverData['current_order_id'] as int?;
 
-      if (mounted && lat != null && lng != null) {
+      if (lat != null && lng != null && mounted) {
         final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
         setState(() => _driverLocation = newDriverLoc);
 
@@ -401,8 +445,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
             _customerLocation = newCustomerLoc;
             _customerName = customer?['name'];
             _orderId = currentOrderId;
-            _otherOrders =
-                _otherOrders.where((o) => o['order_id'] != currentOrderId).toList();
+            _otherOrders = _otherOrders
+                .where((o) => o['order_id'] != currentOrderId)
+                .toList();
           });
 
           // ✅ أول ما يختار أوردر جديد: جيب مسار مباشرة (force)
@@ -414,63 +459,75 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
 
         // Other orders
         if (mounted) {
-          final otherOrders = await supabase
-              .from('customer_order')
-              .select('customer_order_id, customer:customer_id(name)')
-              .eq('delivered_by_id', widget.driverId)
-              .eq('order_status', 'Delivery')
-              .neq('customer_order_id', currentOrderId)
-              .order('order_date', ascending: false) as List<dynamic>;
+          final otherOrders =
+              await supabase
+                      .from('customer_order')
+                      .select('customer_order_id, customer:customer_id(name)')
+                      .eq('delivered_by_id', widget.driverId)
+                      .eq('order_status', 'Delivery')
+                      .neq('customer_order_id', currentOrderId)
+                      .order('order_date', ascending: false)
+                  as List<dynamic>;
 
           // Delivered today
-          final deliveredOrdersRaw = await supabase
-              .from('customer_order')
-              .select(
-                  'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
-              .eq('delivered_by_id', widget.driverId)
-              .eq('order_status', 'Delivered')
-              .limit(50) as List<dynamic>;
+          final deliveredOrdersRaw =
+              await supabase
+                      .from('customer_order')
+                      .select(
+                        'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)',
+                      )
+                      .eq('delivered_by_id', widget.driverId)
+                      .eq('order_status', 'Delivered')
+                      .limit(50)
+                  as List<dynamic>;
 
           final today = DateTime.now();
           final todayStart = DateTime(today.year, today.month, today.day);
           final todayEnd = todayStart.add(const Duration(days: 1));
 
-          final deliveredOrders = deliveredOrdersRaw.where((o) {
-            final descriptions =
-                (o as Map<String, dynamic>)['customer_order_description']
-                    as List<dynamic>?;
-            if (descriptions == null ||
-                descriptions.isEmpty ||
-                descriptions.first['delivered_date'] == null) {
-              return false;
-            }
-            final deliveredDate =
-                DateTime.parse(descriptions.first['delivered_date'] as String);
-            return deliveredDate.isAfter(todayStart) &&
-                deliveredDate.isBefore(todayEnd);
-          }).toList()
-            ..sort((a, b) {
-              final aDate = ((a as Map<String, dynamic>)
-                      ['customer_order_description'] as List<dynamic>)
-                  .first['delivered_date'] as String;
-              final bDate = ((b as Map<String, dynamic>)
-                      ['customer_order_description'] as List<dynamic>)
-                  .first['delivered_date'] as String;
-              return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
-            });
+          final deliveredOrders =
+              deliveredOrdersRaw.where((o) {
+                final descriptions =
+                    (o as Map<String, dynamic>)['customer_order_description']
+                        as List<dynamic>?;
+                if (descriptions == null ||
+                    descriptions.isEmpty ||
+                    descriptions.first['delivered_date'] == null) {
+                  return false;
+                }
+                final deliveredDate = DateTime.parse(
+                  descriptions.first['delivered_date'] as String,
+                );
+                return deliveredDate.isAfter(todayStart) &&
+                    deliveredDate.isBefore(todayEnd);
+              }).toList()..sort((a, b) {
+                final aDate =
+                    ((a as Map<String, dynamic>)['customer_order_description']
+                                as List<dynamic>)
+                            .first['delivered_date']
+                        as String;
+                final bDate =
+                    ((b as Map<String, dynamic>)['customer_order_description']
+                                as List<dynamic>)
+                            .first['delivered_date']
+                        as String;
+                return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
+              });
 
           final limitedDeliveredOrders = deliveredOrders.take(10).toList();
 
           setState(() {
             _otherOrders = otherOrders.map((o) {
-              final c = (o as Map<String, dynamic>)['customer']
-                  as Map<String, dynamic>?;
+              final c =
+                  (o as Map<String, dynamic>)['customer']
+                      as Map<String, dynamic>?;
               return {'order_id': o['customer_order_id'], 'name': c?['name']};
             }).toList();
 
             _deliveredOrders = limitedDeliveredOrders.map((o) {
-              final c = (o as Map<String, dynamic>)['customer']
-                  as Map<String, dynamic>?;
+              final c =
+                  (o as Map<String, dynamic>)['customer']
+                      as Map<String, dynamic>?;
               return {'order_id': o['customer_order_id'], 'name': c?['name']};
             }).toList();
           });
@@ -503,48 +560,58 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           _lastRouteUpdateAt = null;
         }
 
-        final allOrders = await supabase
-            .from('customer_order')
-            .select('customer_order_id, customer:customer_id(name)')
-            .eq('delivered_by_id', widget.driverId)
-            .eq('order_status', 'Delivery')
-            .order('order_date', ascending: false) as List<dynamic>;
+        final allOrders =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id, customer:customer_id(name)')
+                    .eq('delivered_by_id', widget.driverId)
+                    .eq('order_status', 'Delivery')
+                    .order('order_date', ascending: false)
+                as List<dynamic>;
 
-        final deliveredOrdersRaw = await supabase
-            .from('customer_order')
-            .select(
-                'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)')
-            .eq('delivered_by_id', widget.driverId)
-            .eq('order_status', 'Delivered')
-            .limit(50) as List<dynamic>;
+        final deliveredOrdersRaw =
+            await supabase
+                    .from('customer_order')
+                    .select(
+                      'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)',
+                    )
+                    .eq('delivered_by_id', widget.driverId)
+                    .eq('order_status', 'Delivered')
+                    .limit(50)
+                as List<dynamic>;
 
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
         final todayEnd = todayStart.add(const Duration(days: 1));
 
-        final deliveredOrders = deliveredOrdersRaw.where((o) {
-          final descriptions =
-              (o as Map<String, dynamic>)['customer_order_description']
-                  as List<dynamic>?;
-          if (descriptions == null ||
-              descriptions.isEmpty ||
-              descriptions.first['delivered_date'] == null) {
-            return false;
-          }
-          final deliveredDate =
-              DateTime.parse(descriptions.first['delivered_date'] as String);
-          return deliveredDate.isAfter(todayStart) &&
-              deliveredDate.isBefore(todayEnd);
-        }).toList()
-          ..sort((a, b) {
-            final aDate = ((a as Map<String, dynamic>)['customer_order_description']
-                    as List<dynamic>)
-                .first['delivered_date'] as String;
-            final bDate = ((b as Map<String, dynamic>)['customer_order_description']
-                    as List<dynamic>)
-                .first['delivered_date'] as String;
-            return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
-          });
+        final deliveredOrders =
+            deliveredOrdersRaw.where((o) {
+              final descriptions =
+                  (o as Map<String, dynamic>)['customer_order_description']
+                      as List<dynamic>?;
+              if (descriptions == null ||
+                  descriptions.isEmpty ||
+                  descriptions.first['delivered_date'] == null) {
+                return false;
+              }
+              final deliveredDate = DateTime.parse(
+                descriptions.first['delivered_date'] as String,
+              );
+              return deliveredDate.isAfter(todayStart) &&
+                  deliveredDate.isBefore(todayEnd);
+            }).toList()..sort((a, b) {
+              final aDate =
+                  ((a as Map<String, dynamic>)['customer_order_description']
+                              as List<dynamic>)
+                          .first['delivered_date']
+                      as String;
+              final bDate =
+                  ((b as Map<String, dynamic>)['customer_order_description']
+                              as List<dynamic>)
+                          .first['delivered_date']
+                      as String;
+              return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
+            });
 
         final limitedDeliveredOrders = deliveredOrders.take(10).toList();
 
@@ -555,18 +622,21 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
           _routePoints = [];
           _otherOrders = allOrders.map((o) {
             final c =
-                (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
+                (o as Map<String, dynamic>)['customer']
+                    as Map<String, dynamic>?;
             return {'order_id': o['customer_order_id'], 'name': c?['name']};
           }).toList();
           _deliveredOrders = limitedDeliveredOrders.map((o) {
             final c =
-                (o as Map<String, dynamic>)['customer'] as Map<String, dynamic>?;
+                (o as Map<String, dynamic>)['customer']
+                    as Map<String, dynamic>?;
             return {'order_id': o['customer_order_id'], 'name': c?['name']};
           }).toList();
         });
 
         debugPrint(
-            '✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list');
+          '✅ current_order_id is null - showing ${_otherOrders.length} orders in Other orders list',
+        );
       }
     } catch (e) {
       debugPrint('❌ Error fetching locations: $e');
@@ -587,18 +657,19 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
       final url =
           'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson';
 
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final coords = data['routes'][0]['geometry']['coordinates'] as List;
           final polyline = coords
-              .map((c) => LatLng(
-                    (c[1] as num).toDouble(),
-                    (c[0] as num).toDouble(),
-                  ))
+              .map(
+                (c) =>
+                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+              )
               .toList();
 
           if (mounted) {
@@ -699,12 +770,14 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                           children: [
                             CircleAvatar(
                               radius: 26,
-                              backgroundImage: (widget.profileImage != null &&
+                              backgroundImage:
+                                  (widget.profileImage != null &&
                                       widget.profileImage!.isNotEmpty)
                                   ? NetworkImage(widget.profileImage!)
                                   : null,
                               backgroundColor: const Color(0xFF67CD67),
-                              child: (widget.profileImage == null ||
+                              child:
+                                  (widget.profileImage == null ||
                                       widget.profileImage!.isEmpty)
                                   ? Text(
                                       widget.driverName.isNotEmpty
@@ -720,13 +793,32 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                widget.driverName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    widget.driverName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (_currentVehicleBrand != null &&
+                                      _currentVehicleModel != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'Vehicle: $_currentVehicleBrand $_currentVehicleModel',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                             IconButton(
@@ -849,8 +941,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                     borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF2196F3)
-                                            .withValues(alpha: 0.4),
+                                        color: const Color(
+                                          0xFF2196F3,
+                                        ).withValues(alpha: 0.4),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
@@ -897,8 +990,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   const SizedBox(height: 12),
                                   ..._otherOrders.map(
                                     (o) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 17),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 17,
+                                      ),
                                       child: Stack(
                                         clipBehavior: Clip.none,
                                         children: [
@@ -959,12 +1053,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 6,
-                                              ),
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                gradient:
-                                                    const LinearGradient(
+                                                gradient: const LinearGradient(
                                                   colors: [
                                                     Color(0xFFFF9800),
                                                     Color(0xFFF57C00),
@@ -975,11 +1068,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: Colors.orangeAccent
-                                                        .withValues(
-                                                            alpha: 0.3),
+                                                        .withValues(alpha: 0.3),
                                                     blurRadius: 4,
-                                                    offset:
-                                                        const Offset(0, 2),
+                                                    offset: const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),
@@ -1023,8 +1114,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                   const SizedBox(height: 12),
                                   ..._deliveredOrders.map(
                                     (o) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
+                                      ),
                                       child: Stack(
                                         clipBehavior: Clip.none,
                                         children: [
@@ -1085,12 +1177,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 10,
-                                                vertical: 6,
-                                              ),
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                gradient:
-                                                    const LinearGradient(
+                                                gradient: const LinearGradient(
                                                   colors: [
                                                     Color(0xFF4CAF50),
                                                     Color(0xFF388E3C),
@@ -1101,11 +1192,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: Colors.green
-                                                        .withValues(
-                                                            alpha: 0.3),
+                                                        .withValues(alpha: 0.3),
                                                     blurRadius: 4,
-                                                    offset:
-                                                        const Offset(0, 2),
+                                                    offset: const Offset(0, 2),
                                                   ),
                                                 ],
                                               ),

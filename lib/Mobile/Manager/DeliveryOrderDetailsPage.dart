@@ -45,10 +45,12 @@ class _DeliveryOrderDetailsPageState extends State<DeliveryOrderDetailsPage> {
           .eq('customer_order_id', widget.orderId);
 
       if (inventoryResponse.isEmpty) {
-        setState(() {
-          _customerName = customerName;
-          _loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _customerName = customerName;
+            _loading = false;
+          });
+        }
         return;
       }
 
@@ -227,14 +229,18 @@ class _DeliveryOrderDetailsPageState extends State<DeliveryOrderDetailsPage> {
         );
       }
 
-      setState(() {
-        _customerName = customerName;
-        _parts = partsByStaff.values.toList();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _customerName = customerName;
+          _parts = partsByStaff.values.toList();
+          _loading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching delivery order details: $e');
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 

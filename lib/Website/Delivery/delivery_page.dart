@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../supabase_config.dart';
 import '../sidebar.dart';
 import 'delivery_live_popup.dart';
-import '../Notifications/notification_bell_widget.dart';
+import 'delivery_header.dart';
+import 'vehicle_tab_content.dart';
 
 class DeliveryPage extends StatefulWidget {
   const DeliveryPage({super.key});
@@ -13,6 +14,7 @@ class DeliveryPage extends StatefulWidget {
 }
 
 class _DeliveryPageState extends State<DeliveryPage> {
+  String _activeTab = 'drivers'; // 'drivers' or 'vehicles'
   List<Map<String, dynamic>> activeDeliveries = [];
   List<Map<String, dynamic>> idleDeliveries = [];
   bool _loading = true;
@@ -73,7 +75,11 @@ class _DeliveryPageState extends State<DeliveryPage> {
           });
         } else {
           // Driver is idle (no active deliveries)
-          idle.add({'name': driverName, 'profile_image': profileImage});
+          idle.add({
+            'name': driverName,
+            'profile_image': profileImage,
+            'delivery_driver_id': driverId,
+          });
         }
       }
 
@@ -107,123 +113,151 @@ class _DeliveryPageState extends State<DeliveryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // العنوان + أيقونة الجرس
+                  // Header with title and notification
+                  const DeliveryHeader(),
+
+                  const SizedBox(height: 24),
+
+                  // Text-based Tabs (like payment_header.dart)
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "Delivery",
-                        style: GoogleFonts.roboto(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      _TopTextTab(
+                        label: 'Delivery Driver',
+                        isActive: _activeTab == 'drivers',
+                        onTap: () {
+                          setState(() {
+                            _activeTab = 'drivers';
+                          });
+                        },
                       ),
-                      const NotificationBellWidget(),
+                      const SizedBox(width: 24),
+                      _TopTextTab(
+                        label: 'Vehicle',
+                        isActive: _activeTab == 'vehicles',
+                        onTap: () {
+                          setState(() {
+                            _activeTab = 'vehicles';
+                          });
+                        },
+                      ),
                     ],
                   ),
 
-                  const SizedBox(height: 35),
+                  const SizedBox(height: 24),
 
-                  if (_loading)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // القسم الأول: Active Deliveries
-                            Text(
-                              "Active Deliveries",
-                              style: GoogleFonts.roboto(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            activeDeliveries.isEmpty
-                                ? Text(
-                                    'No active deliveries',
-                                    style: GoogleFonts.roboto(
-                                      color: Colors.white60,
-                                      fontSize: 14,
-                                    ),
-                                  )
-                                : Wrap(
-                                    spacing: 24,
-                                    runSpacing: 20,
-                                    children: activeDeliveries
-                                        .map(
-                                          (d) => _DeliveryCard(
-                                            name: d["name"]!,
-                                            profileImage: d["profile_image"],
-                                            isIdle: false,
-                                            onTap: () {
-                                              showDialog(
-                                                context: context,
-                                                barrierDismissible: true,
-                                                builder: (ctx) => DeliveryLivePopup(
-                                                  driverId:
-                                                      d["delivery_driver_id"] ??
-                                                      0,
-                                                  driverName: d["name"]!,
-                                                  profileImage:
-                                                      d["profile_image"],
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-
-                            const SizedBox(height: 40),
-
-                            // القسم الثاني: Idle Deliveries
-                            Text(
-                              "Idle Deliveries",
-                              style: GoogleFonts.roboto(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            idleDeliveries.isEmpty
-                                ? Text(
-                                    'No idle deliveries',
-                                    style: GoogleFonts.roboto(
-                                      color: Colors.white60,
-                                      fontSize: 14,
-                                    ),
-                                  )
-                                : Wrap(
-                                    spacing: 24,
-                                    runSpacing: 20,
-                                    children: idleDeliveries
-                                        .map(
-                                          (d) => _DeliveryCard(
-                                            name: d["name"]!,
-                                            profileImage: d["profile_image"],
-                                            isIdle: true,
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  // Tab Content
+                  Expanded(
+                    child: _activeTab == 'drivers'
+                        ? _buildDeliveryDriverTab()
+                        : const VehicleTabContent(),
+                  ),
                 ],
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryDriverTab() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // القسم الأول: Active Deliveries
+          Text(
+            "Active Deliveries",
+            style: GoogleFonts.roboto(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          activeDeliveries.isEmpty
+              ? Text(
+                  'No active deliveries',
+                  style: GoogleFonts.roboto(
+                    color: Colors.white60,
+                    fontSize: 14,
+                  ),
+                )
+              : Wrap(
+                  spacing: 24,
+                  runSpacing: 20,
+                  children: activeDeliveries
+                      .map(
+                        (d) => _DeliveryCard(
+                          name: d["name"]!,
+                          profileImage: d["profile_image"],
+                          isIdle: false,
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: true,
+                              builder: (ctx) => DeliveryLivePopup(
+                                driverId: d["delivery_driver_id"] ?? 0,
+                                driverName: d["name"]!,
+                                profileImage: d["profile_image"],
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+
+          const SizedBox(height: 40),
+
+          // القسم الثاني: Idle Deliveries
+          Text(
+            "Idle Deliveries",
+            style: GoogleFonts.roboto(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          idleDeliveries.isEmpty
+              ? Text(
+                  'No idle deliveries',
+                  style: GoogleFonts.roboto(
+                    color: Colors.white60,
+                    fontSize: 14,
+                  ),
+                )
+              : Wrap(
+                  spacing: 24,
+                  runSpacing: 20,
+                  children: idleDeliveries
+                      .map(
+                        (d) => _DeliveryCard(
+                          name: d["name"]!,
+                          profileImage: d["profile_image"],
+                          isIdle: true,
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: true,
+                              builder: (ctx) => DeliveryLivePopup(
+                                driverId: d["delivery_driver_id"] ?? 0,
+                                driverName: d["name"]!,
+                                profileImage: d["profile_image"],
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
         ],
       ),
     );
@@ -252,7 +286,7 @@ class _DeliveryCardState extends State<_DeliveryCard> {
 
   @override
   Widget build(BuildContext context) {
-    final hoverEnabled = !widget.isIdle && widget.onTap != null;
+    final hoverEnabled = widget.onTap != null;
     final scale = hoverEnabled && _hovered ? 1.05 : 1.0;
     final avatarScale = hoverEnabled && _hovered ? 1.08 : 1.0;
 
@@ -373,6 +407,53 @@ class _DeliveryCardState extends State<_DeliveryCard> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------
+// Top Text Tab Widget (matching payment_header.dart style)
+// ------------------------------------------------------------------
+class _TopTextTab extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback? onTap;
+
+  const _TopTextTab({required this.label, this.isActive = false, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.roboto(
+                color: isActive ? Colors.white : const Color(0xFF999999),
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (isActive)
+              Container(
+                height: 3,
+                width: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF50B2E7),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
         ),
       ),
     );

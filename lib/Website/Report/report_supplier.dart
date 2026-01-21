@@ -37,6 +37,8 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
   List<Map<String, dynamic>> _filteredSuppliers = [];
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
+  String _sortColumn = 'supplier_id';
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -67,6 +69,7 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
           _suppliers = List<Map<String, dynamic>>.from(result);
           _filteredSuppliers = _suppliers;
           _loading = false;
+          _sortSuppliers();
         });
       }
     } catch (e) {
@@ -81,6 +84,7 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
 
   void _filterSuppliers() {
     final query = _searchController.text.toLowerCase();
+    if (!mounted) return;
     setState(() {
       if (query.isEmpty) {
         _filteredSuppliers = _suppliers;
@@ -90,6 +94,38 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
           return name.startsWith(query);
         }).toList();
       }
+      _sortSuppliers();
+    });
+  }
+
+  void _sortSuppliers() {
+    _filteredSuppliers.sort((a, b) {
+      dynamic aValue = a[_sortColumn];
+      dynamic bValue = b[_sortColumn];
+
+      if (_sortColumn == 'supplier_id') {
+        aValue = aValue as int? ?? 0;
+        bValue = bValue as int? ?? 0;
+      } else {
+        aValue = aValue?.toString().toLowerCase() ?? '';
+        bValue = bValue?.toString().toLowerCase() ?? '';
+      }
+
+      final comparison = aValue.compareTo(bValue);
+      return _sortAscending ? comparison : -comparison;
+    });
+  }
+
+  void _onHeaderTap(String column) {
+    if (!mounted) return;
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+      _sortSuppliers();
     });
   }
 
@@ -182,9 +218,21 @@ class _ReportSupplierPageContentState extends State<ReportSupplierPageContent> {
                             const SizedBox(height: 14),
 
                             Row(
-                              children: const [
-                                _HeaderText('Supplier ID #', flex: 2),
-                                _HeaderText('Supplier Name', flex: 4),
+                              children: [
+                                _SortableHeader(
+                                  'Supplier ID #',
+                                  flex: 2,
+                                  isActive: _sortColumn == 'supplier_id',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('supplier_id'),
+                                ),
+                                _SortableHeader(
+                                  'Supplier Name',
+                                  flex: 4,
+                                  isActive: _sortColumn == 'name',
+                                  isAscending: _sortAscending,
+                                  onTap: () => _onHeaderTap('name'),
+                                ),
                                 _HeaderText('Mobile Number', flex: 3),
                                 _HeaderText('Location', flex: 3),
                                 _HeaderText(
@@ -655,6 +703,56 @@ class _HeaderText extends StatelessWidget {
             color: color,
             fontWeight: FontWeight.bold,
             fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 🔹 Sortable Header Text
+class _SortableHeader extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool isActive;
+  final bool isAscending;
+  final VoidCallback onTap;
+
+  const _SortableHeader(
+    this.text, {
+    this.flex = 1,
+    required this.isActive,
+    required this.isAscending,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                style: TextStyle(
+                  color: isActive ? AppColors.blue : Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isActive)
+                Icon(
+                  isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: 14,
+                  color: AppColors.blue,
+                ),
+            ],
           ),
         ),
       ),

@@ -53,7 +53,7 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget> {
     if (_notificationService.hasUnread) {
       _notificationService.markAllAsRead();
     }
-    
+
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
     setState(() {
@@ -174,7 +174,6 @@ class _NotificationBellWidgetState extends State<NotificationBellWidget> {
                       spreadRadius: 1,
                     ),
                   ],
-                 
                 ),
               ),
             ),
