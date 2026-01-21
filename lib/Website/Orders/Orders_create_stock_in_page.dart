@@ -4,6 +4,25 @@ import '../sidebar.dart';
 import '../../supabase_config.dart';
 import 'Orders_add_product_order.dart';
 
+class _DecimalInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    // Only allow one decimal point
+    if (text.contains('.') && text.indexOf('.') != text.lastIndexOf('.')) {
+      return oldValue;
+    }
+    // Prevent leading decimal point
+    if (text.startsWith('.')) {
+      return oldValue;
+    }
+    return newValue;
+  }
+}
+
 class CreateStockInPage extends StatefulWidget {
   const CreateStockInPage({super.key});
 
@@ -39,13 +58,12 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
     return subtotal * (taxPercent / 100);
   }
 
-  double get discount {
-    final discountPercent = double.tryParse(discountController.text) ?? 0;
-    return subtotal * (discountPercent / 100);
+  double get discountValue {
+    return double.tryParse(discountController.text) ?? 0.0;
   }
 
   double get totalPrice {
-    return subtotal + taxAmount - discount;
+    return subtotal + taxAmount - discountValue;
   }
 
   @override
@@ -143,7 +161,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       final totalCost = subtotal;
       final totalBalance = totalPrice;
 
-      // إنشاء الطلب في supplier_order
+      // إنشاء الطلب في supplier_order مع إضافة قيمة الخصم
       final orderResponse = await supabase
           .from('supplier_order')
           .insert({
@@ -153,6 +171,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
             'total_balance': totalBalance,
             'order_date': DateTime.now().toIso8601String(),
             'order_status': 'Sent',
+            'discount_value': discountValue,
           })
           .select('order_id')
           .single();
@@ -195,7 +214,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       final totalCost = subtotal;
       final totalBalance = totalPrice;
 
-      // إنشاء الطلب في supplier_order مع حالة Hold
+      // إنشاء الطلب في supplier_order مع حالة Hold وإضافة قيمة الخصم
       final orderResponse = await supabase
           .from('supplier_order')
           .insert({
@@ -205,6 +224,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
             'total_balance': totalBalance,
             'order_date': DateTime.now().toIso8601String(),
             'order_status': 'Hold',
+            'discount_value': discountValue,
           })
           .select('order_id')
           .single();
@@ -515,6 +535,10 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                                     text: 'Total Price',
                                                     flex: 3,
                                                   ),
+                                                  _HeaderCell(
+                                                    text: '',
+                                                    flex: 1,
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -546,12 +570,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                       final quantity = product['quantity'] ?? 0;
                                       final totalProductPrice =
                                           wholesalePrice * quantity;
-                                      final isSelected = selectedProductIds
-                                          .contains(productId);
-
-                                      final bgColor = isSelected
-                                          ? const Color(0xFF4D2D2D)
-                                          : (index % 2 == 0)
+                                      final bgColor = (index % 2 == 0)
                                           ? const Color(0xFF2D2D2D)
                                           : const Color(0xFF262626);
 
@@ -561,239 +580,223 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                         ),
                                         onExit: (_) =>
                                             setState(() => hoveredIndex = null),
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              if (isSelected) {
-                                                selectedProductIds.remove(
-                                                  productId,
-                                                );
-                                              } else {
-                                                selectedProductIds.add(
-                                                  productId,
-                                                );
-                                              }
-                                            });
-                                          },
-                                          child: AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 200,
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          margin: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: bgColor,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
                                             ),
-                                            margin: const EdgeInsets.only(
-                                              bottom: 8,
+                                            border: Border.all(
+                                              color: hoveredIndex == index
+                                                  ? const Color(0xFF50B2E7)
+                                                  : Colors.transparent,
+                                              width: 2,
                                             ),
-                                            decoration: BoxDecoration(
-                                              color: bgColor,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: isSelected
-                                                    ? const Color(0xFFC34239)
-                                                    : hoveredIndex == index
-                                                    ? const Color(0xFF50B2E7)
-                                                    : Colors.transparent,
-                                                width: 2,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: Center(
+                                                  child: Text(
+                                                    productId.toString(),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 12,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Checkbox(
-                                                  value: isSelected,
-                                                  onChanged: (val) {
-                                                    setState(() {
-                                                      if (val == true) {
-                                                        selectedProductIds.add(
-                                                          productId,
-                                                        );
-                                                      } else {
-                                                        selectedProductIds
-                                                            .remove(productId);
-                                                      }
-                                                    });
-                                                  },
-                                                  activeColor: const Color(
-                                                    0xFFC34239,
-                                                  ),
-                                                ),
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Center(
-                                                    child: Text(
-                                                      productId.toString(),
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
+                                              Expanded(
+                                                flex: 4,
+                                                child: Center(
+                                                  child: Text(
+                                                    productName,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
-                                                Expanded(
-                                                  flex: 4,
-                                                  child: Center(
-                                                    child: Text(
-                                                      productName,
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    brandName,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Center(
-                                                    child: Text(
-                                                      brandName,
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    "\$${wholesalePrice.toStringAsFixed(2)}",
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Center(
-                                                    child: Text(
-                                                      "\$${wholesalePrice.toStringAsFixed(2)}",
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                // ✅ Quantity مع المربع الذهبي
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Center(
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 4,
-                                                            vertical: 4,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: quantity > 0
-                                                            ? const Color(
-                                                                0xFFB7A447,
-                                                              )
-                                                            : const Color(
-                                                                0xFF6F6F6F,
-                                                              ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              6,
+                                              ),
+                                              // ✅ Quantity مع المربع الذهبي
+                                              Expanded(
+                                                flex: 2,
+                                                child: Center(
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 4,
+                                                          vertical: 4,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: quantity > 0
+                                                          ? const Color(
+                                                              0xFFB7A447,
+                                                            )
+                                                          : const Color(
+                                                              0xFF6F6F6F,
                                                             ),
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          SizedBox(
-                                                            width: 40,
-                                                            child: TextFormField(
-                                                              key: ValueKey(
-                                                                'quantity_\$productId',
-                                                              ),
-                                                              initialValue:
-                                                                  quantity == 0
-                                                                  ? ''
-                                                                  : quantity
-                                                                        .toString(),
-                                                              keyboardType:
-                                                                  TextInputType
-                                                                      .number,
-                                                              cursorColor:
-                                                                  Colors.white,
-                                                              inputFormatters: [
-                                                                FilteringTextInputFormatter
-                                                                    .digitsOnly,
-                                                              ],
-                                                              textAlign:
-                                                                  TextAlign
-                                                                      .center,
-                                                              style: const TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                fontSize: 14,
-                                                              ),
-                                                              decoration: const InputDecoration(
-                                                                border:
-                                                                    InputBorder
-                                                                        .none,
-                                                                contentPadding:
-                                                                    EdgeInsets
-                                                                        .zero,
-                                                                isDense: true,
-                                                                hintText: '0',
-                                                                hintStyle: TextStyle(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 40,
+                                                          child: TextFormField(
+                                                            key: ValueKey(
+                                                              'quantity_\$productId',
+                                                            ),
+                                                            initialValue:
+                                                                quantity == 0
+                                                                ? ''
+                                                                : quantity
+                                                                      .toString(),
+                                                            keyboardType:
+                                                                TextInputType
+                                                                    .number,
+                                                            cursorColor:
+                                                                Colors.white,
+                                                            inputFormatters: [
+                                                              FilteringTextInputFormatter
+                                                                  .digitsOnly,
+                                                            ],
+                                                            textAlign: TextAlign
+                                                                .center,
+                                                            style:
+                                                                const TextStyle(
                                                                   color: Colors
-                                                                      .black54,
+                                                                      .black,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
                                                                   fontSize: 14,
                                                                 ),
+                                                            decoration: const InputDecoration(
+                                                              border:
+                                                                  InputBorder
+                                                                      .none,
+                                                              contentPadding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                              isDense: true,
+                                                              hintText: '0',
+                                                              hintStyle: TextStyle(
+                                                                color: Colors
+                                                                    .black54,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 14,
                                                               ),
-                                                              onChanged: (value) {
-                                                                setState(() {
-                                                                  product['quantity'] =
-                                                                      int.tryParse(
-                                                                        value,
-                                                                      ) ??
-                                                                      0;
-                                                                });
-                                                              },
                                                             ),
+                                                            onChanged: (value) {
+                                                              setState(() {
+                                                                product['quantity'] =
+                                                                    int.tryParse(
+                                                                      value,
+                                                                    ) ??
+                                                                    0;
+                                                              });
+                                                            },
                                                           ),
-                                                          const SizedBox(
-                                                            width: 4,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        Text(
+                                                          unitName,
+                                                          style: TextStyle(
+                                                            color: Colors.white
+                                                                .withOpacity(
+                                                                  0.9,
+                                                                ),
+                                                            fontWeight:
+                                                                FontWeight.w600,
                                                           ),
-                                                          Text(
-                                                            unitName,
-                                                            style: TextStyle(
-                                                              color: Colors
-                                                                  .white
-                                                                  .withOpacity(
-                                                                    0.9,
-                                                                  ),
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Center(
-                                                    child: Text(
-                                                      "\$${totalProductPrice.toStringAsFixed(2)}",
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                              ),
+                                              Expanded(
+                                                flex: 3,
+                                                child: Center(
+                                                  child: Text(
+                                                    "\$${totalProductPrice.toStringAsFixed(2)}",
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                              // New column for remove icon
+                                              Expanded(
+                                                flex: 1,
+                                                child: Center(
+                                                  child: IconButton(
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                      color: Colors.red,
+                                                    ),
+                                                    tooltip: 'Remove product',
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        allProducts.removeAt(
+                                                          index - 1,
+                                                        );
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       );
@@ -886,28 +889,8 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                           );
                                         },
                                 ),
-                                const SizedBox(height: 20),
-                                _ActionButton(
-                                  color: const Color(0xFFC34239),
-                                  icon: Icons.delete_forever_rounded,
-                                  label: 'Remove Product',
-                                  textColor: Colors.white,
-                                  width: 220,
-                                  onTap: () {
-                                    if (selectedProductIds.isEmpty) {
-                                      _showMessage('Select products to remove');
-                                      return;
-                                    }
-                                    setState(() {
-                                      allProducts.removeWhere(
-                                        (p) => selectedProductIds.contains(
-                                          p['product_id'],
-                                        ),
-                                      );
-                                      selectedProductIds.clear();
-                                    });
-                                  },
-                                ),
+
+                                // Removed 'Remove Product' button
                                 const SizedBox(height: 20),
                                 _ActionButton(
                                   color: const Color(0xFF4287AD),
@@ -937,7 +920,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                 const SizedBox(height: 30),
                                 const Divider(color: Colors.white24),
                                 const SizedBox(height: 18),
-                                // ✅ Discount + TextField
+                                // ✅ Discount + TextField (value-based, decimal)
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -946,52 +929,70 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                       style: TextStyle(
                                         color: Colors.white70,
                                         fontSize: 14,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 18),
                                     SizedBox(
-                                      width: 80,
-                                      height: 32,
+                                      width: 100,
+                                      height: 36,
                                       child: TextField(
                                         controller: discountController,
-                                        keyboardType: TextInputType.number,
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
                                         inputFormatters: [
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
+                                          FilteringTextInputFormatter.allow(
+                                            RegExp(r'^\d*\.?\d*'),
+                                          ),
+                                          _DecimalInputFormatter(),
                                         ],
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 14,
                                         ),
                                         decoration: InputDecoration(
-                                          suffixText: "%",
-                                          suffixStyle: const TextStyle(
-                                            color: Colors.white,
+                                          prefixText: '\$ ',
+                                          prefixStyle: const TextStyle(
+                                            color: Colors.white70,
                                             fontSize: 14,
                                           ),
-                                          hintText: "0",
+                                          hintText: '0.00',
                                           hintStyle: const TextStyle(
-                                            color: Colors.white54,
+                                            color: Colors.white38,
+                                            fontSize: 14,
                                           ),
+                                          filled: true,
+                                          fillColor: const Color(0xFF2D2D2D),
                                           contentPadding:
                                               const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 0,
+                                                horizontal: 12,
+                                                vertical: 8,
                                               ),
-                                          enabledBorder: OutlineInputBorder(
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                             borderSide: const BorderSide(
                                               color: Color(0xFFB7A447),
                                             ),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(
                                               6,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFB7A447),
                                             ),
                                           ),
                                           focusedBorder: OutlineInputBorder(
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFB7A447),
-                                            ),
                                             borderRadius: BorderRadius.circular(
                                               6,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: Color(0xFFB7A447),
+                                              width: 2,
                                             ),
                                           ),
                                         ),
@@ -1000,12 +1001,19 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
-                                Text(
-                                  'Total Price : \$${totalPrice.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16.0,
+                                    horizontal: 8.0,
+                                  ),
+                                  child: Text(
+                                    'Total Price : \$${totalPrice.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 18,
+                                      letterSpacing: 1.2,
+                                    ),
                                   ),
                                 ),
                               ],

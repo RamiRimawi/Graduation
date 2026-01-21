@@ -151,7 +151,7 @@ class _ReportPageContentState extends State<ReportPageContent> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: const [
                         Text(
-                          'Report Page',
+                          'Product Reports',
                           style: TextStyle(
                             color: AppColors.white,
                             fontSize: 18,
