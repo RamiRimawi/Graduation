@@ -523,9 +523,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     final distanceInMeters =
         _calculateDistance(currentLocation, destinationPoint) * 1000;
 
-    final withinWindow =
-        distanceInMeters >= _arrivalMinMeters &&
-        distanceInMeters <= _arrivalMaxMeters;
+    final withinWindow = distanceInMeters <= _arrivalMaxMeters;
 
     final inside = withinWindow && speedMps <= _maxArrivalSpeedMps;
 
