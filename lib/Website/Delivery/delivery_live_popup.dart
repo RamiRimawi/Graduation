@@ -24,10 +24,13 @@ class DeliveryLivePopup extends StatefulWidget {
   State<DeliveryLivePopup> createState() => _DeliveryLivePopupState();
 }
 
-class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
+class _DeliveryLivePopupState extends State<DeliveryLivePopup>
+    with TickerProviderStateMixin {
   final MapController _mapController = MapController();
 
   LatLng _driverLocation = const LatLng(31.9522, 35.2332); // Default: Ramallah
+  LatLng _driverMarkerLocation = const LatLng(31.9522, 35.2332);
+  bool _hasInitialDriverLocation = false;
   LatLng? _customerLocation;
   String? _customerName;
   int? _orderId;
@@ -55,6 +58,11 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   Timer? _routeSmartTimer;
   DateTime? _lastRouteUpdateAt;
   LatLng? _lastRouteFrom;
+
+  // ✅ Smooth driver animation
+  AnimationController? _driverAnimController;
+  Animation<LatLng>? _driverAnim;
+  static const Duration _driverAnimDuration = Duration(milliseconds: 600);
 
   static const Duration _routeMinIntervalNormal = Duration(seconds: 12);
   static const Duration _routeMinIntervalFast = Duration(seconds: 4);
@@ -175,6 +183,48 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
     });
   }
 
+  void _onDriverAnimTick() {
+    if (!mounted || _driverAnim == null) return;
+    setState(() {
+      _driverMarkerLocation = _driverAnim!.value;
+    });
+  }
+
+  void _startDriverAnimation(LatLng newLocation) {
+    if (_driverAnimController == null) return;
+
+    _driverAnimController!.stop();
+    _driverAnimController!.reset();
+
+    _driverAnim = LatLngTween(begin: _driverMarkerLocation, end: newLocation)
+        .animate(
+          CurvedAnimation(
+            parent: _driverAnimController!,
+            curve: Curves.easeOut,
+          ),
+        );
+
+    _driverAnimController!.removeListener(_onDriverAnimTick);
+    _driverAnimController!.addListener(_onDriverAnimTick);
+    _driverAnimController!.forward();
+  }
+
+  void _applyDriverLocationUpdate(LatLng newLocation, {bool animate = true}) {
+    setState(() {
+      _driverLocation = newLocation;
+      if (!_hasInitialDriverLocation || !animate) {
+        _driverMarkerLocation = newLocation;
+      }
+    });
+
+    if (!_hasInitialDriverLocation || !animate) {
+      _hasInitialDriverLocation = true;
+      return;
+    }
+
+    _startDriverAnimation(newLocation);
+  }
+
   // Helper: التحقق وتحديث حالة الانحراف عن المسار
   void _checkIfOffRoute() {
     if (_routePoints.isEmpty || _customerLocation == null) {
@@ -255,9 +305,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
 
             final newDriverLoc = LatLng(lat, lng);
 
-            setState(() {
-              _driverLocation = newDriverLoc;
-            });
+            _applyDriverLocationUpdate(newDriverLoc, animate: true);
 
             _updateSpeedAndPolling(newDriverLoc);
             _checkIfOffRoute();
@@ -270,6 +318,12 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   @override
   void initState() {
     super.initState();
+
+    _driverMarkerLocation = _driverLocation;
+    _driverAnimController = AnimationController(
+      vsync: this,
+      duration: _driverAnimDuration,
+    );
 
     _startDriverRealtime();
 
@@ -312,6 +366,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
   void dispose() {
     _pollingTimer?.cancel();
     _routeSmartTimer?.cancel();
+
+    _driverAnimController?.removeListener(_onDriverAnimTick);
+    _driverAnimController?.dispose();
 
     if (_driverChannel != null) {
       supabase.removeChannel(_driverChannel!);
@@ -408,7 +465,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
 
       if (lat != null && lng != null && mounted) {
         final newDriverLoc = LatLng(lat.toDouble(), lng.toDouble());
-        setState(() => _driverLocation = newDriverLoc);
+        _applyDriverLocationUpdate(newDriverLoc, animate: true);
 
         _updateSpeedAndPolling(newDriverLoc);
         _checkIfOffRoute();
@@ -1266,7 +1323,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                         FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            initialCenter: _driverLocation,
+                            initialCenter: _driverMarkerLocation,
                             initialZoom: 14,
                             maxZoom: 20,
                           ),
@@ -1291,7 +1348,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup> {
                             MarkerLayer(
                               markers: [
                                 Marker(
-                                  point: _driverLocation,
+                                  point: _driverMarkerLocation,
                                   width: 50,
                                   height: 50,
                                   child: _DriverMarker(),
@@ -1414,5 +1471,21 @@ class _CustomerMarker extends StatelessWidget {
       ),
       child: const Icon(Icons.location_on, color: Colors.redAccent, size: 20),
     );
+  }
+}
+
+class LatLngTween extends Tween<LatLng> {
+  LatLngTween({super.begin, super.end});
+
+  @override
+  LatLng lerp(double t) {
+    final beginLat = begin?.latitude ?? 0.0;
+    final beginLng = begin?.longitude ?? 0.0;
+    final endLat = end?.latitude ?? 0.0;
+    final endLng = end?.longitude ?? 0.0;
+
+    final lat = beginLat + (endLat - beginLat) * t;
+    final lng = beginLng + (endLng - beginLng) * t;
+    return LatLng(lat, lng);
   }
 }

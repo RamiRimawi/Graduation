@@ -1,6 +1,6 @@
 {
-    "name": "dolphin",
-    "short_name": "dolphin",
+    "name": "Dolphin",
+    "short_name": "Dolphin",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#202020",

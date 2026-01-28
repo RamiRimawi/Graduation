@@ -1,4 +1,4 @@
-# dolphin
+# Dolphin
 
 A new Flutter project.
 
