@@ -89,7 +89,6 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
           .order('order_date', ascending: false)
           .limit(100) as List<dynamic>;
 
-      final seenCustomerIds = <int>{};
       final List<Map<String, dynamic>> fetched = [];
 
       for (final row in data) {
@@ -123,14 +122,6 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
           if (deliveredDate != null) {
             deliveredAt = DateTime.tryParse(deliveredDate);
           }
-        }
-
-        if (customerId != null && seenCustomerIds.contains(customerId)) {
-          continue;
-        }
-
-        if (customerId != null) {
-          seenCustomerIds.add(customerId);
         }
 
         fetched.add({
