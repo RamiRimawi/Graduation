@@ -2,6 +2,16 @@ import org.gradle.api.JavaVersion
 import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.compile.JavaCompile
 
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.google.gms:google-services:4.4.2")
+    }
+}
+
 allprojects {
     repositories {
         google()

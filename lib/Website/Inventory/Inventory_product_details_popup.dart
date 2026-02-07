@@ -122,6 +122,41 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
     }
   }
 
+  void _openImagePreview() {
+    final hasImage = _selectedImageBytes != null ||
+        (productImageUrl != null && productImageUrl!.isNotEmpty);
+    if (!hasImage) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black87,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          child: InteractiveViewer(
+            minScale: 0.7,
+            maxScale: 4,
+            child: _selectedImageBytes != null
+                ? Image.memory(
+                    _selectedImageBytes!,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    isAntiAlias: true,
+                  )
+                : Image.network(
+                    productImageUrl!,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    isAntiAlias: true,
+                  ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<String?> _uploadImageToSupabase() async {
     if (_selectedImageBytes == null || _selectedImageName == null) return null;
 
@@ -545,58 +580,68 @@ class _ProductDetailsPopupState extends State<ProductDetailsPopup> {
                             ),
                             child: Stack(
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    child: _selectedImageBytes != null
-                                        ? Image.memory(
-                                            _selectedImageBytes!,
-                                            fit: BoxFit.cover,
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                          )
-                                        : productImageUrl != null &&
-                                              productImageUrl!.isNotEmpty
-                                        ? Image.network(
-                                            productImageUrl!,
-                                            fit: BoxFit.cover,
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return const Icon(
-                                                    Icons.image_not_supported,
-                                                    size: 100,
-                                                    color: Colors.grey,
-                                                  );
-                                                },
-                                            loadingBuilder: (context, child, loadingProgress) {
-                                              if (loadingProgress == null) {
-                                                return child;
-                                              }
-                                              return CircularProgressIndicator(
-                                                value:
-                                                    loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                              .cumulativeBytesLoaded /
-                                                          loadingProgress
-                                                              .expectedTotalBytes!
-                                                    : null,
-                                                color: const Color(0xFFFFE14D),
-                                              );
-                                            },
-                                          )
-                                        : const Center(
-                                            child: Icon(
-                                              Icons.image_not_supported,
-                                              size: 100,
-                                              color: Colors.grey,
+                                GestureDetector(
+                                  onTap: _openImagePreview,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      child: _selectedImageBytes != null
+                                          ? Image.memory(
+                                              _selectedImageBytes!,
+                                              fit: BoxFit.contain,
+                                              alignment: Alignment.center,
+                                              filterQuality: FilterQuality.high,
+                                              isAntiAlias: true,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                            )
+                                          : productImageUrl != null &&
+                                                productImageUrl!.isNotEmpty
+                                          ? Image.network(
+                                              productImageUrl!,
+                                              fit: BoxFit.contain,
+                                              alignment: Alignment.center,
+                                              filterQuality: FilterQuality.high,
+                                              isAntiAlias: true,
+                                              gaplessPlayback: true,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return const Icon(
+                                                      Icons.image_not_supported,
+                                                      size: 100,
+                                                      color: Colors.grey,
+                                                    );
+                                                  },
+                                              loadingBuilder: (context, child, loadingProgress) {
+                                                if (loadingProgress == null) {
+                                                  return child;
+                                                }
+                                                return CircularProgressIndicator(
+                                                  value:
+                                                      loadingProgress
+                                                              .expectedTotalBytes !=
+                                                          null
+                                                      ? loadingProgress
+                                                                .cumulativeBytesLoaded /
+                                                            loadingProgress
+                                                                .expectedTotalBytes!
+                                                      : null,
+                                                  color: const Color(0xFFFFE14D),
+                                                );
+                                              },
+                                            )
+                                          : const Center(
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                size: 100,
+                                                color: Colors.grey,
+                                              ),
                                             ),
-                                          ),
+                                    ),
                                   ),
                                 ),
                                 // Edit button overlay

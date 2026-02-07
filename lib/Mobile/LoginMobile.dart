@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../supabase_config.dart';
 import 'Supplier/supplier_home_page.dart';
 import 'DeliveryDriver/deleviry_home.dart';
@@ -280,6 +281,18 @@ class _LoginPageState extends State<LoginPage> {
 
       // Cache all user account data for immediate display in account page
       await _cacheUserAccountData(userType, userId);
+
+      final String roleTag = switch (userType) {
+        'delivery' => 'driver',
+        'storage_staff' => 'storage_staff',
+        'manager' => 'manager',
+        'sales_rep' => 'sales_rep',
+        'customer' => 'customer',
+        'supplier' => 'supplier',
+        _ => userType,
+      };
+      await OneSignal.User.addTagWithKey('role', roleTag);
+      await OneSignal.User.addTagWithKey('user_id', userId);
 
       // Navigate to appropriate home page
       if (mounted) {
