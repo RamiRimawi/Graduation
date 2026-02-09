@@ -54,6 +54,29 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _userIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  String _normalizeArabicDigits(String input) {
+    const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+    const easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
+    final buffer = StringBuffer();
+
+    for (final ch in input.runes) {
+      final char = String.fromCharCode(ch);
+      final idxArabic = arabicIndic.indexOf(char);
+      if (idxArabic >= 0) {
+        buffer.write(idxArabic.toString());
+        continue;
+      }
+      final idxEastern = easternArabicIndic.indexOf(char);
+      if (idxEastern >= 0) {
+        buffer.write(idxEastern.toString());
+        continue;
+      }
+      buffer.write(char);
+    }
+
+    return buffer.toString();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -200,8 +223,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    final userId = _userIdController.text.trim();
-    final password = _passwordController.text.trim();
+    final userId = _normalizeArabicDigits(_userIdController.text.trim());
+    final password = _normalizeArabicDigits(_passwordController.text.trim());
 
     if (userId.isEmpty || password.isEmpty) {
       _showError('Please enter User ID and Password');
@@ -389,6 +412,7 @@ class _LoginPageState extends State<LoginPage> {
                       obscure: false,
                       focusNode: _usernameFocus,
                       controller: _userIdController,
+                      normalizeArabicDigits: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
@@ -404,6 +428,7 @@ class _LoginPageState extends State<LoginPage> {
                       obscure: true,
                       focusNode: _passwordFocus,
                       controller: _passwordController,
+                      normalizeArabicDigits: true,
                     ),
                     const SizedBox(height: 16),
 
@@ -511,6 +536,7 @@ class _LoginPageState extends State<LoginPage> {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     int? maxLength,
+    bool normalizeArabicDigits = false,
   }) {
     return TextField(
       controller: controller,
@@ -518,7 +544,10 @@ class _LoginPageState extends State<LoginPage> {
       obscureText: obscure,
       enabled: !_isLoading,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
+      inputFormatters: [
+        if (normalizeArabicDigits) _ArabicDigitsToLatinFormatter(),
+        ...?inputFormatters,
+      ],
       maxLength: maxLength,
       style: const TextStyle(
         color: AppColors.white,
@@ -558,6 +587,45 @@ class _LoginPageState extends State<LoginPage> {
         ),
         counterText: maxLength != null ? '' : null,
       ),
+    );
+  }
+}
+
+class _ArabicDigitsToLatinFormatter extends TextInputFormatter {
+  static const _arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+  static const _easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text;
+    final buffer = StringBuffer();
+
+    for (final ch in text.runes) {
+      final char = String.fromCharCode(ch);
+      final idxArabic = _arabicIndic.indexOf(char);
+      if (idxArabic >= 0) {
+        buffer.write(idxArabic.toString());
+        continue;
+      }
+      final idxEastern = _easternArabicIndic.indexOf(char);
+      if (idxEastern >= 0) {
+        buffer.write(idxEastern.toString());
+        continue;
+      }
+      buffer.write(char);
+    }
+
+    final normalized = buffer.toString();
+    if (normalized == text) return newValue;
+
+    final selectionIndex = normalized.length;
+    return TextEditingValue(
+      text: normalized,
+      selection: TextSelection.collapsed(offset: selectionIndex),
+      composing: TextRange.empty,
     );
   }
 }
