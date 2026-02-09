@@ -27,6 +27,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearch);
+    _loadCartProductIds();
     _loadProducts();
   }
 
@@ -87,6 +88,27 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _loadCartProductIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = prefs.getString('cart_items') ?? '{}';
+      final cartMap = jsonDecode(cartJson) as Map<String, dynamic>;
+      final ids = cartMap.keys
+          .map((key) => int.tryParse(key))
+          .whereType<int>()
+          .toSet();
+
+      if (!mounted) return;
+      setState(() {
+        _cartProductIds
+          ..clear()
+          ..addAll(ids);
+      });
+    } catch (e) {
+      debugPrint('Error loading cart items: $e');
     }
   }
 
