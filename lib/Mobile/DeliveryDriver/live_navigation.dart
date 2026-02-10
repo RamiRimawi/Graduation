@@ -93,6 +93,10 @@ class LiveNavigation extends StatefulWidget {
 class _LiveNavigationState extends State<LiveNavigation>
     with SingleTickerProviderStateMixin {
   MapController? _mapController;
+  bool _isMapReady = false;
+  LatLng? _pendingMoveCenter;
+  double? _pendingMoveZoom;
+  double? _pendingMoveRotation;
 
   LatLng? _currentDriverLocation; // ✅ filtered + locked (the truth in UI)
   LatLng? _previousLocation;
@@ -260,7 +264,7 @@ class _LiveNavigationState extends State<LiveNavigation>
       _currentBearing = heading;
     });
 
-    _mapController?.move(initial, 17.0);
+    _safeMove(initial, 17.0);
     _updateRoute();
   }
 
@@ -392,7 +396,7 @@ class _LiveNavigationState extends State<LiveNavigation>
         _currentBearing = _lastHeadingDeg;
       });
 
-      _mapController?.move(initLoc, 17.0);
+      _safeMove(initLoc, 17.0);
       await _updateRoute(); // initial route
 
       // ✅ faster stream on Android
@@ -1009,6 +1013,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     _lastFollowAt = now;
 
     if (_mapController == null) return;
+    if (!_isMapReady) return;
 
     final followPoint = _animatedDriverLocation ?? _currentDriverLocation;
     if (followPoint == null) return;
@@ -1021,7 +1026,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     else if (_currentSpeed > 20)
       zoom = 16.5;
 
-    _mapController!.moveAndRotate(followPoint, zoom, _currentBearing);
+    _safeMoveAndRotate(followPoint, zoom, _currentBearing);
   }
 
   Future<void> _clearCurrentOrderId() async {
@@ -1035,13 +1040,27 @@ class _LiveNavigationState extends State<LiveNavigation>
     }
   }
 
+  void _popAfterDialog(BuildContext context, int times) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      for (var i = 0; i < times; i++) {
+        if (!mounted) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final destinationLocation = LatLng(
       widget.customerLatitude,
       widget.customerLongitude,
     );
-    final mapRotation = _mapController?.camera.rotation ?? 0.0;
+    final mapRotation = _isMapReady ? _mapController!.camera.rotation : 0.0;
     final markerRotationRad =
         (_currentBearing - mapRotation) * math.pi / 180;
 
@@ -1058,6 +1077,23 @@ class _LiveNavigationState extends State<LiveNavigation>
                 minZoom: 10.0,
                 maxZoom: 19.0,
                 keepAlive: true,
+                onMapReady: () {
+                  _isMapReady = true;
+                  if (_pendingMoveCenter != null &&
+                      _pendingMoveZoom != null) {
+                    final center = _pendingMoveCenter!;
+                    final zoom = _pendingMoveZoom!;
+                    final rotation = _pendingMoveRotation;
+                    _pendingMoveCenter = null;
+                    _pendingMoveZoom = null;
+                    _pendingMoveRotation = null;
+                    if (rotation != null) {
+                      _mapController!.moveAndRotate(center, zoom, rotation);
+                    } else {
+                      _mapController!.move(center, zoom);
+                    }
+                  }
+                },
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
@@ -1367,9 +1403,10 @@ class _LiveNavigationState extends State<LiveNavigation>
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: () {
+                          final parentContext = context;
                         showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
+                            context: parentContext,
+                            builder: (dialogContext) => AlertDialog(
                             backgroundColor: const Color(0xFF2D2D2D),
                             title: const Text(
                               'End Navigation?',
@@ -1381,7 +1418,7 @@ class _LiveNavigationState extends State<LiveNavigation>
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () => Navigator.pop(dialogContext),
                                 child: const Text(
                                   'Cancel',
                                   style: TextStyle(color: Color(0xFFB7A447)),
@@ -1391,9 +1428,8 @@ class _LiveNavigationState extends State<LiveNavigation>
                                 onPressed: () async {
                                   await _clearCurrentOrderId();
                                   if (!mounted) return;
-                                  Navigator.pop(context);
-                                  Navigator.pop(context);
-                                  Navigator.pop(context);
+                                  Navigator.pop(dialogContext);
+                                  _popAfterDialog(parentContext, 2);
                                 },
                                 child: const Text(
                                   'End Route',
@@ -1428,5 +1464,25 @@ class _LiveNavigationState extends State<LiveNavigation>
         ),
       ),
     );
+  }
+
+  void _safeMove(LatLng center, double zoom) {
+    if (_mapController == null || !_isMapReady) {
+      _pendingMoveCenter = center;
+      _pendingMoveZoom = zoom;
+      _pendingMoveRotation = null;
+      return;
+    }
+    _mapController!.move(center, zoom);
+  }
+
+  void _safeMoveAndRotate(LatLng center, double zoom, double rotation) {
+    if (_mapController == null || !_isMapReady) {
+      _pendingMoveCenter = center;
+      _pendingMoveZoom = zoom;
+      _pendingMoveRotation = rotation;
+      return;
+    }
+    _mapController!.moveAndRotate(center, zoom, rotation);
   }
 }
