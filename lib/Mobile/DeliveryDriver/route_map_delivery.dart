@@ -219,6 +219,8 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
           customerLongitude: widget.longitude,
           orderId: widget.orderId,
           deliveryDriverId: widget.deliveryDriverId,
+          initialDriverLocation:
+              deliveryDriverLocation ?? _fallbackDriverLocation,
         ),
       ),
     );

@@ -62,12 +62,13 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
   // ✅ Smooth driver animation
   AnimationController? _driverAnimController;
   Animation<LatLng>? _driverAnim;
-  static const Duration _driverAnimDuration = Duration(milliseconds: 600);
+  static const Duration _driverAnimDurationDefault =
+      Duration(milliseconds: 600);
 
-  static const Duration _routeMinIntervalNormal = Duration(seconds: 12);
-  static const Duration _routeMinIntervalFast = Duration(seconds: 4);
-  static const double _routeMinMoveNormalMeters = 25.0;
-  static const double _routeMinMoveFastMeters = 10.0;
+  static const Duration _routeMinIntervalNormal = Duration(seconds: 5);
+  static const Duration _routeMinIntervalFast = Duration(seconds: 2);
+  static const double _routeMinMoveNormalMeters = 12.0;
+  static const double _routeMinMoveFastMeters = 6.0;
   static const double _fastSpeedKmh = 50.0;
 
   // Helper: حساب أقرب مسافة من نقطة إلى خط (المسار)
@@ -193,10 +194,15 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
   void _startDriverAnimation(LatLng newLocation) {
     if (_driverAnimController == null) return;
 
+    final from = _driverMarkerLocation;
+    final moved = Distance().as(LengthUnit.Meter, from, newLocation);
+    final ms = (moved * 8).clamp(160.0, 800.0).toInt();
+    _driverAnimController!.duration = Duration(milliseconds: ms);
+
     _driverAnimController!.stop();
     _driverAnimController!.reset();
 
-    _driverAnim = LatLngTween(begin: _driverMarkerLocation, end: newLocation)
+    _driverAnim = LatLngTween(begin: from, end: newLocation)
         .animate(
           CurvedAnimation(
             parent: _driverAnimController!,
@@ -322,7 +328,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     _driverMarkerLocation = _driverLocation;
     _driverAnimController = AnimationController(
       vsync: this,
-      duration: _driverAnimDuration,
+      duration: _driverAnimDurationDefault,
     );
 
     _startDriverRealtime();

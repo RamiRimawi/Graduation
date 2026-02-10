@@ -73,6 +73,7 @@ class LiveNavigation extends StatefulWidget {
   final double customerLongitude;
   final int? orderId;
   final int deliveryDriverId;
+  final LatLng? initialDriverLocation;
 
   const LiveNavigation({
     super.key,
@@ -82,6 +83,7 @@ class LiveNavigation extends StatefulWidget {
     required this.customerLongitude,
     this.orderId,
     required this.deliveryDriverId,
+    this.initialDriverLocation,
   });
 
   @override
@@ -115,15 +117,7 @@ class _LiveNavigationState extends State<LiveNavigation>
 
   StreamSubscription<Position>? _positionStream;
   Timer? _routeUpdateTimer;
-  bool _arrivedAtDestination = false;
   bool _isFollowingDriver = true;
-
-  // -------------------- ARRIVAL --------------------
-  int _arrivalHitCount = 0;
-  static const int _requiredArrivalHits = 2;
-  static const double _arrivalThresholdMeters = 20.0; // 20m
-  static const double _maxArrivalSpeedMps = 5.0;
-  static const double _maxGpsAccuracyMeters = 35.0;
 
   // -------------------- Smooth / Filters --------------------
   static const int _markerAnimMsDefault = 450;
@@ -132,6 +126,9 @@ class _LiveNavigationState extends State<LiveNavigation>
   static const double _maxJumpMeters = 60.0; // كان 80 -> شددناه
   static const double _maxJumpWhenSlowMeters = 25.0; // لو السرعة قليلة: شد أكتر
   static const double _ignoreJumpIfSpeedLessThan = 1.0; // m/s
+
+  // Max allowed GPS accuracy before ignoring the sample
+  static const double _maxGpsAccuracyMeters = 35.0;
 
   // Stop lock
   static const double _stopSpeedMps = 0.8; // أقل من هيك اعتبره واقف
@@ -172,10 +169,10 @@ class _LiveNavigationState extends State<LiveNavigation>
   bool _isOffRoute = false;
 
   static const double _offRouteThresholdMeters = 50.0;
-  static const Duration _routeMinInterval = Duration(seconds: 12);
-  static const Duration _routeFastInterval = Duration(seconds: 4);
-  static const double _routeUpdateMoveMeters = 25.0;
-  static const double _routeFastMoveMeters = 10.0;
+  static const Duration _routeMinInterval = Duration(seconds: 5);
+  static const Duration _routeFastInterval = Duration(seconds: 2);
+  static const double _routeUpdateMoveMeters = 12.0;
+  static const double _routeFastMoveMeters = 6.0;
 
   // -------------------- PREDICTION (LIVE) --------------------
   Timer? _predictionTimer;
@@ -203,6 +200,10 @@ class _LiveNavigationState extends State<LiveNavigation>
   void initState() {
     super.initState();
     _mapController = MapController();
+
+    if (widget.initialDriverLocation != null) {
+      _primeFromInitialLocation(widget.initialDriverLocation!);
+    }
 
     _markerAnimController = AnimationController(
       vsync: this,
@@ -235,6 +236,32 @@ class _LiveNavigationState extends State<LiveNavigation>
       const Duration(seconds: 2),
       (_) => _maybeUpdateRoute(),
     );
+  }
+
+  void _primeFromInitialLocation(LatLng initial) {
+    final heading = _calculateBearing(
+      initial,
+      LatLng(widget.customerLatitude, widget.customerLongitude),
+    );
+
+    _kalman = _Kalman2D(
+      lat0: initial.latitude,
+      lng0: initial.longitude,
+      q: _kalmanQ,
+      r: _kalmanRGood,
+    );
+    _kalmanReady = true;
+
+    setState(() {
+      _currentDriverLocation = initial;
+      _previousLocation = initial;
+      _animatedDriverLocation = initial;
+      _smoothedBearing = heading;
+      _currentBearing = heading;
+    });
+
+    _mapController?.move(initial, 17.0);
+    _updateRoute();
   }
 
   @override
@@ -574,12 +601,10 @@ class _LiveNavigationState extends State<LiveNavigation>
       }
     }
 
-    // -------------------- DB + ARRIVAL (نفس النقطة) --------------------
+    // -------------------- DB + OFF-ROUTE --------------------
     _maybeUpdateLocationInDatabase(snapped, speedMps);
 
     _checkIfOffRoute(snapped);
-
-    _checkArrival(snapped, position.accuracy, speedMps);
   }
 
   // -------------------- SMART SNAP --------------------
@@ -588,6 +613,8 @@ class _LiveNavigationState extends State<LiveNavigation>
     final dest = LatLng(widget.customerLatitude, widget.customerLongitude);
     final distToDest = Distance().as(LengthUnit.Meter, raw, dest);
     if (distToDest <= _nearDestNoSnapMeters) return raw;
+
+    if (_isOffRoute) return raw;
 
     return _applySnapIfNeeded(raw, speedMps: speedMps);
   }
@@ -667,18 +694,6 @@ class _LiveNavigationState extends State<LiveNavigation>
 
     if (nowOff != _isOffRoute) {
       setState(() => _isOffRoute = nowOff);
-
-      if (!mounted) return;
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      if (nowOff) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ خارج المسار'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
     }
   }
 
@@ -759,48 +774,6 @@ class _LiveNavigationState extends State<LiveNavigation>
       debugPrint('Error updating route: $e');
     } finally {
       _isRouting = false;
-    }
-  }
-
-  // -------------------- ARRIVAL --------------------
-  void _checkArrival(
-    LatLng currentLocation,
-    double gpsAccuracy,
-    double speedMps,
-  ) {
-    if (_arrivedAtDestination) return;
-
-    if (gpsAccuracy > _maxGpsAccuracyMeters) {
-      _arrivalHitCount = 0;
-      return;
-    }
-
-    final destinationPoint = LatLng(
-      widget.customerLatitude,
-      widget.customerLongitude,
-    );
-
-    final distanceInMeters =
-        _calculateDistance(currentLocation, destinationPoint) * 1000;
-
-    final withinRange = distanceInMeters <= _arrivalThresholdMeters;
-
-    // إذا داخل 20m خلّي شرط السرعة ألين (عشان أحيانًا GPS يعطي speed غلط)
-    final speedOk = withinRange
-        ? (speedMps <= 8.0)
-        : (speedMps <= _maxArrivalSpeedMps);
-
-    if (withinRange && speedOk) {
-      _arrivalHitCount++;
-      debugPrint(
-        '🎯 Arrival check: $_arrivalHitCount/$_requiredArrivalHits (${distanceInMeters.toStringAsFixed(1)}m)',
-      );
-      if (_arrivalHitCount >= _requiredArrivalHits) {
-        setState(() => _arrivedAtDestination = true);
-        _showArrivalDialog();
-      }
-    } else {
-      _arrivalHitCount = 0;
     }
   }
 
@@ -1048,7 +1021,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     else if (_currentSpeed > 20)
       zoom = 16.5;
 
-    _mapController!.move(followPoint, zoom);
+    _mapController!.moveAndRotate(followPoint, zoom, _currentBearing);
   }
 
   Future<void> _clearCurrentOrderId() async {
@@ -1062,42 +1035,15 @@ class _LiveNavigationState extends State<LiveNavigation>
     }
   }
 
-  void _showArrivalDialog() {
-    _clearCurrentOrderId();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: const Color(0xFF2D2D2D),
-        title: const Text(
-          'Arrived at Destination!',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'You have arrived at the customer location.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('OK', style: TextStyle(color: Color(0xFFB7A447))),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final destinationLocation = LatLng(
       widget.customerLatitude,
       widget.customerLongitude,
     );
+    final mapRotation = _mapController?.camera.rotation ?? 0.0;
+    final markerRotationRad =
+        (_currentBearing - mapRotation) * math.pi / 180;
 
     return Scaffold(
       backgroundColor: const Color(0xFF202020),
@@ -1148,7 +1094,7 @@ class _LiveNavigationState extends State<LiveNavigation>
                         height: 70.0,
                         alignment: Alignment.center,
                         child: Transform.rotate(
-                          angle: _currentBearing * math.pi / 180,
+                          angle: markerRotationRad,
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
@@ -1364,27 +1310,8 @@ class _LiveNavigationState extends State<LiveNavigation>
                             Icon(Icons.warning, color: Colors.orange, size: 18),
                             SizedBox(width: 6),
                             Text(
-                              'خارج المسار',
+                              'Off route',
                               style: TextStyle(color: Colors.orange),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (_stopLocked)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(
-                              Icons.pause_circle,
-                              color: Colors.white70,
-                              size: 18,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'ثابت (Stop Lock)',
-                              style: TextStyle(color: Colors.white70),
                             ),
                           ],
                         ),
