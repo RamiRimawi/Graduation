@@ -54,7 +54,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
       return [
         _NavItem(Icons.home_filled, 'Home'),
         _NavItem(Icons.shopping_cart_outlined, 'Cart'),
-        _NavItem(Icons.archive_outlined, 'Archive'),
+        _NavItem(Icons.archive_outlined, 'Orders'),
         _NavItem(Icons.person, 'Account'),
       ];
     }
