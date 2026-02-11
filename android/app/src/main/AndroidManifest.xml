@@ -35,6 +35,11 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDF6GEMkCi8x-6Pv85RDLmRng6iM5mQiDY" />
 
+        <!-- Mapbox Access Token -->
+        <meta-data
+            android:name="com.mapbox.maps.token"
+            android:value="pk.eyJ1IjoicmFtYWRhbjk2IiwiYSI6ImNtbGh4eHMyMzA1d20zY3Fzem54aHZtNGQifQ.sB2yvST_wLvszakHkT7Npg" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

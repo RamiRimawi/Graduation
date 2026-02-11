@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'live_navigation.dart';
 import '../../supabase_config.dart';
 
@@ -33,7 +36,25 @@ class RouteMapDeleviry extends StatefulWidget {
 }
 
 class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
-  MapController? _mapController;
+  mapbox.MapboxMap? _mapboxMap;
+  mapbox.PointAnnotationManager? _driverPointManager;
+  mapbox.PointAnnotationManager? _destPointManager;
+  mapbox.PolylineAnnotationManager? _routeLineManager;
+
+  mapbox.PointAnnotation? _driverPoint;
+  mapbox.PointAnnotation? _destPoint;
+  mapbox.PolylineAnnotation? _routeLine;
+
+  Uint8List? _driverIconBytes;
+  Uint8List? _destIconBytes;
+  bool _isCreatingDriverMarker = false;
+  bool _isCreatingDestMarker = false;
+  bool _isStyleReady = false;
+
+  static const String _mapboxAccessToken =
+      'pk.eyJ1IjoicmFtYWRhbjk2IiwiYSI6ImNtbGh4eHMyMzA1d20zY3Fzem54aHZtNGQifQ.sB2yvST_wLvszakHkT7Npg';
+  static const String _mapStyleUri =
+      'mapbox://styles/mapbox/streets-v12';
   bool _mapLoading = true;
   bool _locationObtained = false;
   List<LatLng> routePoints = [];
@@ -45,7 +66,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
+    mapbox.MapboxOptions.setAccessToken(_mapboxAccessToken);
     _getCurrentLocation();
   }
 
@@ -85,6 +106,8 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
         deliveryDriverLocation = current;
         _locationObtained = true;
       });
+      _updateDriverMarker(current);
+      _updateDestinationMarker();
       await _getShortestRoute(current);
     } catch (e) {
       debugPrint('Error getting location: $e');
@@ -98,33 +121,42 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
       deliveryDriverLocation = _fallbackDriverLocation;
       _locationObtained = true;
     });
+    _updateDriverMarker(_fallbackDriverLocation);
+    _updateDestinationMarker();
     _getShortestRoute(_fallbackDriverLocation);
   }
 
   // Function to fit the entire route in view
-  void _fitRouteInView() {
-    if (_mapController == null || deliveryDriverLocation == null) return;
+  Future<void> _fitRouteInView() async {
+    if (_mapboxMap == null || deliveryDriverLocation == null) return;
 
     final endPoint = LatLng(widget.latitude, widget.longitude);
     
-    // Create bounds that include both start and end points
-    final bounds = LatLngBounds.fromPoints([
-      deliveryDriverLocation!,
-      endPoint,
-    ]);
+    final south = math.min(deliveryDriverLocation!.latitude, endPoint.latitude);
+    final north = math.max(deliveryDriverLocation!.latitude, endPoint.latitude);
+    final west = math.min(deliveryDriverLocation!.longitude, endPoint.longitude);
+    final east = math.max(deliveryDriverLocation!.longitude, endPoint.longitude);
 
-    // Fit the camera to show the entire route with padding
-    _mapController!.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: const EdgeInsets.only(
-          top: 110,    // Space for back button
-          bottom: 290, // Space for bottom info card
-          left: 50,
-          right: 60,
-        ),
+    final bounds = mapbox.CoordinateBounds(
+      southwest: mapbox.Point(
+        coordinates: mapbox.Position(west, south),
       ),
+      northeast: mapbox.Point(
+        coordinates: mapbox.Position(east, north),
+      ),
+      infiniteBounds: false,
     );
+
+    final camera = await _mapboxMap!.cameraForCoordinateBounds(
+      bounds,
+      mapbox.MbxEdgeInsets(top: 110, left: 50, bottom: 290, right: 60),
+      null,
+      null,
+      null,
+      null,
+    );
+
+    _mapboxMap!.setCamera(camera);
 
     debugPrint('📍 Map fitted to show entire route');
   }
@@ -164,6 +196,12 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
           setState(() {
             _mapLoading = false;
           });
+
+          _updateRouteLine();
+          if (deliveryDriverLocation != null) {
+            _updateDriverMarker(deliveryDriverLocation!);
+          }
+          _updateDestinationMarker();
 
           // Fit the entire route in view after map is ready
           Future.delayed(const Duration(milliseconds: 500), () {
@@ -226,6 +264,257 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
     );
   }
 
+  Future<void> _zoomBy(double delta) async {
+    if (_mapboxMap == null) return;
+
+    final state = await _mapboxMap!.getCameraState();
+    final nextZoom = (state.zoom + delta).clamp(8.0, 18.0);
+
+    _mapboxMap!.easeTo(
+      mapbox.CameraOptions(
+        center: state.center,
+        zoom: nextZoom,
+        bearing: state.bearing,
+        pitch: state.pitch,
+      ),
+      mapbox.MapAnimationOptions(duration: 250),
+    );
+  }
+
+  mapbox.Point _pointFromLatLng(LatLng point) {
+    return mapbox.Point(
+      coordinates: mapbox.Position(point.longitude, point.latitude),
+    );
+  }
+
+  void _onMapCreated(mapbox.MapboxMap mapboxMap) {
+    _mapboxMap = mapboxMap;
+    _isStyleReady = false;
+
+    _mapboxMap!.gestures.updateSettings(
+      mapbox.GesturesSettings(rotateEnabled: false),
+    );
+    _mapboxMap!.scaleBar.updateSettings(
+      mapbox.ScaleBarSettings(enabled: false),
+    );
+    _mapboxMap!.logo.updateSettings(
+      mapbox.LogoSettings(enabled: false),
+    );
+    _mapboxMap!.attribution.updateSettings(
+      mapbox.AttributionSettings(enabled: false),
+    );
+  }
+
+  Future<void> _onStyleLoaded(mapbox.StyleLoadedEventData data) async {
+    if (_mapboxMap == null) return;
+
+    _driverPointManager =
+        await _mapboxMap!.annotations.createPointAnnotationManager();
+    _destPointManager =
+        await _mapboxMap!.annotations.createPointAnnotationManager();
+    _routeLineManager =
+        await _mapboxMap!.annotations.createPolylineAnnotationManager();
+
+    _driverPoint = null;
+    _destPoint = null;
+    _routeLine = null;
+    _isStyleReady = true;
+
+    await _ensureMarkerImages();
+
+    if (deliveryDriverLocation != null) {
+      await _updateDriverMarker(deliveryDriverLocation!);
+    }
+    await _updateDestinationMarker();
+    await _updateRouteLine();
+
+    if (deliveryDriverLocation != null) {
+      await _fitRouteInView();
+    }
+  }
+
+  Future<void> _updateDriverMarker(LatLng loc) async {
+    if (!_isStyleReady) return;
+    if (_driverPointManager == null || _driverIconBytes == null) return;
+
+    if (_driverPoint == null) {
+      if (_isCreatingDriverMarker) return;
+      _isCreatingDriverMarker = true;
+      _driverPoint = await _driverPointManager!.create(
+        mapbox.PointAnnotationOptions(
+          geometry: _pointFromLatLng(loc),
+          image: _driverIconBytes!,
+        ),
+      );
+      _isCreatingDriverMarker = false;
+      return;
+    }
+
+    _driverPoint!..geometry = _pointFromLatLng(loc);
+    await _driverPointManager!.update(_driverPoint!);
+  }
+
+  Future<void> _updateDestinationMarker() async {
+    if (!_isStyleReady) return;
+    if (_destPointManager == null || _destIconBytes == null) return;
+
+    final dest = LatLng(widget.latitude, widget.longitude);
+
+    if (_destPoint == null) {
+      if (_isCreatingDestMarker) return;
+      _isCreatingDestMarker = true;
+      _destPoint = await _destPointManager!.create(
+        mapbox.PointAnnotationOptions(
+          geometry: _pointFromLatLng(dest),
+          image: _destIconBytes!,
+        ),
+      );
+      _isCreatingDestMarker = false;
+      return;
+    }
+
+    _destPoint!..geometry = _pointFromLatLng(dest);
+    await _destPointManager!.update(_destPoint!);
+  }
+
+  Future<void> _updateRouteLine() async {
+    if (!_isStyleReady) return;
+    if (_routeLineManager == null) return;
+
+    if (routePoints.isEmpty) {
+      if (_routeLine != null) {
+        await _routeLineManager!.delete(_routeLine!);
+        _routeLine = null;
+      }
+      return;
+    }
+
+    final geometry = mapbox.LineString(
+      coordinates: routePoints
+          .map((p) => mapbox.Position(p.longitude, p.latitude))
+          .toList(),
+    );
+
+    if (_routeLine == null) {
+      _routeLine = await _routeLineManager!.create(
+        mapbox.PolylineAnnotationOptions(
+          geometry: geometry,
+          lineColor: 0xFF42A5F5,
+          lineWidth: 6.0,
+        ),
+      );
+      return;
+    }
+
+    _routeLine!
+      ..geometry = geometry
+      ..lineColor = 0xFF42A5F5
+      ..lineWidth = 6.0;
+
+    await _routeLineManager!.update(_routeLine!);
+  }
+
+  Future<void> _ensureMarkerImages() async {
+    if (_driverIconBytes == null) {
+      _driverIconBytes = await _renderDriverIconBytes(120);
+    }
+    if (_destIconBytes == null) {
+      _destIconBytes = await _renderDestinationIconBytes(96);
+    }
+  }
+
+  Future<Uint8List> _renderDriverIconBytes(double size) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final center = Offset(size / 2, size / 2);
+
+    final outerPaint = Paint()..color = const Color(0x262196F3);
+    canvas.drawCircle(center, size * 0.48, outerPaint);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.18)
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+    canvas.drawCircle(center, size * 0.33, shadowPaint);
+
+    final whitePaint = Paint()..color = Colors.white;
+    canvas.drawCircle(center, size * 0.32, whitePaint);
+    canvas.drawCircle(center, size * 0.28, whitePaint);
+
+    final icon = Icons.local_shipping;
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size * 0.34,
+          color: const Color(0xFF2196F3),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final iconOffset = Offset(
+      center.dx - iconPainter.width / 2,
+      center.dy - iconPainter.height / 2,
+    );
+    iconPainter.paint(canvas, iconOffset);
+
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  Future<Uint8List> _renderDestinationIconBytes(double size) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final center = Offset(size / 2, size / 2);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.25)
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+    canvas.drawCircle(center, size * 0.36, shadowPaint);
+
+    final redPaint = Paint()..color = const Color(0xFFFF5252);
+    canvas.drawCircle(center, size * 0.32, redPaint);
+
+    final strokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.08
+      ..color = Colors.white;
+    canvas.drawCircle(center, size * 0.32, strokePaint);
+
+    final icon = Icons.place;
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size * 0.42,
+          color: Colors.white,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final iconOffset = Offset(
+      center.dx - iconPainter.width / 2,
+      center.dy - iconPainter.height / 2,
+    );
+    iconPainter.paint(canvas, iconOffset);
+
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
   @override
   Widget build(BuildContext context) {
     final deliveryLocation = LatLng(widget.latitude, widget.longitude);
@@ -235,138 +524,20 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
       body: SafeArea(
         child: Stack(
           children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: deliveryDriverLocation ?? deliveryLocation,
-                initialZoom: 13.0,
-                minZoom: 8.0,
-                maxZoom: 18.0,
-                initialCameraFit: CameraFit.bounds(
-                  bounds: LatLngBounds(
-                    LatLng(31.45, 34.70),
-                    LatLng(32.60, 35.70),
+            mapbox.MapWidget(
+              key: const ValueKey('route-mapbox'),
+              styleUri: _mapStyleUri,
+              cameraOptions: mapbox.CameraOptions(
+                center: mapbox.Point(
+                  coordinates: mapbox.Position(
+                    (deliveryDriverLocation ?? deliveryLocation).longitude,
+                    (deliveryDriverLocation ?? deliveryLocation).latitude,
                   ),
-                  padding: const EdgeInsets.all(50.0),
                 ),
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                ),
-                onMapReady: () {
-                  // Fit route when map is ready
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (mounted && deliveryDriverLocation != null) {
-                      _fitRouteInView();
-                    }
-                  });
-                },
+                zoom: 13.0,
               ),
-
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.dolphin',
-                tileProvider: NetworkTileProvider(),
-              ),
-              
-              // ✅ غيّر الخط الأزرق فقط
-              if (routePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: routePoints,
-                      strokeWidth: 8.0,  // ✅ نفس live_navigation
-                      color: const Color(0xFF42A5F5),  // ✅ نفس live_navigation
-                    ),
-                  ],
-                ),
-              
-              MarkerLayer(
-                markers: [
-                  // ✅ غيّر أيقونة السائق
-                  if (deliveryDriverLocation != null)
-                    Marker(
-                      point: deliveryDriverLocation!,
-                      width: 70.0,
-                      height: 70.0,
-                      alignment: Alignment.center,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Outer glow
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3).withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          // Middle white circle
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Blue truck icon
-                          Container(
-                            width: 45,
-                            height: 45,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.local_shipping,
-                              color: Color(0xFF2196F3),
-                              size: 28,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  
-                  // ✅ غيّر أيقونة الوجهة
-                  Marker(
-                    point: deliveryLocation,
-                    width: 50.0,
-                    height: 50.0,
-                    alignment: Alignment.center,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF5252),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.place,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              onMapCreated: _onMapCreated,
+              onStyleLoadedListener: _onStyleLoaded,
             ),
 
             // Zoom In/Out Buttons
@@ -394,15 +565,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                         size: 24,
                       ),
                       onPressed: () {
-                        if (_mapController != null) {
-                          final currentZoom = _mapController!.camera.zoom;
-                          if (currentZoom < 18.0) {
-                            _mapController!.move(
-                              _mapController!.camera.center,
-                              currentZoom + 1,
-                            );
-                          }
-                        }
+                        _zoomBy(1.0);
                       },
                     ),
                   ),
@@ -426,15 +589,7 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
                         size: 24,
                       ),
                       onPressed: () {
-                        if (_mapController != null) {
-                          final currentZoom = _mapController!.camera.zoom;
-                          if (currentZoom > 8.0) {
-                            _mapController!.move(
-                              _mapController!.camera.center,
-                              currentZoom - 1,
-                            );
-                          }
-                        }
+                        _zoomBy(-1.0);
                       },
                     ),
                   ),

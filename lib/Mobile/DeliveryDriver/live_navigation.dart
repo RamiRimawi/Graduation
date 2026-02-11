@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_map/flutter_map.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import '../../supabase_config.dart';
 
 // ✅ Top-level helper (Dart ما بسمح class جوّا class)
@@ -92,11 +94,22 @@ class LiveNavigation extends StatefulWidget {
 
 class _LiveNavigationState extends State<LiveNavigation>
     with SingleTickerProviderStateMixin {
-  MapController? _mapController;
+  mapbox.MapboxMap? _mapboxMap;
   bool _isMapReady = false;
-  LatLng? _pendingMoveCenter;
-  double? _pendingMoveZoom;
-  double? _pendingMoveRotation;
+  mapbox.CameraOptions? _pendingCamera;
+
+  mapbox.PointAnnotationManager? _driverPointManager;
+  mapbox.PointAnnotation? _driverPoint;
+  mapbox.PointAnnotationManager? _destPointManager;
+  mapbox.PointAnnotation? _destPoint;
+  mapbox.PolylineAnnotationManager? _routeLineManager;
+  mapbox.PolylineAnnotation? _routeLine;
+
+  Uint8List? _driverIconBytes;
+  Uint8List? _destIconBytes;
+  bool _isCreatingDriverMarker = false;
+  bool _isCreatingDestMarker = false;
+  bool _isStyleReady = false;
 
   LatLng? _currentDriverLocation; // ✅ filtered + locked (the truth in UI)
   LatLng? _previousLocation;
@@ -174,9 +187,9 @@ class _LiveNavigationState extends State<LiveNavigation>
 
   static const double _offRouteThresholdMeters = 50.0;
   static const Duration _routeMinInterval = Duration(seconds: 5);
-  static const Duration _routeFastInterval = Duration(seconds: 2);
+  static const Duration _routeFastInterval = Duration(seconds: 1); // ✅ أسرع للخروج من المسار
   static const double _routeUpdateMoveMeters = 12.0;
-  static const double _routeFastMoveMeters = 6.0;
+  static const double _routeFastMoveMeters = 4.0; // ✅ أقل مسافة = تحديث أسرع
 
   // -------------------- PREDICTION (LIVE) --------------------
   Timer? _predictionTimer;
@@ -200,10 +213,22 @@ class _LiveNavigationState extends State<LiveNavigation>
   // لما تقرب من الزبون: خلي القياس raw/kalman بدون snap قوي عشان ما يمنع الوصول
   static const double _nearDestNoSnapMeters = 60.0;
 
+  // -------------------- MAPBOX --------------------
+  static const String _mapboxAccessToken =
+      'pk.eyJ1IjoicmFtYWRhbjk2IiwiYSI6ImNtbGh4eHMyMzA1d20zY3Fzem54aHZtNGQifQ.sB2yvST_wLvszakHkT7Npg';
+    static const String _mapStyleUri =
+      'mapbox://styles/mapbox/streets-v12';
+      static const String _mapStyleUriDark =
+        'mapbox://styles/mapbox/dark-v11';
+  static const double _navPitchDeg = 60.0;
+      static const Duration _cameraAnimDuration = Duration(milliseconds: 500);
+
+      bool _isDarkStyle = false;
+
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
+    mapbox.MapboxOptions.setAccessToken(_mapboxAccessToken);
 
     if (widget.initialDriverLocation != null) {
       _primeFromInitialLocation(widget.initialDriverLocation!);
@@ -225,6 +250,9 @@ class _LiveNavigationState extends State<LiveNavigation>
           (_animTo!.longitude - _animFrom!.longitude) * t;
 
       _animatedDriverLocation = LatLng(lat, lng);
+      if (_animatedDriverLocation != null) {
+        _updateDriverMarker(_animatedDriverLocation!);
+      }
 
       if (_isFollowingDriver && _animatedDriverLocation != null) {
         _followDriverThrottled();
@@ -264,7 +292,10 @@ class _LiveNavigationState extends State<LiveNavigation>
       _currentBearing = heading;
     });
 
-    _safeMove(initial, 17.0);
+    _updateDestinationMarker();
+    _updateDriverMarker(initial);
+
+    _safeMove(initial, 17.0); // ✅ زوم مثل الصورة
     _updateRoute();
   }
 
@@ -287,8 +318,7 @@ class _LiveNavigationState extends State<LiveNavigation>
   }
 
   void _tickPrediction() {
-    if (_stopLocked) return; // ✅ لو واقف: لا prediction
-
+    // ✅ Simplified - removed stop lock check for smoother animation
     final base = _animatedDriverLocation ?? _currentDriverLocation;
     if (base == null) return;
 
@@ -307,6 +337,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     final next = _applySnapSmart(rawNext, speedMps: _lastSpeedMps);
 
     _animatedDriverLocation = next;
+    _updateDriverMarker(next);
 
     if (_isFollowingDriver) _followDriverThrottled();
     if (mounted) setState(() {});
@@ -396,7 +427,10 @@ class _LiveNavigationState extends State<LiveNavigation>
         _currentBearing = _lastHeadingDeg;
       });
 
-      _safeMove(initLoc, 17.0);
+      _updateDestinationMarker();
+      _updateDriverMarker(initLoc);
+
+      _safeMove(initLoc, 17.0); // ✅ زوم مثل الصورة
       await _updateRoute(); // initial route
 
       // ✅ faster stream on Android
@@ -490,27 +524,14 @@ class _LiveNavigationState extends State<LiveNavigation>
       }
     }
 
-    // -------------------- STOP LOCK --------------------
+    // -------------------- STOP LOCK (DISABLED FOR SMOOTH MOVEMENT) --------------------
+    // ✅ Disabled stop lock to allow continuous smooth movement like old code
+    _stopHits = 0;
+    _stopLocked = false;
+    _stopAnchor = null;
+
+    // ✅ Define speedMps BEFORE using it
     final speedMps = position.speed.isFinite ? position.speed : 0.0;
-    final bool looksStopped = speedMps <= _stopSpeedMps;
-
-    if (looksStopped) {
-      _stopHits++;
-      if (_stopHits >= _stopLockHitsToEnable) {
-        _stopLocked = true;
-        _stopAnchor ??= (_currentDriverLocation ?? filtered);
-
-        // لو فلتر قال تحرك وهو واقف: قيد الحركة ضمن دائرة صغيرة
-        final d = Distance().as(LengthUnit.Meter, _stopAnchor!, filtered);
-        if (d > _stopLockRadiusMeters) {
-          filtered = _stopAnchor!;
-        }
-      }
-    } else {
-      _stopHits = 0;
-      _stopLocked = false;
-      _stopAnchor = null;
-    }
 
     // -------------------- SNAP (SMART) --------------------
     final snapped = _applySnapSmart(filtered, speedMps: speedMps);
@@ -527,18 +548,19 @@ class _LiveNavigationState extends State<LiveNavigation>
 
     double rawBearing;
     final speedKmh = speedMps * 3.6;
-    final movedFromPrev = (_previousLocation != null)
-        ? Distance().as(LengthUnit.Meter, _previousLocation!, snapped)
-        : 0.0;
 
-    if (position.heading.isFinite && position.heading >= 0 && speedKmh >= 1.0) {
-      // ✅ heading هو الأفضل للالتفاف الحقيقي
+    if (position.heading.isFinite && position.heading >= 0 && speedKmh >= 5.0) {
+      // ✅ Use device heading when moving fast and heading is valid
       rawBearing = position.heading;
-    } else if (_previousLocation != null && movedFromPrev > 1.2) {
-      rawBearing = _calculateBearing(_previousLocation!, snapped);
+    } else if (_previousLocation != null && speedKmh > 1.0) {
+      // ✅ Use look-ahead point for smoother car-like rotation
+      rawBearing = _calculateBearing(_previousLocation!, lookAheadPoint);
     } else {
-      // fallback: keep last heading to avoid jitter
-      rawBearing = _lastHeadingDeg;
+      // fallback: point to destination or keep last heading
+      rawBearing = _calculateBearing(
+        snapped,
+        LatLng(widget.customerLatitude, widget.customerLongitude),
+      );
     }
 
     final didSnap = Distance().as(LengthUnit.Meter, filtered, snapped) > 1;
@@ -591,18 +613,13 @@ class _LiveNavigationState extends State<LiveNavigation>
     });
 
     // -------------------- MARKER UPDATE --------------------
-    if (_stopLocked) {
-      // ✅ لو واقف: لا animation
-      _animatedDriverLocation = snapped;
-      if (mounted) setState(() {});
+    // ✅ Simple animation like old code - always animate when position changes
+    if (movedMeters.isFinite && movedMeters > 0.5) {
+      _animateMarkerToSmart(snapped, speedMps);
     } else {
-      // animation فقط لو في حركة حقيقية
-      if (movedMeters.isFinite && movedMeters > 0.8) {
-        _animateMarkerToSmart(snapped, speedMps);
-      } else {
-        _animatedDriverLocation = snapped;
-        if (mounted) setState(() {});
-      }
+      _animatedDriverLocation = snapped;
+      _updateDriverMarker(snapped);
+      if (mounted) setState(() {});
     }
 
     // -------------------- DB + OFF-ROUTE --------------------
@@ -768,6 +785,8 @@ class _LiveNavigationState extends State<LiveNavigation>
             _remainingDistance = newDistance;
             _remainingTime = newDuration;
           });
+
+          _updateRouteLine();
 
           debugPrint(
             '🔄 Route updated: ${newDistance.toStringAsFixed(1)} km, ${newDuration.toStringAsFixed(0)} min',
@@ -989,6 +1008,18 @@ class _LiveNavigationState extends State<LiveNavigation>
     return distance.as(LengthUnit.Meter, p, LatLng(cy, cx));
   }
 
+  // ✅ Simple animation like old code
+  void _animateMarkerTo(LatLng target) {
+    final from = _animatedDriverLocation ?? _currentDriverLocation ?? target;
+
+    _animFrom = from;
+    _animTo = target;
+
+    _markerAnimController.stop();
+    _markerAnimController.duration = const Duration(milliseconds: _markerAnimMsDefault);
+    _markerAnimController.forward(from: 0);
+  }
+
   // ✅ smart animation duration based on move distance
   void _animateMarkerToSmart(LatLng target, double speedMps) {
     final from = _animatedDriverLocation ?? _currentDriverLocation ?? target;
@@ -996,7 +1027,7 @@ class _LiveNavigationState extends State<LiveNavigation>
     final moved = Distance().as(LengthUnit.Meter, from, target);
     final ms = (moved * 8)
         .clamp(140.0, 650.0)
-        .toInt(); // شوي أبطأ لتخفيف الاهتزاز
+        .toInt();
 
     _animFrom = from;
     _animTo = target;
@@ -1006,27 +1037,281 @@ class _LiveNavigationState extends State<LiveNavigation>
     _markerAnimController.forward(from: 0);
   }
 
+  mapbox.Point _pointFromLatLng(LatLng point) {
+    return mapbox.Point(
+      coordinates: mapbox.Position(point.longitude, point.latitude),
+    );
+  }
+
+  void _onMapCreated(mapbox.MapboxMap mapboxMap) {
+    _mapboxMap = mapboxMap;
+    _isMapReady = true;
+    _isStyleReady = false;
+
+    _mapboxMap!.compass.updateSettings(
+      mapbox.CompassSettings(enabled: false),
+    );
+    _mapboxMap!.scaleBar.updateSettings(
+      mapbox.ScaleBarSettings(enabled: false),
+    );
+    _mapboxMap!.logo.updateSettings(
+      mapbox.LogoSettings(enabled: false),
+    );
+    _mapboxMap!.attribution.updateSettings(
+      mapbox.AttributionSettings(enabled: false),
+    );
+    _mapboxMap!.location.updateSettings(
+      mapbox.LocationComponentSettings(enabled: false),
+    );
+
+    if (_pendingCamera != null) {
+      _mapboxMap!.setCamera(_pendingCamera!);
+      _pendingCamera = null;
+    }
+  }
+
+  Future<void> _onStyleLoaded(mapbox.StyleLoadedEventData data) async {
+    if (_mapboxMap == null) return;
+
+    _driverPointManager =
+      await _mapboxMap!.annotations.createPointAnnotationManager();
+    _destPointManager =
+      await _mapboxMap!.annotations.createPointAnnotationManager();
+    _routeLineManager =
+      await _mapboxMap!.annotations.createPolylineAnnotationManager();
+
+    _driverPoint = null;
+    _destPoint = null;
+    _routeLine = null;
+    _isStyleReady = true;
+
+    await _ensureMarkerImages();
+
+    await _updateDestinationMarker();
+
+    final driverPoint = _animatedDriverLocation ?? _currentDriverLocation;
+    if (driverPoint != null) {
+      await _updateDriverMarker(driverPoint);
+    }
+
+    await _updateRouteLine();
+  }
+
+  Future<void> _updateDriverMarker(LatLng loc) async {
+    if (!_isStyleReady) return;
+    if (_driverPointManager == null || _driverIconBytes == null) return;
+
+    if (_driverPoint == null) {
+      if (_isCreatingDriverMarker) return;
+      _isCreatingDriverMarker = true;
+      await _driverPointManager!.deleteAll();
+      _driverPoint = await _driverPointManager!.create(
+        mapbox.PointAnnotationOptions(
+          geometry: _pointFromLatLng(loc),
+          image: _driverIconBytes!,
+        ),
+      );
+      _isCreatingDriverMarker = false;
+      return;
+    }
+
+    _driverPoint!..geometry = _pointFromLatLng(loc);
+    await _driverPointManager!.update(_driverPoint!);
+  }
+
+  Future<void> _updateDestinationMarker() async {
+    if (!_isStyleReady) return;
+    if (_destPointManager == null || _destIconBytes == null) return;
+
+    final dest = LatLng(widget.customerLatitude, widget.customerLongitude);
+
+    if (_destPoint == null) {
+      if (_isCreatingDestMarker) return;
+      _isCreatingDestMarker = true;
+      await _destPointManager!.deleteAll();
+      _destPoint = await _destPointManager!.create(
+        mapbox.PointAnnotationOptions(
+          geometry: _pointFromLatLng(dest),
+          image: _destIconBytes!,
+        ),
+      );
+      _isCreatingDestMarker = false;
+      return;
+    }
+
+    _destPoint!..geometry = _pointFromLatLng(dest);
+    await _destPointManager!.update(_destPoint!);
+  }
+
+  Future<void> _ensureMarkerImages() async {
+    if (_driverIconBytes == null) {
+      _driverIconBytes = await _renderDriverIconBytes(120);
+    }
+    if (_destIconBytes == null) {
+      _destIconBytes = await _renderDestinationIconBytes(96);
+    }
+  }
+
+  Future<Uint8List> _renderDriverIconBytes(double size) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final center = Offset(size / 2, size / 2);
+
+    final outerPaint = Paint()..color = const Color(0x262196F3);
+    canvas.drawCircle(center, size * 0.48, outerPaint);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.18)
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+    canvas.drawCircle(center, size * 0.33, shadowPaint);
+
+    final whitePaint = Paint()..color = Colors.white;
+    canvas.drawCircle(center, size * 0.32, whitePaint);
+    canvas.drawCircle(center, size * 0.28, whitePaint);
+
+    final icon = Icons.navigation;
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size * 0.36,
+          color: const Color(0xFF2196F3),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final iconOffset = Offset(
+      center.dx - iconPainter.width / 2,
+      center.dy - iconPainter.height / 2,
+    );
+    iconPainter.paint(canvas, iconOffset);
+
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  Future<Uint8List> _renderDestinationIconBytes(double size) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final center = Offset(size / 2, size / 2);
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withOpacity(0.25)
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+    canvas.drawCircle(center, size * 0.36, shadowPaint);
+
+    final redPaint = Paint()..color = const Color(0xFFFF5252);
+    canvas.drawCircle(center, size * 0.32, redPaint);
+
+    final strokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.08
+      ..color = Colors.white;
+    canvas.drawCircle(center, size * 0.32, strokePaint);
+
+    final icon = Icons.place;
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size * 0.42,
+          color: Colors.white,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final iconOffset = Offset(
+      center.dx - iconPainter.width / 2,
+      center.dy - iconPainter.height / 2,
+    );
+    iconPainter.paint(canvas, iconOffset);
+
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  Future<void> _updateRouteLine() async {
+    if (!_isStyleReady) return;
+    if (_routeLineManager == null) return;
+
+    if (_routePoints.isEmpty) {
+      if (_routeLine != null) {
+        await _routeLineManager!.delete(_routeLine!);
+        _routeLine = null;
+      }
+      return;
+    }
+
+    final geometry = mapbox.LineString(
+      coordinates: _routePoints
+          .map((p) => mapbox.Position(p.longitude, p.latitude))
+          .toList(),
+    );
+
+    if (_routeLine == null) {
+      _routeLine = await _routeLineManager!.create(
+        mapbox.PolylineAnnotationOptions(
+          geometry: geometry,
+          lineColor: 0xFF42A5F5,
+          lineWidth: 6.0,
+        ),
+      );
+      return;
+    }
+
+    _routeLine!
+      ..geometry = geometry
+      ..lineColor = 0xFF42A5F5
+      ..lineWidth = 6.0;
+
+    await _routeLineManager!.update(_routeLine!);
+  }
+
   void _followDriverThrottled() {
     final now = DateTime.now();
     if (now.difference(_lastFollowAt) < const Duration(milliseconds: 200))
       return;
     _lastFollowAt = now;
 
-    if (_mapController == null) return;
+    if (_mapboxMap == null) return;
     if (!_isMapReady) return;
 
     final followPoint = _animatedDriverLocation ?? _currentDriverLocation;
     if (followPoint == null) return;
 
-    double zoom = 17.0;
-    if (_currentSpeed > 60)
-      zoom = 15.5;
-    else if (_currentSpeed > 40)
-      zoom = 16.0;
-    else if (_currentSpeed > 20)
-      zoom = 16.5;
+    // ✅ Fixed zoom for smoother experience - no zoom changes during navigation
+    const double zoom = 17.0; // رؤية واسعة ومستقرة
 
-    _safeMoveAndRotate(followPoint, zoom, _currentBearing);
+    // ✅ Rotate map so movement direction is always up (Navigation Mode)
+    // Prefer current bearing, but fall back to route bearing when speed is low.
+    final mapBearing = _getFollowBearing();
+    _safeMoveAndRotate(followPoint, zoom, mapBearing);
+  }
+
+  double _getFollowBearing() {
+    if (_currentSpeed >= 5) {
+      return _currentBearing % 360;
+    }
+
+    if (_routePoints.length > 1) {
+      return _routeBearing % 360;
+    }
+
+    return _currentBearing % 360;
   }
 
   Future<void> _clearCurrentOrderId() async {
@@ -1060,149 +1345,32 @@ class _LiveNavigationState extends State<LiveNavigation>
       widget.customerLatitude,
       widget.customerLongitude,
     );
-    final mapRotation = _isMapReady ? _mapController!.camera.rotation : 0.0;
-    final markerRotationRad =
-        (_currentBearing - mapRotation) * math.pi / 180;
-
     return Scaffold(
       backgroundColor: const Color(0xFF202020),
       body: SafeArea(
         child: Stack(
           children: [
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentDriverLocation ?? destinationLocation,
-                initialZoom: 17.0,
-                minZoom: 10.0,
-                maxZoom: 19.0,
-                keepAlive: true,
-                onMapReady: () {
-                  _isMapReady = true;
-                  if (_pendingMoveCenter != null &&
-                      _pendingMoveZoom != null) {
-                    final center = _pendingMoveCenter!;
-                    final zoom = _pendingMoveZoom!;
-                    final rotation = _pendingMoveRotation;
-                    _pendingMoveCenter = null;
-                    _pendingMoveZoom = null;
-                    _pendingMoveRotation = null;
-                    if (rotation != null) {
-                      _mapController!.moveAndRotate(center, zoom, rotation);
-                    } else {
-                      _mapController!.move(center, zoom);
-                    }
-                  }
-                },
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                ),
-                onPositionChanged: (position, hasGesture) {
-                  if (hasGesture) {
-                    setState(() => _isFollowingDriver = false);
-                  }
-                },
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.dolphin',
-                  tileProvider: NetworkTileProvider(),
-                ),
-                if (_routePoints.isNotEmpty)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _routePoints,
-                        strokeWidth: 8.0,
-                        color: const Color(0xFF42A5F5),
-                      ),
-                    ],
+            mapbox.MapWidget(
+              key: const ValueKey('live-nav-mapbox'),
+              styleUri: _isDarkStyle ? _mapStyleUriDark : _mapStyleUri,
+              cameraOptions: mapbox.CameraOptions(
+                center: mapbox.Point(
+                  coordinates: mapbox.Position(
+                    (_currentDriverLocation ?? destinationLocation).longitude,
+                    (_currentDriverLocation ?? destinationLocation).latitude,
                   ),
-                MarkerLayer(
-                  markers: [
-                    if ((_animatedDriverLocation ?? _currentDriverLocation) !=
-                        null)
-                      Marker(
-                        point:
-                            _animatedDriverLocation ?? _currentDriverLocation!,
-                        width: 70.0,
-                        height: 70.0,
-                        alignment: Alignment.center,
-                        child: Transform.rotate(
-                          angle: markerRotationRad,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                width: 70,
-                                height: 70,
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF2196F3,
-                                  ).withOpacity(0.15),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 45,
-                                height: 45,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.navigation,
-                                  color: Color(0xFF2196F3),
-                                  size: 30,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    Marker(
-                      point: destinationLocation,
-                      width: 50.0,
-                      height: 50.0,
-                      alignment: Alignment.center,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF5252),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.place,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
-              ],
+                zoom: 17.0,
+                bearing: _currentBearing,
+                pitch: _navPitchDeg,
+              ),
+              onMapCreated: _onMapCreated,
+              onStyleLoadedListener: _onStyleLoaded,
+              onScrollListener: (_) {
+                if (_isFollowingDriver) {
+                  setState(() => _isFollowingDriver = false);
+                }
+              },
             ),
 
             // Top card
@@ -1284,8 +1452,8 @@ class _LiveNavigationState extends State<LiveNavigation>
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: _isFollowingDriver
-                        ? const Color(0xFF2196F3)
-                        : Colors.white60,
+                        ? const Color(0xFF2196F3) // أزرق - نشط
+                        : const Color(0xFF9E9E9E), // رمادي سكني - غير نشط
                     width: 2,
                   ),
                   boxShadow: [
@@ -1299,16 +1467,60 @@ class _LiveNavigationState extends State<LiveNavigation>
                   icon: Icon(
                     Icons.my_location,
                     color: _isFollowingDriver
-                        ? const Color(0xFF2196F3)
-                        : Colors.white60,
+                        ? const Color(0xFF2196F3) // أزرق - متابعة نشطة
+                        : const Color(0xFF9E9E9E), // رمادي سكني - غير نشط
                     size: 28,
                   ),
-                  onPressed: () {
+                  // ✅ لا يمكن الضغط إذا كان نشط بالفعل
+                  onPressed: _isFollowingDriver ? null : () {
                     setState(() => _isFollowingDriver = true);
-                    if ((_animatedDriverLocation ?? _currentDriverLocation) !=
-                        null) {
-                      _followDriverThrottled();
+                    
+                    // ✅ Recalculate correct bearing to fix inverted map issue
+                    final followPoint = _animatedDriverLocation ?? _currentDriverLocation;
+                    if (followPoint != null && _mapboxMap != null && _isMapReady) {
+                      // Use the current smoothed bearing from state (most accurate)
+                      final mapBearing = _getFollowBearing();
+                      const double zoom = 17.0;
+                      _safeMoveAndRotate(followPoint, zoom, mapBearing);
                     }
+                  },
+                ),
+              ),
+            ),
+
+            // Dark mode toggle
+            Positioned(
+              top: 200,
+              right: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D).withOpacity(0.95),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _isDarkStyle
+                        ? const Color(0xFF90CAF9)
+                        : const Color(0xFF9E9E9E),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _isDarkStyle ? Icons.dark_mode : Icons.light_mode,
+                    color: _isDarkStyle
+                        ? const Color(0xFF90CAF9)
+                        : const Color(0xFFB0BEC5),
+                    size: 26,
+                  ),
+                  onPressed: () async {
+                    final nextStyle = !_isDarkStyle;
+                    setState(() => _isDarkStyle = nextStyle);
+                    await _setMapStyle(nextStyle);
                   },
                 ),
               ),
@@ -1467,22 +1679,59 @@ class _LiveNavigationState extends State<LiveNavigation>
   }
 
   void _safeMove(LatLng center, double zoom) {
-    if (_mapController == null || !_isMapReady) {
-      _pendingMoveCenter = center;
-      _pendingMoveZoom = zoom;
-      _pendingMoveRotation = null;
-      return;
-    }
-    _mapController!.move(center, zoom);
+    _setCamera(center, zoom, null, animate: false);
   }
 
-  void _safeMoveAndRotate(LatLng center, double zoom, double rotation) {
-    if (_mapController == null || !_isMapReady) {
-      _pendingMoveCenter = center;
-      _pendingMoveZoom = zoom;
-      _pendingMoveRotation = rotation;
+  void _safeMoveAndRotate(LatLng center, double zoom, double bearingDeg) {
+    _setCamera(center, zoom, bearingDeg, animate: true);
+  }
+
+  void _setCamera(
+    LatLng center,
+    double zoom,
+    double? bearingDeg, {
+    required bool animate,
+  }) {
+    final camera = mapbox.CameraOptions(
+      center: mapbox.Point(
+        coordinates: mapbox.Position(center.longitude, center.latitude),
+      ),
+      zoom: zoom,
+      bearing: bearingDeg,
+      pitch: _navPitchDeg,
+    );
+
+    if (_mapboxMap == null || !_isMapReady) {
+      _pendingCamera = camera;
       return;
     }
-    _mapController!.moveAndRotate(center, zoom, rotation);
+
+    if (animate) {
+      _mapboxMap!.easeTo(
+        camera,
+        mapbox.MapAnimationOptions(duration: _cameraAnimDuration.inMilliseconds),
+      );
+    } else {
+      _mapboxMap!.setCamera(camera);
+    }
+  }
+
+  Future<void> _setMapStyle(bool isDark) async {
+    if (_mapboxMap == null) return;
+
+    _isStyleReady = false;
+    await _driverPointManager?.deleteAll();
+    await _destPointManager?.deleteAll();
+    await _routeLineManager?.deleteAll();
+
+    _driverPointManager = null;
+    _destPointManager = null;
+    _routeLineManager = null;
+    _driverPoint = null;
+    _destPoint = null;
+    _routeLine = null;
+
+    final styleUri = isDark ? _mapStyleUriDark : _mapStyleUri;
+    _mapboxMap!.loadStyleURI(styleUri);
   }
 }
