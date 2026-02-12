@@ -1602,10 +1602,14 @@ class _LiveNavigationState extends State<LiveNavigation>
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D).withOpacity(0.98),
+                  color: _isDarkStyle
+                      ? const Color(0xFF141B24)
+                      : const Color(0xFF2D2D2D).withOpacity(0.98),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF2196F3).withOpacity(0.5),
+                    color: _isDarkStyle
+                        ? const Color(0xFFB7A447).withOpacity(0.3)
+                        : const Color(0xFF2196F3).withOpacity(0.5),
                     width: 2,
                   ),
                   boxShadow: [
@@ -1641,8 +1645,10 @@ class _LiveNavigationState extends State<LiveNavigation>
                               _remainingTime > 0
                                   ? _remainingTime.toStringAsFixed(0)
                                   : '--',
-                              style: const TextStyle(
-                                color: Color(0xFF2196F3),
+                              style: TextStyle(
+                                color: _isDarkStyle
+                                    ? const Color(0xFFF4C062)
+                                    : const Color(0xFF2196F3),
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1663,8 +1669,10 @@ class _LiveNavigationState extends State<LiveNavigation>
                               _remainingDistance > 0
                                   ? _remainingDistance.toStringAsFixed(1)
                                   : '--',
-                              style: const TextStyle(
-                                color: Color(0xFF2196F3),
+                              style: TextStyle(
+                                color: _isDarkStyle
+                                    ? const Color(0xFFF4C062)
+                                    : const Color(0xFF2196F3),
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
