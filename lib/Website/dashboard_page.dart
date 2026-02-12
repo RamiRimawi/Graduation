@@ -73,8 +73,15 @@ class _TopStepsRowState extends State<_TopStepsRow> {
 
   Future<void> _fetchOrderCounts() async {
     try {
-      // Fetch all orders and count by status
-      final data = await supabase.from('customer_order').select('order_status');
+      // Get today's date in YYYY-MM-DD format
+      final today = DateTime.now();
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      // Fetch all orders with order_status and delivered_date details
+      final data = await supabase
+          .from('customer_order')
+          .select('order_status, customer_order_description(delivered_date)');
 
       // Count orders by status
       int pending = 0;
@@ -102,7 +109,23 @@ class _TopStepsRowState extends State<_TopStepsRow> {
             delivering++;
             break;
           case 'Delivered':
-            delivered++;
+            // Only count if delivered today
+            final descriptions = row['customer_order_description'] as List?;
+            if (descriptions != null && descriptions.isNotEmpty) {
+              // Check if any product was delivered today
+              bool deliveredToday = false;
+              for (final desc in descriptions) {
+                final deliveredDateStr = desc['delivered_date'] as String?;
+                if (deliveredDateStr != null &&
+                    deliveredDateStr.startsWith(todayStr)) {
+                  deliveredToday = true;
+                  break;
+                }
+              }
+              if (deliveredToday) {
+                delivered++;
+              }
+            }
             break;
         }
       }
