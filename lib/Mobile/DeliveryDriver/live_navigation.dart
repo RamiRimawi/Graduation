@@ -18,6 +18,13 @@ class _SnapResult {
   const _SnapResult(this.point, this.distMeters);
 }
 
+class _RouteSnapResult {
+  final LatLng point;
+  final double distMeters;
+  final int segmentIndex;
+  const _RouteSnapResult(this.point, this.distMeters, this.segmentIndex);
+}
+
 // -------------------- 1D KALMAN FILTER --------------------
 class _Kalman1D {
   double x; // state
@@ -184,11 +191,12 @@ class _LiveNavigationState extends State<LiveNavigation>
   LatLng? _lastRouteFrom;
   bool _isRouting = false;
   bool _isOffRoute = false;
+  bool _didSetInitialRouteBearing = false;
 
   static const double _offRouteThresholdMeters = 50.0;
-  static const Duration _routeMinInterval = Duration(seconds: 5);
+  static const Duration _routeMinInterval = Duration(seconds: 2);
   static const Duration _routeFastInterval = Duration(seconds: 1); // ✅ أسرع للخروج من المسار
-  static const double _routeUpdateMoveMeters = 12.0;
+  static const double _routeUpdateMoveMeters = 4.0;
   static const double _routeFastMoveMeters = 4.0; // ✅ أقل مسافة = تحديث أسرع
 
   // -------------------- PREDICTION (LIVE) --------------------
@@ -626,6 +634,9 @@ class _LiveNavigationState extends State<LiveNavigation>
     _maybeUpdateLocationInDatabase(snapped, speedMps);
 
     _checkIfOffRoute(snapped);
+    if (!_isOffRoute) {
+      _trimRouteBehind(snapped);
+    }
   }
 
   // -------------------- SMART SNAP --------------------
@@ -786,6 +797,19 @@ class _LiveNavigationState extends State<LiveNavigation>
             _remainingTime = newDuration;
           });
 
+          if (!_didSetInitialRouteBearing && _currentDriverLocation != null) {
+            final initialBearing = _calculateRouteBearing(_currentDriverLocation!);
+            setState(() {
+              _routeBearing = initialBearing;
+              _smoothedBearing = initialBearing;
+              _currentBearing = initialBearing;
+            });
+            _didSetInitialRouteBearing = true;
+            if (_isFollowingDriver) {
+              _followDriverThrottled();
+            }
+          }
+
           _updateRouteLine();
 
           debugPrint(
@@ -850,6 +874,52 @@ class _LiveNavigationState extends State<LiveNavigation>
 
     if (bestPoint == null) return null;
     return _SnapResult(bestPoint, best);
+  }
+
+  _RouteSnapResult? _snapToRoutePointWithIndex(LatLng p) {
+    if (_routePoints.length < 2) return null;
+
+    double best = double.infinity;
+    LatLng? bestPoint;
+    int bestIndex = 0;
+
+    for (int i = 0; i < _routePoints.length - 1; i++) {
+      final a = _routePoints[i];
+      final b = _routePoints[i + 1];
+
+      final res = _closestPointOnSegmentMeters(p, a, b);
+      if (res.distMeters < best) {
+        best = res.distMeters;
+        bestPoint = res.point;
+        bestIndex = i;
+      }
+    }
+
+    if (bestPoint == null) return null;
+    return _RouteSnapResult(bestPoint, best, bestIndex);
+  }
+
+  void _trimRouteBehind(LatLng current) {
+    if (_routePoints.length < 2) return;
+
+    final snap = _snapToRoutePointWithIndex(current);
+    if (snap == null) return;
+
+    if (snap.segmentIndex < 0 || snap.segmentIndex >= _routePoints.length - 1) {
+      return;
+    }
+
+    if (snap.distMeters > _snapMaxDistanceMeters * 2) {
+      return;
+    }
+
+    final newPoints = <LatLng>[snap.point, ..._routePoints.sublist(snap.segmentIndex + 1)];
+    if (newPoints.length == _routePoints.length) return;
+
+    setState(() {
+      _routePoints = newPoints;
+    });
+    _updateRouteLine();
   }
 
   LatLng _applySnapIfNeeded(LatLng raw, {required double speedMps}) {
@@ -1073,12 +1143,12 @@ class _LiveNavigationState extends State<LiveNavigation>
   Future<void> _onStyleLoaded(mapbox.StyleLoadedEventData data) async {
     if (_mapboxMap == null) return;
 
+    _routeLineManager =
+      await _mapboxMap!.annotations.createPolylineAnnotationManager();
     _driverPointManager =
       await _mapboxMap!.annotations.createPointAnnotationManager();
     _destPointManager =
       await _mapboxMap!.annotations.createPointAnnotationManager();
-    _routeLineManager =
-      await _mapboxMap!.annotations.createPolylineAnnotationManager();
 
     _driverPoint = null;
     _destPoint = null;
@@ -1087,14 +1157,13 @@ class _LiveNavigationState extends State<LiveNavigation>
 
     await _ensureMarkerImages();
 
+    await _updateRouteLine();
     await _updateDestinationMarker();
 
     final driverPoint = _animatedDriverLocation ?? _currentDriverLocation;
     if (driverPoint != null) {
       await _updateDriverMarker(driverPoint);
     }
-
-    await _updateRouteLine();
   }
 
   Future<void> _updateDriverMarker(LatLng loc) async {
