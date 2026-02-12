@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../manager_theme.dart';
+import 'manager_theme.dart';
 
 class SelectStaffSheet extends StatefulWidget {
   final void Function(int staffId, int inventoryId, String displayName)

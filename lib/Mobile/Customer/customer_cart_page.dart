@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import 'customer_home_page.dart';
-import 'customer_archive_page.dart';
-import '../account_page.dart';
 
 class CustomerCartPage extends StatefulWidget {
   const CustomerCartPage({super.key});
@@ -19,7 +15,6 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
   bool _isLoading = true;
   // ignore: unused_field
   int? _orderId; // current cart order id
-  int _currentIndex = 1; // Cart tab index
 
   Color get _bg => const Color(0xFF1A1A1A);
   Color get _card => const Color(0xFF2D2D2D);
@@ -31,33 +26,6 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
       0.0,
       (s, i) => s + (i['price'] as double) * (i['qty'] as int),
     );
-  }
-
-  // ===== navigation handler for bottom bar (Customer layout indices) =====
-  void _onNavTap(int i) {
-    setState(() => _currentIndex = i);
-
-    if (i == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
-      );
-    } else if (i == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
-      );
-    } else if (i == 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerArchivePage()),
-      );
-    } else if (i == 3) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
   }
 
   @override
@@ -609,11 +577,6 @@ class _CustomerCartPageState extends State<CustomerCartPage> {
                   const SizedBox(height: 10),
                 ],
               ),
-      ),
-
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex,
-        onTap: _onNavTap,
       ),
     );
   }

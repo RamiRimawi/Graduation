@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../manager_theme.dart';
+import 'manager_theme.dart';
 import 'package:Dolphin/Mobile/Manager/CustomSendButton.dart';
 import '../../supabase_config.dart';
 

@@ -3,12 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../supabase_config.dart';
-import 'Supplier/supplier_home_page.dart';
-import 'DeliveryDriver/deleviry_home.dart';
-import 'StroageStaff/staff_home.dart';
+import 'Supplier/SupplierShell.dart';
+import 'DeliveryDriver/DeliveryShell.dart';
+import 'StroageStaff/StaffShell.dart';
 import 'Manager/ManagerShell.dart';
-import 'Customer/customer_home_page.dart';
-import 'Sales Rep/salesRep_home_page.dart';
+import 'Customer/CustomerShell.dart';
+import 'Sales Rep/SalesRepShell.dart';
 
 class DolphinApp extends StatelessWidget {
   const DolphinApp({super.key});
@@ -322,22 +322,22 @@ class _LoginPageState extends State<LoginPage> {
         Widget homePage;
         switch (userType) {
           case 'supplier':
-            homePage = const SupplierHomePage();
+            homePage = const SupplierShell();
             break;
           case 'delivery':
-            homePage = HomeDeleviry(deliveryDriverId: int.parse(userId));
+            homePage = DeliveryShell(deliveryDriverId: int.parse(userId));
             break;
           case 'storage_staff':
-            homePage = const HomeStaff();
+            homePage = const StaffShell();
             break;
           case 'manager':
             homePage = const ManagerShell();
             break;
           case 'sales_rep':
-            homePage = const SalesRepHomePage();
+            homePage = const SalesRepShell();
             break;
           case 'customer':
-            homePage = const CustomerHomePage();
+            homePage = const CustomerShell();
             break;
           default:
             _showError('Unknown user type');

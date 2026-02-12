@@ -2,11 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import 'salesRep_home_page.dart';
-import 'salesRep_cart_page.dart';
-import 'salesRep_archive_page.dart';
-import '../account_page.dart';
 
 class SalesRepCustomersPage extends StatefulWidget {
   const SalesRepCustomersPage({super.key});
@@ -20,7 +15,6 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
   List<Map<String, dynamic>> _customers = [];
   List<Map<String, dynamic>> _filteredCustomers = [];
   bool _isLoading = true;
-  int _currentIndex = 3; // Customers tab index
 
   @override
   void initState() {
@@ -48,7 +42,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
       final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
       if (salesRepId == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -92,7 +86,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
       });
     } catch (e) {
       debugPrint('Error loading customers: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -115,32 +109,31 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     }).toList();
   }
 
-  void _onNavTap(int i) {
-    setState(() => _currentIndex = i);
-
-    if (i == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
-      );
-    } else if (i == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
-      );
-    } else if (i == 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
-      );
-    } else if (i == 3) {
-      // stay on Customers page
-    } else if (i == 4) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
+  Widget _buildSearchField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2D2D),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: Color(0xFFB7A447), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: const InputDecoration(
+                hintText: 'Search by customer name',
+                hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -187,37 +180,6 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
                   ),
                 ],
               ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex,
-        onTap: _onNavTap,
-      ),
-    );
-  }
-
-  Widget _buildSearchField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF2D2D2D),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: Color(0xFFB7A447), size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'Search by customer name',
-                hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

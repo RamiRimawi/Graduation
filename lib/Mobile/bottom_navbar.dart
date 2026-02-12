@@ -44,7 +44,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
         _NavItem(Icons.home_filled, 'Home'),
         _NavItem(Icons.upload_outlined, 'Stock-out'),
         _NavItem(Icons.download_outlined, 'Stock-in'),
-        _NavItem(Icons.notifications_outlined, 'Notification', showDot: true),
         _NavItem(Icons.person, 'Account'),
       ];
     }
@@ -121,33 +120,12 @@ class _BottomNavBarState extends State<BottomNavBar> {
           items: items.map((desc) {
             final idx = items.indexOf(desc);
             final selected = idx == widget.currentIndex;
-            final labelColor = selected ? const Color(0xFFF9D949) : Colors.white60;
+            final labelColor = selected
+                ? const Color(0xFFF9D949)
+                : Colors.white60;
 
-            // build icon with optional notification dot
-            Widget iconWidget = Icon(desc.icon, size: 24, color: labelColor);
-
-            if (desc.showDot) {
-              // add a small yellow dot on top-right
-              iconWidget = Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  iconWidget,
-                  Positioned(
-                    right: -2,
-                    top: -6,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9D949),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF242424), width: 2),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
+            // build icon
+            final iconWidget = Icon(desc.icon, size: 24, color: labelColor);
 
             return BottomNavigationBarItem(
               icon: Column(
@@ -157,10 +135,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
                   const SizedBox(height: 6),
                   Text(
                     desc.label,
-                    style: TextStyle(
-                      color: labelColor,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: labelColor, fontSize: 12),
                   ),
                   const SizedBox(height: 6),
                   AnimatedContainer(
@@ -186,6 +161,5 @@ class _BottomNavBarState extends State<BottomNavBar> {
 class _NavItem {
   final IconData icon;
   final String label;
-  final bool showDot;
-  const _NavItem(this.icon, this.label, {this.showDot = false});
+  const _NavItem(this.icon, this.label);
 }

@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import 'salesRep_home_page.dart';
-import 'salesRep_archive_page.dart';
-import 'salesRep_customers_page.dart';
-import '../account_page.dart';
 
 class SalesRepCartPage extends StatefulWidget {
   const SalesRepCartPage({super.key});
@@ -20,7 +15,6 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
   bool _isLoading = true;
   // ignore: unused_field
   int? _orderId; // current cart order id
-  int _currentIndex = 1; // Cart tab index
 
   Color get _bg => const Color(0xFF1A1A1A);
   Color get _card => const Color(0xFF2D2D2D);
@@ -32,38 +26,6 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
       0.0,
       (s, i) => s + (i['price'] as double) * (i['qty'] as int),
     );
-  }
-
-  // ===== navigation handler for bottom bar (SalesRep layout indices) =====
-  void _onNavTap(int i) {
-    setState(() => _currentIndex = i);
-
-    if (i == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
-      );
-    } else if (i == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
-      );
-    } else if (i == 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
-      );
-    } else if (i == 3) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepCustomersPage()),
-      );
-    } else if (i == 4) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
   }
 
   @override
@@ -85,7 +47,7 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
       final salesRepId = userIdStr != null ? int.tryParse(userIdStr) : null;
 
       if (salesRepId == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -113,7 +75,7 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
       });
     } catch (e) {
       debugPrint('Error loading cart: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -762,11 +724,6 @@ class _SalesRepCartPageState extends State<SalesRepCartPage> {
                   const SizedBox(height: 10),
                 ],
               ),
-      ),
-
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex,
-        onTap: _onNavTap,
       ),
     );
   }

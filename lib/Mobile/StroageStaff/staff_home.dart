@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'staff_detail.dart';
-import '../account_page.dart';
-import '../bottom_navbar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'staff_sync_manager.dart';
@@ -14,7 +12,6 @@ class HomeStaff extends StatefulWidget {
 }
 
 class _HomeStaffState extends State<HomeStaff> {
-  int _selectedIndex = 0;
   bool _loading = true;
   List<Map<String, dynamic>> customers = const [];
 
@@ -61,17 +58,6 @@ class _HomeStaffState extends State<HomeStaff> {
       debugPrint('Error fetching customers: $e');
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _onItemTapped(int index) {
-    if (index == 1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-      return;
-    }
-    setState(() => _selectedIndex = index);
   }
 
   @override
@@ -234,11 +220,6 @@ class _HomeStaffState extends State<HomeStaff> {
                   );
                 },
               ),
-      ),
-
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
       ),
     );
   }

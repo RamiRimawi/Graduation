@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../account_page.dart';
-import '../bottom_navbar.dart';
 // ignore: unused_import
 import 'staff_home.dart';
 import '../../supabase_config.dart';
@@ -22,8 +20,6 @@ class CustomerDetail extends StatefulWidget {
 }
 
 class _CustomerDetailState extends State<CustomerDetail> {
-  int _selectedIndex = 0;
-
   // NEW: حالة الزر (Done أو Send Update)
   bool _saving = false;
   bool _loading = true;
@@ -66,17 +62,6 @@ class _CustomerDetailState extends State<CustomerDetail> {
       debugPrint('Error fetching products: $e');
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _onItemTapped(int index) {
-    if (index == 1) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-      return;
-    }
-    setState(() => _selectedIndex = index);
   }
 
   int _allocatedQty(Map<String, dynamic> product) {
@@ -1085,11 +1070,6 @@ class _CustomerDetailState extends State<CustomerDetail> {
             ),
           ],
         ),
-      ),
-
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
       ),
     );
   }

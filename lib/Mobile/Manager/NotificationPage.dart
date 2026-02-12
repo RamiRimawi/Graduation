@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../manager_theme.dart';
+import 'manager_theme.dart';
 
 class NotificationPage extends StatelessWidget {
   NotificationPage({super.key});

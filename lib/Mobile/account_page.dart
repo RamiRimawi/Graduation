@@ -5,17 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../supabase_config.dart';
 import 'bottom_navbar.dart';
-import 'Supplier/supplier_home_page.dart';
-import 'DeliveryDriver/deleviry_home.dart';
+import 'Supplier/SupplierShell.dart';
+import 'DeliveryDriver/DeliveryShell.dart';
 import 'DeliveryDriver/delivery_archive.dart';
-import 'StroageStaff/staff_home.dart';
+import 'StroageStaff/StaffShell.dart';
 import 'Customer/customer_home_page.dart';
 import 'Customer/customer_cart_page.dart';
 import 'Customer/customer_archive_page.dart';
-import 'Sales Rep/salesRep_home_page.dart';
-import 'Sales Rep/salesRep_cart_page.dart';
-import 'Sales Rep/salesRep_archive_page.dart';
-import 'Sales Rep/salesRep_customers_page.dart';
+import 'Sales Rep/SalesRepShell.dart';
 import 'Manager/ManagerShell.dart';
 import 'LoginMobile.dart';
 
@@ -696,29 +693,8 @@ class _AccountPageState extends State<AccountPage> {
                 if (i == 0) {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
+                    MaterialPageRoute(builder: (_) => const SalesRepShell()),
                   );
-                } else if (i == 1) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
-                  );
-                } else if (i == 2) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SalesRepArchivePage(),
-                    ),
-                  );
-                } else if (i == 3) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SalesRepCustomersPage(),
-                    ),
-                  );
-                } else if (i == 4) {
-                  // already on AccountPage
                 }
               },
             )
@@ -772,7 +748,7 @@ class _AccountPageState extends State<AccountPage> {
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  HomeDeleviry(deliveryDriverId: userId),
+                                  DeliveryShell(deliveryDriverId: userId),
                             ),
                           );
                         }
@@ -787,9 +763,9 @@ class _AccountPageState extends State<AccountPage> {
 
                         Widget homePage;
                         if (_userRole == 'storage_staff') {
-                          homePage = const HomeStaff();
+                          homePage = const StaffShell();
                         } else {
-                          homePage = const SupplierHomePage();
+                          homePage = const SupplierShell();
                         }
                         if (mounted) {
                           Navigator.pushReplacement(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../manager_theme.dart';
+import 'manager_theme.dart';
 import 'CreateStockInOrderPage.dart';
 import 'StockInOrderDetailsPage.dart';
 

@@ -1,47 +1,42 @@
 import 'package:flutter/material.dart';
 import '../bottom_navbar.dart';
 import '../account_page.dart';
-import 'manager_theme.dart';
-import 'HomeManager.dart';
-import 'StockOutPage.dart';
-import 'Stock-inPage.dart';
+import '../Manager/manager_theme.dart';
+import 'deleviry_home.dart';
+import 'delivery_archive.dart';
 
-class ManagerShell extends StatefulWidget {
-  const ManagerShell({super.key});
+class DeliveryShell extends StatefulWidget {
+  final int deliveryDriverId;
+
+  const DeliveryShell({super.key, required this.deliveryDriverId});
 
   @override
-  State<ManagerShell> createState() => _ManagerShellState();
+  State<DeliveryShell> createState() => _DeliveryShellState();
 }
 
-class _ManagerShellState extends State<ManagerShell> {
+class _DeliveryShellState extends State<DeliveryShell> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
-  late UniqueKey _stockOutKey;
 
-  // الصفحات (ممكن لاحقاً تستبدل الـ Placeholder بصفحات حقيقية)
+  // Pages for delivery driver
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    _stockOutKey = UniqueKey();
     _pages = [
-      HomeManagerPage(onSwitchTab: _onNavTap),
-      StockOutPage(key: _stockOutKey),
-      StockInPage(), // مش const
+      HomeDeleviry(deliveryDriverId: widget.deliveryDriverId),
+      DeliveryArchive(deliveryDriverId: widget.deliveryDriverId),
       const AccountPage(showNavBar: false),
     ];
   }
 
   void _onNavTap(int index) {
-    if (index == 1) {
-      _stockOutKey = UniqueKey();
-    }
     setState(() => _currentIndex = index);
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic, // نفس إحساس السلايد في stock-out bar
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -52,7 +47,7 @@ class _ManagerShellState extends State<ManagerShell> {
       body: PageView(
         controller: _pageController,
         physics:
-            const NeverScrollableScrollPhysics(), // يمنع السحب باليد – التنقل من البار فقط
+            const NeverScrollableScrollPhysics(), // Prevent swipe – navigate via navbar only
         children: _pages,
       ),
       bottomNavigationBar: BottomNavBar(

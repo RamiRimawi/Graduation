@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
-import '../account_page.dart';
-import '../bottom_navbar.dart';
 import 'order_details_page.dart';
 
 class SupplierHomePage extends StatefulWidget {
@@ -122,17 +120,6 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
                   );
                 },
               ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 0,
-        onTap: (i) {
-          if (i == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const AccountPage()),
-            );
-          }
-        },
       ),
     );
   }

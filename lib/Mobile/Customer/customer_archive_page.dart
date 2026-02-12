@@ -2,10 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import 'customer_home_page.dart';
-import 'customer_cart_page.dart';
-import '../account_page.dart';
 
 class CustomerArchivePage extends StatefulWidget {
   const CustomerArchivePage({super.key});
@@ -19,35 +15,12 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
   final Color _card = const Color(0xFF2D2D2D);
   final Color _accent = const Color(0xFFF9D949);
   final Color _muted = Colors.white70;
-  int _currentIndex = 2;
   bool _isLoading = true;
   List<Map<String, dynamic>> _preparingOrders = [];
   List<Map<String, dynamic>> _deliveredOrders = [];
   List<Map<String, dynamic>> _deliveredOrdersAll = [];
   DateTime? _fromDate;
   DateTime? _toDate;
-
-  void _onNavTap(int i) {
-    setState(() => _currentIndex = i);
-    if (i == 0) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerHomePage()),
-      );
-    } else if (i == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CustomerCartPage()),
-      );
-    } else if (i == 2) {
-      // stay
-    } else if (i == 3) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
-  }
 
   @override
   void initState() {
@@ -1152,10 +1125,6 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                   ],
                 ),
               ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentIndex,
-        onTap: _onNavTap,
       ),
     );
   }

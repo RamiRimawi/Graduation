@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import '../account_page.dart';
-import '../manager_theme.dart';
+import '../Manager/manager_theme.dart';
 
 class OrderDetailsPage extends StatefulWidget {
   final int orderId;
@@ -389,17 +387,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
           ],
         ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 0,
-        onTap: (i) {
-          if (i == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const AccountPage()),
-            );
-          }
-        },
       ),
     );
   }

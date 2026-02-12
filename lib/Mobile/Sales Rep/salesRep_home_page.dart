@@ -3,11 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../supabase_config.dart';
-import '../bottom_navbar.dart';
-import '../account_page.dart';
-import 'salesRep_cart_page.dart';
-import 'salesRep_archive_page.dart';
-import 'salesRep_customers_page.dart';
 
 class SalesRepHomePage extends StatefulWidget {
   const SalesRepHomePage({super.key});
@@ -21,7 +16,6 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _filteredProducts = [];
   bool _isLoading = true;
-  int _currentNavIndex = 0;
   final Set<int> _cartProductIds = {};
 
   @override
@@ -133,43 +127,6 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
     }).toList();
   }
 
-  void _onNavTap(int i) {
-    setState(() => _currentNavIndex = i);
-
-    // Navigate similarly to supplier_home_page.dart behavior:
-    if (i == 0) {
-      // Home - replace with this page
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepHomePage()),
-      );
-    } else if (i == 1) {
-      // Cart
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepCartPage()),
-      );
-    } else if (i == 2) {
-      // Archive
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepArchivePage()),
-      );
-    } else if (i == 3) {
-      // Customers
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const SalesRepCustomersPage()),
-      );
-    } else if (i == 4) {
-      // Account (shared)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AccountPage()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> visibleProducts = _filteredProducts;
@@ -243,10 +200,6 @@ class _SalesRepHomePageState extends State<SalesRepHomePage> {
                   ),
                 ],
               ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: _currentNavIndex,
-        onTap: _onNavTap,
       ),
     );
   }
