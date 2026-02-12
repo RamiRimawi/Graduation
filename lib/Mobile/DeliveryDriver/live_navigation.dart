@@ -324,7 +324,6 @@ class _LiveNavigationState extends State<LiveNavigation>
       (_) => _tickPrediction(),
     );
   }
-
   void _tickPrediction() {
     // ✅ Simplified - removed stop lock check for smoother animation
     final base = _animatedDriverLocation ?? _currentDriverLocation;
