@@ -4,25 +4,6 @@ import '../sidebar.dart';
 import '../../supabase_config.dart';
 import 'Orders_add_product_order.dart';
 
-class _DecimalInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text;
-    // Only allow one decimal point
-    if (text.contains('.') && text.indexOf('.') != text.lastIndexOf('.')) {
-      return oldValue;
-    }
-    // Prevent leading decimal point
-    if (text.startsWith('.')) {
-      return oldValue;
-    }
-    return newValue;
-  }
-}
-
 class CreateStockInPage extends StatefulWidget {
   const CreateStockInPage({super.key});
 
@@ -33,7 +14,6 @@ class CreateStockInPage extends StatefulWidget {
 class _CreateStockInPageState extends State<CreateStockInPage> {
   String? selectedSupplierId;
   Map<String, dynamic>? selectedSupplier;
-  final TextEditingController discountController = TextEditingController();
   int? hoveredIndex;
 
   List<Map<String, dynamic>> allSuppliers = [];
@@ -58,12 +38,8 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
     return subtotal * (taxPercent / 100);
   }
 
-  double get discountValue {
-    return double.tryParse(discountController.text) ?? 0.0;
-  }
-
   double get totalPrice {
-    return subtotal + taxAmount - discountValue;
+    return subtotal + taxAmount;
   }
 
   @override
@@ -71,9 +47,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
     super.initState();
     _loadSuppliers();
     // لا نحمل المنتجات عند فتح الصفحة - الجدول يبدأ فاضي
-    discountController.addListener(() {
-      setState(() {}); // Rebuild when discount changes
-    });
   }
 
   void _showMessage(String message) {
@@ -161,7 +134,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       final totalCost = subtotal;
       final totalBalance = totalPrice;
 
-      // إنشاء الطلب في supplier_order مع إضافة قيمة الخصم
+      // إنشاء الطلب في supplier_order
       final orderResponse = await supabase
           .from('supplier_order')
           .insert({
@@ -171,7 +144,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
             'total_balance': totalBalance,
             'order_date': DateTime.now().toIso8601String(),
             'order_status': 'Sent',
-            'discount_value': discountValue,
           })
           .select('order_id')
           .single();
@@ -214,7 +186,7 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
       final totalCost = subtotal;
       final totalBalance = totalPrice;
 
-      // إنشاء الطلب في supplier_order مع حالة Hold وإضافة قيمة الخصم
+      // إنشاء الطلب في supplier_order مع حالة Hold
       final orderResponse = await supabase
           .from('supplier_order')
           .insert({
@@ -224,7 +196,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
             'total_balance': totalBalance,
             'order_date': DateTime.now().toIso8601String(),
             'order_status': 'Hold',
-            'discount_value': discountValue,
           })
           .select('order_id')
           .single();
@@ -263,7 +234,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
 
   @override
   void dispose() {
-    discountController.dispose();
     super.dispose();
   }
 
@@ -920,87 +890,6 @@ class _CreateStockInPageState extends State<CreateStockInPage> {
                                 const SizedBox(height: 30),
                                 const Divider(color: Colors.white24),
                                 const SizedBox(height: 18),
-                                // ✅ Discount + TextField (value-based, decimal)
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      "Discount:",
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 18),
-                                    SizedBox(
-                                      width: 100,
-                                      height: 36,
-                                      child: TextField(
-                                        controller: discountController,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                              decimal: true,
-                                            ),
-                                        inputFormatters: [
-                                          FilteringTextInputFormatter.allow(
-                                            RegExp(r'^\d*\.?\d*'),
-                                          ),
-                                          _DecimalInputFormatter(),
-                                        ],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                        ),
-                                        decoration: InputDecoration(
-                                          prefixText: '\$ ',
-                                          prefixStyle: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 14,
-                                          ),
-                                          hintText: '0.00',
-                                          hintStyle: const TextStyle(
-                                            color: Colors.white38,
-                                            fontSize: 14,
-                                          ),
-                                          filled: true,
-                                          fillColor: const Color(0xFF2D2D2D),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 8,
-                                              ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFB7A447),
-                                            ),
-                                          ),
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFB7A447),
-                                            ),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                            borderSide: const BorderSide(
-                                              color: Color(0xFFB7A447),
-                                              width: 2,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16.0,
