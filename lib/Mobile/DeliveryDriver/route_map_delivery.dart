@@ -308,12 +308,13 @@ class _RouteMapDeleviryState extends State<RouteMapDeleviry> {
   Future<void> _onStyleLoaded(mapbox.StyleLoadedEventData data) async {
     if (_mapboxMap == null) return;
 
+    // ✅ Create route line manager FIRST so icons appear on top
+    _routeLineManager =
+        await _mapboxMap!.annotations.createPolylineAnnotationManager();
     _driverPointManager =
         await _mapboxMap!.annotations.createPointAnnotationManager();
     _destPointManager =
         await _mapboxMap!.annotations.createPointAnnotationManager();
-    _routeLineManager =
-        await _mapboxMap!.annotations.createPolylineAnnotationManager();
 
     _driverPoint = null;
     _destPoint = null;

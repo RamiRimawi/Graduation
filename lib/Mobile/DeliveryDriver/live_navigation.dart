@@ -224,10 +224,10 @@ class _LiveNavigationState extends State<LiveNavigation>
   // -------------------- MAPBOX --------------------
   static const String _mapboxAccessToken =
       'pk.eyJ1IjoicmFtYWRhbjk2IiwiYSI6ImNtbGh4eHMyMzA1d20zY3Fzem54aHZtNGQifQ.sB2yvST_wLvszakHkT7Npg';
-    static const String _mapStyleUri =
+  static const String _mapStyleUri =
       'mapbox://styles/mapbox/streets-v12';
-      static const String _mapStyleUriDark =
-        'mapbox://styles/mapbox/dark-v11';
+  static const String _mapStyleUriDark =
+      'mapbox://styles/mapbox/dark-v11';
   static const double _navPitchDeg = 60.0;
       static const Duration _cameraAnimDuration = Duration(milliseconds: 500);
 
