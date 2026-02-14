@@ -1083,47 +1083,55 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => _pickStaffForSplit(partIndex),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: split.staffName != null
-                            ? AppColors.gold.withOpacity(0.2)
-                            : Colors.orange.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: split.staffName != null
-                              ? AppColors.gold
-                              : Colors.orange,
-                          width: 1,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: GestureDetector(
+                      onTap: () => _pickStaffForSplit(partIndex),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.person,
+                        decoration: BoxDecoration(
+                          color: split.staffName != null
+                              ? AppColors.gold.withOpacity(0.2)
+                              : Colors.orange.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
                             color: split.staffName != null
                                 ? AppColors.gold
                                 : Colors.orange,
-                            size: 14,
+                            width: 1,
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            split.staffName ?? 'Select Staff',
-                            style: TextStyle(
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person,
                               color: split.staffName != null
                                   ? AppColors.gold
                                   : Colors.orange,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              size: 14,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                split.staffName ?? 'Select Staff',
+                                style: TextStyle(
+                                  color: split.staffName != null
+                                      ? AppColors.gold
+                                      : Colors.orange,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                            if (split.staffName != null) ...[],
+                          ],
+                        ),
                       ),
                     ),
                   ),

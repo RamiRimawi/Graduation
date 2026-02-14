@@ -824,11 +824,15 @@ class _SplitPartTableState extends State<_SplitPartTable> {
                             size: 16,
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            widget.split.staffName ?? 'Select Staff',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
+                          Flexible(
+                            child: Text(
+                              widget.split.staffName ?? 'Select Staff',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ),
                         ],

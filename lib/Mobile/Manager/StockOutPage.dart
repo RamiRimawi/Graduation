@@ -161,6 +161,16 @@ class _StockOutPageState extends State<StockOutPage> {
     }
   }
 
+  // Refresh all tabs at once (used when returning from order actions)
+  Future<void> _refreshAllTabs() async {
+    await Future.wait([
+      _fetchPendingOrders(),
+      _fetchPreparingOrders(),
+      _fetchPreparedOrders(),
+      _fetchDeliveryDrivers(),
+    ]);
+  }
+
   // Refresh data for a specific tab index before rendering
   void _refreshTab(int index) {
     switch (index) {
@@ -469,12 +479,11 @@ class _PendingSection extends StatelessWidget {
                             ),
                           );
 
-                          // Refresh if order was successfully sent
+                          // Refresh all tabs if order action was performed
                           if (result == true && context.mounted) {
                             final stockOutState = context
                                 .findAncestorStateOfType<_StockOutPageState>();
-                            stockOutState?._fetchPendingOrders();
-                            stockOutState?._fetchPreparingOrders();
+                            await stockOutState?._refreshAllTabs();
                           }
                         },
                         child: _OrderCard(
@@ -529,14 +538,21 @@ class _PreparingSection extends StatelessWidget {
                 final o = orders[i];
 
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
                             PreparingOrderDetailsPage(orderId: o.id),
                       ),
                     );
+
+                    // Refresh all tabs when returning (order status may have changed)
+                    if (context.mounted) {
+                      final stockOutState = context
+                          .findAncestorStateOfType<_StockOutPageState>();
+                      await stockOutState?._refreshAllTabs();
+                    }
                   },
                   child: _OrderCard(
                     left: '${o.id}',
@@ -606,14 +622,11 @@ class _PreparedSection extends StatelessWidget {
                             ),
                           );
 
-                          // Refresh if order was sent to delivery
+                          // Refresh all tabs if order was sent to delivery
                           if (result == true && context.mounted) {
                             final stockOutState = context
                                 .findAncestorStateOfType<_StockOutPageState>();
-                            if (stockOutState != null) {
-                              await stockOutState._fetchPreparedOrders();
-                              await stockOutState._fetchDeliveryDrivers();
-                            }
+                            await stockOutState?._refreshAllTabs();
                           }
                         },
                         child: _OrderCard(
