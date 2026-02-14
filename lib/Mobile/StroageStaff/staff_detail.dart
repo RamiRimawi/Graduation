@@ -24,11 +24,38 @@ class _CustomerDetailState extends State<CustomerDetail> {
   bool _saving = false;
   bool _loading = true;
   List<Map<String, dynamic>> products = [];
+  bool _isOfflineWithNoCache = false;
 
   @override
   void initState() {
     super.initState();
     _fetchProducts();
+    _startConnectivityMonitoring();
+  }
+
+  void _startConnectivityMonitoring() {
+    // Update UI when connectivity changes
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {}); // Refresh to update banner
+        _startConnectivityMonitoring();
+      }
+    });
+  }
+
+  void _listenToConnectivityChanges() {
+    // Check periodically if we're back online when in offline state
+    if (_isOfflineWithNoCache) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted &&
+            _isOfflineWithNoCache &&
+            StaffSyncManager.instance.isOnline) {
+          _fetchProducts();
+        } else if (mounted && _isOfflineWithNoCache) {
+          _listenToConnectivityChanges();
+        }
+      });
+    }
   }
 
   Future<void> _fetchProducts() async {
@@ -55,12 +82,30 @@ class _CustomerDetailState extends State<CustomerDetail> {
       if (mounted) {
         setState(() {
           products = fetchedProducts;
+          // Check if we're offline with no cached data
+          _isOfflineWithNoCache =
+              !StaffSyncManager.instance.isOnline && fetchedProducts.isEmpty;
           _loading = false;
         });
+
+        // Start listening for connectivity if offline
+        if (_isOfflineWithNoCache) {
+          _listenToConnectivityChanges();
+        }
       }
     } catch (e) {
       debugPrint('Error fetching products: $e');
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _isOfflineWithNoCache = !StaffSyncManager.instance.isOnline;
+          _loading = false;
+        });
+
+        // Start listening for connectivity if offline
+        if (_isOfflineWithNoCache) {
+          _listenToConnectivityChanges();
+        }
+      }
     }
   }
 
@@ -568,12 +613,30 @@ class _CustomerDetailState extends State<CustomerDetail> {
       if (StaffSyncManager.instance.isOnline) {
         // Process immediately
         await _processSaveUpdates(staffId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Order updated successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } else {
         // Queue for later sync
         await StaffSyncManager.instance.queueOrderPreparation(
           customerId: widget.customerId,
           products: products,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Order saved offline. Will sync when online.'),
+              backgroundColor: Color(0xFFFFE14D),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
 
       if (mounted) {
@@ -729,11 +792,45 @@ class _CustomerDetailState extends State<CustomerDetail> {
 
   @override
   Widget build(BuildContext context) {
+    final isOnline = StaffSyncManager.instance.isOnline;
+    final isSyncing = StaffSyncManager.instance.isSyncing;
+
     return Scaffold(
       backgroundColor: const Color(0xFF202020),
       body: SafeArea(
         child: Column(
           children: [
+            // Status banner
+            if (!isOnline || isSyncing)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                color: !isOnline
+                    ? Colors.red.withOpacity(0.2)
+                    : const Color(0xFFFFE14D).withOpacity(0.2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      !isOnline ? Icons.cloud_off : Icons.sync,
+                      size: 18,
+                      color: !isOnline ? Colors.red : const Color(0xFFFFE14D),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      !isOnline ? 'Offline Mode' : 'Syncing changes...',
+                      style: TextStyle(
+                        color: !isOnline ? Colors.red : const Color(0xFFFFE14D),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             //========== TOP BAR (Back + Name) ==========
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -829,6 +926,71 @@ class _CustomerDetailState extends State<CustomerDetail> {
                         color: Color(0xFFFFE14D),
                       ),
                     )
+                  : products.isEmpty
+                  ? _isOfflineWithNoCache
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.cloud_off,
+                                    size: 64,
+                                    color: Color(0xFFB7A447),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'No Internet Connection',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'This order\'s details weren\'t cached. Please connect to the internet to view order details.',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  ElevatedButton.icon(
+                                    onPressed: _fetchProducts,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFB7A447),
+                                      foregroundColor: const Color(0xFF202020),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text(
+                                      'Retry',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : const Center(
+                            child: Text(
+                              'No products found for this order',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: products.length,

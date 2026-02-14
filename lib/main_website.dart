@@ -61,9 +61,7 @@ class DolphinApp extends StatelessWidget {
   static Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
     return MaterialPageRoute(
       settings: settings,
-      builder: (context) => _AuthGuard(
-        routeName: settings.name ?? '/login',
-      ),
+      builder: (context) => _AuthGuard(routeName: settings.name ?? '/login'),
     );
   }
 }
@@ -82,9 +80,7 @@ class _AuthGuard extends StatelessWidget {
           return const Scaffold(
             backgroundColor: Color(0xFF202020),
             body: Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFB7A447),
-              ),
+              child: CircularProgressIndicator(color: Color(0xFFB7A447)),
             ),
           );
         }
@@ -109,9 +105,7 @@ class _AuthGuard extends StatelessWidget {
           return const Scaffold(
             backgroundColor: Color(0xFF202020),
             body: Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFB7A447),
-              ),
+              child: CircularProgressIndicator(color: Color(0xFFB7A447)),
             ),
           );
         }

@@ -20,6 +20,10 @@ class StaffSyncManager {
 
   // Initialize and start monitoring connectivity
   Future<void> initialize() async {
+    // Clean up old cache entries
+    final db = OfflineDatabaseHelper.instance;
+    await db.clearOldCache();
+
     // Check initial connectivity
     final result = await _connectivity.checkConnectivity();
     _isOnline = result != ConnectivityResult.none;
@@ -64,14 +68,20 @@ class StaffSyncManager {
 
           // Successfully processed, delete from queue
           await db.deletePendingAction(action['id'] as int);
+
+          // Clear cached data for this order since it's now synced
+          await db.clearCachedOrder(customerId);
         } catch (e) {
           // Failed to process, increment retry count
+          final retryCount = action['retry_count'] as int;
           await db.incrementRetryCount(action['id'] as int);
 
-          // If retried too many times (e.g., 5), could log or skip
-          final retryCount = action['retry_count'] as int;
-          if (retryCount > 5) {
-            // Optionally: delete or flag for manual review
+          // If retried too many times (5+), delete to prevent infinite retries
+          if (retryCount >= 5) {
+            print(
+              'Action ${action['id']} failed after 5 retries, removing from queue',
+            );
+            await db.deletePendingAction(action['id'] as int);
           }
         }
       }
@@ -422,5 +432,22 @@ class StaffSyncManager {
     final db = OfflineDatabaseHelper.instance;
     final actions = await db.getPendingActions();
     return actions.length;
+  }
+
+  // Get list of customer order IDs that have pending actions
+  Future<Set<int>> getPendingOrderIds() async {
+    final db = OfflineDatabaseHelper.instance;
+    final actions = await db.getPendingActions();
+    return actions
+        .map((action) => action['customer_order_id'] as int?)
+        .where((id) => id != null)
+        .cast<int>()
+        .toSet();
+  }
+
+  // Check if a specific order has pending actions
+  Future<bool> hasOrderPendingSync(int orderId) async {
+    final pendingIds = await getPendingOrderIds();
+    return pendingIds.contains(orderId);
   }
 }

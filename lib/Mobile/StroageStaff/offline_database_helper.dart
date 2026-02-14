@@ -121,7 +121,15 @@ class OfflineDatabaseHelper {
       orderBy: 'customer_order_id ASC',
     );
 
+    // Check if cache is older than 1 hour
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final oneHourAgo = now - (60 * 60 * 1000);
+
     return results
+        .where((row) {
+          final cachedAt = row['cached_at'] as int? ?? 0;
+          return cachedAt > oneHourAgo; // Only return recent cache
+        })
         .map(
           (row) => {
             'id': row['customer_order_id'],
@@ -185,10 +193,15 @@ class OfflineDatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getCachedProducts(int orderId) async {
     final db = await database;
+
+    // Check cache age (1 hour)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final oneHourAgo = now - (60 * 60 * 1000);
+
     final results = await db.query(
       'cached_products',
-      where: 'customer_order_id = ?',
-      whereArgs: [orderId],
+      where: 'customer_order_id = ? AND cached_at > ?',
+      whereArgs: [orderId, oneHourAgo],
     );
 
     return results
@@ -292,8 +305,12 @@ class OfflineDatabaseHelper {
   }) async {
     final db = await database;
 
-    String where = 'product_id = ?';
-    List<dynamic> whereArgs = [productId];
+    // Check cache age (1 hour)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final oneHourAgo = now - (60 * 60 * 1000);
+
+    String where = 'product_id = ? AND cached_at > ?';
+    List<dynamic> whereArgs = [productId, oneHourAgo];
 
     if (inventoryId != null) {
       where += ' AND inventory_id = ?';
@@ -359,6 +376,34 @@ class OfflineDatabaseHelper {
     await db.delete('cached_products');
     await db.delete('cached_allocations');
     await db.delete('cached_batches');
+  }
+
+  // Clear cache older than 24 hours
+  Future<void> clearOldCache() async {
+    final db = await database;
+    final dayAgo =
+        DateTime.now().millisecondsSinceEpoch - (24 * 60 * 60 * 1000);
+
+    await db.delete(
+      'cached_orders',
+      where: 'cached_at < ?',
+      whereArgs: [dayAgo],
+    );
+    await db.delete(
+      'cached_products',
+      where: 'cached_at < ?',
+      whereArgs: [dayAgo],
+    );
+    await db.delete(
+      'cached_allocations',
+      where: 'cached_at < ?',
+      whereArgs: [dayAgo],
+    );
+    await db.delete(
+      'cached_batches',
+      where: 'cached_at < ?',
+      whereArgs: [dayAgo],
+    );
   }
 
   Future<void> close() async {
