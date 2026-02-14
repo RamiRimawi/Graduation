@@ -805,37 +805,40 @@ class _SplitPartTableState extends State<_SplitPartTable> {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: widget.onStaffTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.bgDark,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.person,
-                            color: AppColors.gold,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              widget.split.staffName ?? 'Select Staff',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: GestureDetector(
+                      onTap: widget.onStaffTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgDark,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.person,
+                              color: AppColors.gold,
+                              size: 16,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                widget.split.staffName ?? 'Select Staff',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
