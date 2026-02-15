@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -53,6 +54,11 @@ class _LoginPageState extends State<LoginPage> {
 
   final TextEditingController _userIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  Future<bool> _isOnline() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult != ConnectivityResult.none;
+  }
 
   String _normalizeArabicDigits(String input) {
     const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
@@ -231,6 +237,12 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    final online = await _isOnline();
+    if (!online) {
+      _showWarning('Check your internet, you are offline');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -363,6 +375,21 @@ class _LoginPageState extends State<LoginPage> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _showWarning(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(color: AppColors.black),
+          ),
+          backgroundColor: AppColors.yellow,
           duration: const Duration(seconds: 3),
         ),
       );
