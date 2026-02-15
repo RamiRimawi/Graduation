@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'delivery_order_details.dart';
 import '../../supabase_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomeDeleviry extends StatefulWidget {
   final int deliveryDriverId;
@@ -15,11 +16,39 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
 
   List<Map<String, dynamic>> customers = [];
   bool _isLoading = true;
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     _fetchCustomersGrouped();
+    _setupRealtimeSubscription();
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _setupRealtimeSubscription() {
+    _realtimeChannel = supabase
+        .channel('delivery_orders_${widget.deliveryDriverId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'customer_order',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'delivered_by_id',
+            value: widget.deliveryDriverId,
+          ),
+          callback: (payload) {
+            debugPrint('🔔 Realtime change detected: ${payload.eventType}');
+            _fetchCustomersGrouped();
+          },
+        )
+        .subscribe();
   }
 
   @override
@@ -41,7 +70,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                   )
                   .eq('order_status', 'Delivery')
                   .eq('delivered_by_id', widget.deliveryDriverId)
-                  .order('order_date', ascending: false)
+                  .order('order_date', ascending: true)
                   .limit(200)
               as List<dynamic>;
 
@@ -71,7 +100,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
             'customerId': customerId,
             'name': customerName,
             'orders': <Map<String, dynamic>>[],
-            'latestOrderDate': orderDate,
+            'earliestOrderDate': orderDate,
           };
         });
 
@@ -83,35 +112,35 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
           'orderDate': orderDate,
         });
 
-        final latest = grouped[customerId]!['latestOrderDate'] as DateTime?;
-        if (latest == null ||
-            (orderDate != null && orderDate.isAfter(latest))) {
-          grouped[customerId]!['latestOrderDate'] = orderDate;
+        final earliest = grouped[customerId]!['earliestOrderDate'] as DateTime?;
+        if (earliest == null ||
+            (orderDate != null && orderDate.isBefore(earliest))) {
+          grouped[customerId]!['earliestOrderDate'] = orderDate;
         }
       }
 
       final result = grouped.values.toList();
 
-      // Sort customers by latest order date (newest first)
+      // Sort customers by earliest order date (oldest first)
       result.sort((a, b) {
-        final da = a['latestOrderDate'] as DateTime?;
-        final db = b['latestOrderDate'] as DateTime?;
-        if (da != null && db != null) return db.compareTo(da);
+        final da = a['earliestOrderDate'] as DateTime?;
+        final db = b['earliestOrderDate'] as DateTime?;
+        if (da != null && db != null) return da.compareTo(db);
         if (da != null) return -1;
         if (db != null) return 1;
         return 0;
       });
 
-      // Sort each customer's orders by orderDate newest first (optional but nice)
+      // Sort each customer's orders by orderDate oldest first
       for (final c in result) {
         final orders = (c['orders'] as List<Map<String, dynamic>>);
         orders.sort((x, y) {
           final dx = x['orderDate'] as DateTime?;
           final dy = y['orderDate'] as DateTime?;
-          if (dx != null && dy != null) return dy.compareTo(dx);
+          if (dx != null && dy != null) return dx.compareTo(dy);
           if (dx != null) return -1;
           if (dy != null) return 1;
-          return (y['orderId'] as int).compareTo(x['orderId'] as int);
+          return (x['orderId'] as int).compareTo(y['orderId'] as int);
         });
       }
 
@@ -169,16 +198,31 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                 child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : customers.isEmpty
-            ? const Center(
-                child: Text(
-                  'No active deliveries assigned to you',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+            ? RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _fetchCustomersGrouped,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Text(
+                        'No active deliveries assigned to you',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                    ),
+                  ],
                 ),
               )
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                itemCount: customers.length,
-                itemBuilder: (context, index) {
+            : RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _fetchCustomersGrouped,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                  itemCount: customers.length,
+                  itemBuilder: (context, index) {
                   final customer = customers[index];
                   final name =
                       customer['name'] as String? ?? 'Unknown Customer';
@@ -617,6 +661,7 @@ class _HomeDeleviryState extends State<HomeDeleviry> {
                   return isMulti ? multiOrderCard() : singleOrderCard();
                 },
               ),
+            ),
       ),
     );
   }
