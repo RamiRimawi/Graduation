@@ -181,7 +181,7 @@ class _SimpleTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const tabs = ['Today', 'Receives', 'Previous'];
+    const tabs = ['Today', 'Receives', 'Archive'];
 
     return Row(
       children: List.generate(tabs.length, (i) {

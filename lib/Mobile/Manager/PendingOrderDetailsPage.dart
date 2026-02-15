@@ -51,14 +51,19 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       builder: (_) => _OrderConfirmationModal(
         orderId: widget.orderId,
         orderData: _orderData!,
-        onConfirm: (staffId, inventoryId, selectedBatchIds) {
+        onConfirm: (staffId, inventoryId, selectedBatchIds) async {
           setState(() {
             _selectedStaffId = staffId;
             _selectedInventoryId = inventoryId;
             _selectedBatchIds.clear();
             _selectedBatchIds.addAll(selectedBatchIds);
           });
-          _sendNonSplitOrder();
+          // Wait for the send operation to complete
+          await _sendNonSplitOrder();
+        },
+        onConfirmMulti: (splitsData) async {
+          // Wait for the multi-part send operation to complete
+          await _sendMultiPartOrderFromModal(splitsData);
         },
       ),
     );
@@ -219,6 +224,34 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         ),
       );
       Navigator.pop(context, true); // Return true to indicate success
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send order. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendMultiPartOrderFromModal(
+    List<Map<String, dynamic>> splitsData,
+  ) async {
+    final success = await OrderService.saveSplitOrder(
+      orderId: widget.orderId,
+      splits: splitsData,
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order sent successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -549,12 +582,14 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 class _OrderConfirmationModal extends StatefulWidget {
   final int orderId;
   final OrderData orderData;
-  final Function(int, int, Map<int, int?>) onConfirm;
+  final Future<void> Function(int, int, Map<int, int?>) onConfirm;
+  final Future<void> Function(List<Map<String, dynamic>>) onConfirmMulti;
 
   const _OrderConfirmationModal({
     required this.orderId,
     required this.orderData,
     required this.onConfirm,
+    required this.onConfirmMulti,
   });
 
   @override
@@ -833,7 +868,7 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
     );
   }
 
-  void _confirmAndSend() {
+  void _confirmAndSend() async {
     // Validate all parts with items have staff assigned
     for (int i = 0; i < _splits.length; i++) {
       if (_splits[i].quantitiesByItem.isEmpty) continue;
@@ -890,9 +925,10 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
       });
     }
 
+    // Close the modal before sending
     Navigator.pop(context);
-    // Use first split data for backward compatibility with onConfirm signature
-    // But we'll actually handle it differently in _sendNonSplitOrder
+
+    // Handle single vs multi-part sends
     if (splitsData.length == 1) {
       final firstSplit = splitsData[0];
       final batchesByItemIndex = <int, int?>{};
@@ -902,43 +938,14 @@ class _OrderConfirmationModalState extends State<_OrderConfirmationModal> {
           batchesByItemIndex[i] = _splits[0].batchIdByItem[i];
         }
       }
-      widget.onConfirm(
-        firstSplit['staffId'],
-        firstSplit['inventoryId'],
+      await widget.onConfirm(
+        firstSplit['staffId'] as int,
+        firstSplit['inventoryId'] as int,
         batchesByItemIndex,
       );
     } else {
-      // Multi-part assignment - need to modify parent method
-      // For now, pass splits data through a modified call
-      _sendMultiPartOrder(splitsData);
-    }
-  }
-
-  Future<void> _sendMultiPartOrder(
-    List<Map<String, dynamic>> splitsData,
-  ) async {
-    final success = await OrderService.saveSplitOrder(
-      orderId: widget.orderId,
-      splits: splitsData,
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order sent successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send order. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Multi-part assignment - use the multi-part callback
+      await widget.onConfirmMulti(splitsData);
     }
   }
 
