@@ -27,6 +27,11 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
   bool isLoading = true;
   String searchQuery = '';
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +52,8 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
   }
 
   Future<void> _loadReceivesOrders() async {
-    setState(() => isLoading = true);
+    if (!mounted) return;
+    _safeSetState(() => isLoading = true);
 
     try {
       // Fetch Sent, Updated, and Hold orders
@@ -149,7 +155,8 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
         }
       }
 
-      setState(() {
+      if (!mounted) return;
+      _safeSetState(() {
         allOrders = regularOrders;
         filteredOrders = regularOrders;
         onHoldOrders = holdOrders;
@@ -157,12 +164,13 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
       });
     } catch (e) {
       print('Error loading receives orders: $e');
-      setState(() => isLoading = false);
+      if (!mounted) return;
+      _safeSetState(() => isLoading = false);
     }
   }
 
   void _filterOrders(String query) {
-    setState(() {
+    _safeSetState(() {
       searchQuery = query;
       if (query.isEmpty) {
         filteredOrders = allOrders;
@@ -291,11 +299,11 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                             ),
                           );
                         } else {
-                          setState(() => stockTab = i);
+                          _safeSetState(() => stockTab = i);
                         }
                       },
                       onTabChanged: (i) {
-                        setState(() => currentTab = i);
+                        _safeSetState(() => currentTab = i);
 
                         if (i == 0) {
                           // 👉 Today (Stock-in الرئيسية)
@@ -393,9 +401,9 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
 
                                   return MouseRegion(
                                     onEnter: (_) =>
-                                        setState(() => hoveredIndex = i),
+                                      _safeSetState(() => hoveredIndex = i),
                                     onExit: (_) =>
-                                        setState(() => hoveredIndex = null),
+                                      _safeSetState(() => hoveredIndex = null),
                                     child: InkWell(
                                       onTap: () =>
                                           _showOrderDetails(context, order),
@@ -513,11 +521,11 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                         : const Color(0xFF262626);
 
                                     return MouseRegion(
-                                      onEnter: (_) => setState(
+                                      onEnter: (_) => _safeSetState(
                                         () => hoveredIndex = i + 1000,
                                       ),
                                       onExit: (_) =>
-                                          setState(() => hoveredIndex = null),
+                                          _safeSetState(() => hoveredIndex = null),
                                       child: InkWell(
                                         onTap: () =>
                                             _showOrderDetails(context, order),

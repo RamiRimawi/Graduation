@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -28,9 +29,20 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     with TickerProviderStateMixin {
   final MapController _mapController = MapController();
 
+  // Keep the map camera stable across rebuilds.
+  // (If initialCenter/initialZoom change on every setState, flutter_map may
+  // re-apply them and cause zoom/center to "jump".)
+  final LatLng _mapInitialCenter = const LatLng(31.9522, 35.2332);
+  final double _mapInitialZoom = 14;
+  bool _userHasInteractedWithMap = false;
+  int? _lastAutoFitOrderId;
+
   LatLng _driverLocation = const LatLng(31.9522, 35.2332); // Default: Ramallah
   LatLng _driverMarkerLocation = const LatLng(31.9522, 35.2332);
   bool _hasInitialDriverLocation = false;
+  DateTime? _lastDriverLocationReceivedAt;
+  Ticker? _markerTicker;
+  DateTime? _lastMarkerTickAt;
   LatLng? _customerLocation;
   String? _customerName;
   int? _orderId;
@@ -59,11 +71,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
   DateTime? _lastRouteUpdateAt;
   LatLng? _lastRouteFrom;
 
-  // ✅ Smooth driver animation
-  AnimationController? _driverAnimController;
-  Animation<LatLng>? _driverAnim;
-  static const Duration _driverAnimDurationDefault =
-      Duration(milliseconds: 600);
+  // ✅ Continuous smooth marker motion
+  static const double _minFollowSpeedMps = 1.5;
+  static const double _maxFollowSpeedMps = 45.0;
 
   static const Duration _routeMinIntervalNormal = Duration(seconds: 5);
   static const Duration _routeMinIntervalFast = Duration(seconds: 2);
@@ -184,38 +194,58 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     });
   }
 
-  void _onDriverAnimTick() {
-    if (!mounted || _driverAnim == null) return;
+  void _onMarkerTick(Duration elapsed) {
+    if (!mounted || !_hasInitialDriverLocation) return;
+
+    final now = DateTime.now();
+    final previousTick = _lastMarkerTickAt;
+    _lastMarkerTickAt = now;
+    if (previousTick == null) return;
+
+    final dtMs = now.difference(previousTick).inMilliseconds;
+    if (dtMs <= 0) return;
+
+    final distance = Distance();
+    final remainingMeters = distance.as(
+      LengthUnit.Meter,
+      _driverMarkerLocation,
+      _driverLocation,
+    );
+
+    // Snap when very close to avoid tiny jitter.
+    if (remainingMeters < 0.6) {
+      if (_driverMarkerLocation != _driverLocation) {
+        setState(() {
+          _driverMarkerLocation = _driverLocation;
+        });
+      }
+      return;
+    }
+
+    // Follow at a continuous speed derived from measured speed (with clamps).
+    final speedMps = (_currentSpeed / 3.6).clamp(
+      _minFollowSpeedMps,
+      _maxFollowSpeedMps,
+    );
+    final stepMeters = speedMps * (dtMs / 1000.0);
+
+    final t = stepMeters >= remainingMeters
+        ? 1.0
+        : (stepMeters / remainingMeters);
+
+    final nextLat = _driverMarkerLocation.latitude +
+        (_driverLocation.latitude - _driverMarkerLocation.latitude) * t;
+    final nextLng = _driverMarkerLocation.longitude +
+        (_driverLocation.longitude - _driverMarkerLocation.longitude) * t;
+
     setState(() {
-      _driverMarkerLocation = _driverAnim!.value;
+      _driverMarkerLocation = LatLng(nextLat, nextLng);
     });
   }
 
-  void _startDriverAnimation(LatLng newLocation) {
-    if (_driverAnimController == null) return;
-
-    final from = _driverMarkerLocation;
-    final moved = Distance().as(LengthUnit.Meter, from, newLocation);
-    final ms = (moved * 8).clamp(160.0, 800.0).toInt();
-    _driverAnimController!.duration = Duration(milliseconds: ms);
-
-    _driverAnimController!.stop();
-    _driverAnimController!.reset();
-
-    _driverAnim = LatLngTween(begin: from, end: newLocation)
-        .animate(
-          CurvedAnimation(
-            parent: _driverAnimController!,
-            curve: Curves.easeOut,
-          ),
-        );
-
-    _driverAnimController!.removeListener(_onDriverAnimTick);
-    _driverAnimController!.addListener(_onDriverAnimTick);
-    _driverAnimController!.forward();
-  }
-
   void _applyDriverLocationUpdate(LatLng newLocation, {bool animate = true}) {
+    _lastDriverLocationReceivedAt = DateTime.now();
+
     setState(() {
       _driverLocation = newLocation;
       if (!_hasInitialDriverLocation || !animate) {
@@ -227,8 +257,6 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
       _hasInitialDriverLocation = true;
       return;
     }
-
-    _startDriverAnimation(newLocation);
   }
 
   // Helper: التحقق وتحديث حالة الانحراف عن المسار
@@ -326,10 +354,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     super.initState();
 
     _driverMarkerLocation = _driverLocation;
-    _driverAnimController = AnimationController(
-      vsync: this,
-      duration: _driverAnimDurationDefault,
-    );
+    _markerTicker = createTicker(_onMarkerTick)..start();
 
     _startDriverRealtime();
 
@@ -351,6 +376,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
   }
 
   void _positionMapView() {
+    // Don't fight the user: once they zoom/pan manually, keep their camera.
+    if (_userHasInteractedWithMap) return;
+
     if (_customerLocation != null) {
       final dist = Distance().as(
         LengthUnit.Meter,
@@ -373,8 +401,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     _pollingTimer?.cancel();
     _routeSmartTimer?.cancel();
 
-    _driverAnimController?.removeListener(_onDriverAnimTick);
-    _driverAnimController?.dispose();
+    _markerTicker?.dispose();
 
     if (_driverChannel != null) {
       supabase.removeChannel(_driverChannel!);
@@ -603,7 +630,8 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
           final endedOrderId = _previousOrderId;
           final endedCustomerName = _customerName;
 
-          _mapController.move(_driverLocation, 14);
+          // Preserve the user's current zoom when recentering.
+          _mapController.move(_driverLocation, _mapController.camera.zoom);
 
           setState(() {
             if (endedOrderId != null) {
@@ -621,6 +649,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
           _previousOrderId = null;
           _lastRouteFrom = null;
           _lastRouteUpdateAt = null;
+          _lastAutoFitOrderId = null;
         }
 
         final allOrders =
@@ -740,8 +769,14 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
               _routePoints = polyline;
             });
 
-            if (_routePoints.isNotEmpty) {
+            // Auto-fit only once per order, and only if the user hasn't
+            // manually zoomed/panned the map.
+            if (_routePoints.isNotEmpty &&
+                !_userHasInteractedWithMap &&
+                _orderId != null &&
+                _lastAutoFitOrderId != _orderId) {
               _fitMapToRoute();
+              _lastAutoFitOrderId = _orderId;
             }
           }
         }
@@ -1329,9 +1364,14 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
                         FlutterMap(
                           mapController: _mapController,
                           options: MapOptions(
-                            initialCenter: _driverMarkerLocation,
-                            initialZoom: 14,
+                            initialCenter: _mapInitialCenter,
+                            initialZoom: _mapInitialZoom,
                             maxZoom: 20,
+                            onPositionChanged: (_, hasGesture) {
+                              if (hasGesture) {
+                                _userHasInteractedWithMap = true;
+                              }
+                            },
                           ),
                           children: [
                             TileLayer(
