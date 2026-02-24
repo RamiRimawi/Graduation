@@ -559,52 +559,26 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
                       .order('order_date', ascending: false)
                   as List<dynamic>;
 
-          // Delivered today
-          final deliveredOrdersRaw =
-              await supabase
-                      .from('customer_order')
-                      .select(
-                        'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)',
-                      )
-                      .eq('delivered_by_id', widget.driverId)
-                      .eq('order_status', 'Delivered')
-                      .limit(50)
-                  as List<dynamic>;
-
+          // Delivered today — filter by last_action_time directly in Supabase
           final today = DateTime.now();
           final todayStart = DateTime(today.year, today.month, today.day);
           final todayEnd = todayStart.add(const Duration(days: 1));
+          final todayStartStr = todayStart.toIso8601String();
+          final todayEndStr = todayEnd.toIso8601String();
 
-          final deliveredOrders =
-              deliveredOrdersRaw.where((o) {
-                final descriptions =
-                    (o as Map<String, dynamic>)['customer_order_description']
-                        as List<dynamic>?;
-                if (descriptions == null ||
-                    descriptions.isEmpty ||
-                    descriptions.first['delivered_date'] == null) {
-                  return false;
-                }
-                final deliveredDate = DateTime.parse(
-                  descriptions.first['delivered_date'] as String,
-                );
-                return deliveredDate.isAfter(todayStart) &&
-                    deliveredDate.isBefore(todayEnd);
-              }).toList()..sort((a, b) {
-                final aDate =
-                    ((a as Map<String, dynamic>)['customer_order_description']
-                                as List<dynamic>)
-                            .first['delivered_date']
-                        as String;
-                final bDate =
-                    ((b as Map<String, dynamic>)['customer_order_description']
-                                as List<dynamic>)
-                            .first['delivered_date']
-                        as String;
-                return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
-              });
+          final deliveredOrdersRaw =
+              await supabase
+                      .from('customer_order')
+                      .select('customer_order_id, customer:customer_id(name), last_action_time')
+                      .eq('delivered_by_id', widget.driverId)
+                      .eq('order_status', 'Delivered')
+                      .gte('last_action_time', todayStartStr)
+                      .lt('last_action_time', todayEndStr)
+                      .order('last_action_time', ascending: false)
+                      .limit(10)
+                  as List<dynamic>;
 
-          final limitedDeliveredOrders = deliveredOrders.take(10).toList();
+          final limitedDeliveredOrders = deliveredOrdersRaw;
 
           setState(() {
             _otherOrders = otherOrders.map((o) {
@@ -661,51 +635,26 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
                     .order('order_date', ascending: false)
                 as List<dynamic>;
 
-        final deliveredOrdersRaw =
-            await supabase
-                    .from('customer_order')
-                    .select(
-                      'customer_order_id, customer:customer_id(name), customer_order_description(delivered_date)',
-                    )
-                    .eq('delivered_by_id', widget.driverId)
-                    .eq('order_status', 'Delivered')
-                    .limit(50)
-                as List<dynamic>;
-
+        // Delivered today — filter by last_action_time directly in Supabase
         final today = DateTime.now();
         final todayStart = DateTime(today.year, today.month, today.day);
         final todayEnd = todayStart.add(const Duration(days: 1));
+        final todayStartStr = todayStart.toIso8601String();
+        final todayEndStr = todayEnd.toIso8601String();
 
-        final deliveredOrders =
-            deliveredOrdersRaw.where((o) {
-              final descriptions =
-                  (o as Map<String, dynamic>)['customer_order_description']
-                      as List<dynamic>?;
-              if (descriptions == null ||
-                  descriptions.isEmpty ||
-                  descriptions.first['delivered_date'] == null) {
-                return false;
-              }
-              final deliveredDate = DateTime.parse(
-                descriptions.first['delivered_date'] as String,
-              );
-              return deliveredDate.isAfter(todayStart) &&
-                  deliveredDate.isBefore(todayEnd);
-            }).toList()..sort((a, b) {
-              final aDate =
-                  ((a as Map<String, dynamic>)['customer_order_description']
-                              as List<dynamic>)
-                          .first['delivered_date']
-                      as String;
-              final bDate =
-                  ((b as Map<String, dynamic>)['customer_order_description']
-                              as List<dynamic>)
-                          .first['delivered_date']
-                      as String;
-              return DateTime.parse(bDate).compareTo(DateTime.parse(aDate));
-            });
+        final deliveredOrdersRaw =
+            await supabase
+                    .from('customer_order')
+                    .select('customer_order_id, customer:customer_id(name), last_action_time')
+                    .eq('delivered_by_id', widget.driverId)
+                    .eq('order_status', 'Delivered')
+                    .gte('last_action_time', todayStartStr)
+                    .lt('last_action_time', todayEndStr)
+                    .order('last_action_time', ascending: false)
+                    .limit(10)
+                as List<dynamic>;
 
-        final limitedDeliveredOrders = deliveredOrders.take(10).toList();
+        final limitedDeliveredOrders = deliveredOrdersRaw;
 
         setState(() {
           _customerLocation = null;
