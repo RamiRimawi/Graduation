@@ -394,8 +394,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                     type = 'in (ACCEPTED)';
                                   }
 
-                                  final even = int.tryParse(orderId) ?? 0;
-                                  final bg = even.isEven
+                                  final bg = i.isEven
                                       ? const Color(0xFF2D2D2D)
                                       : const Color(0xFF262626);
 
@@ -515,8 +514,7 @@ class _OrdersStockInReceivesPageState extends State<OrdersStockInReceivesPage> {
                                     final time = _formatTime(orderDate);
                                     final date = _formatDate(orderDate);
 
-                                    final even = int.tryParse(orderId) ?? 0;
-                                    final bg = even.isEven
+                                    final bg = i.isEven
                                         ? const Color(0xFF2D2D2D)
                                         : const Color(0xFF262626);
 

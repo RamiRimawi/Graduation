@@ -284,8 +284,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                                 else
                                   ...List.generate(_filteredOrders.length, (i) {
                                     final o = _filteredOrders[i];
-                                    final even = int.tryParse(o.id) ?? 0;
-                                    final bg = even.isEven
+                                    final bg = i.isEven
                                         ? const Color(0xFF2D2D2D)
                                         : const Color(0xFF262626);
 
@@ -386,8 +385,7 @@ class _OrdersReceivesPageState extends State<OrdersReceivesPage> {
                                   const SizedBox(height: 10),
                                   ...List.generate(_filteredOnHold.length, (i) {
                                     final o = _filteredOnHold[i];
-                                    final even = int.tryParse(o.id) ?? 0;
-                                    final bg = even.isEven
+                                    final bg = i.isEven
                                         ? const Color(0xFF2D2D2D)
                                         : const Color(0xFF262626);
 
