@@ -207,16 +207,27 @@ class _StockInPageState extends State<StockInPage> {
                     ? const Center(
                         child: CircularProgressIndicator(color: AppColors.gold),
                       )
-                    : filteredOrders.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No accepted orders found',
-                          style: TextStyle(color: Colors.white70, fontSize: 16),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: filteredOrders.length,
-                        itemBuilder: (_, i) {
+                    : RefreshIndicator(
+                        color: AppColors.gold,
+                        backgroundColor: AppColors.card,
+                        onRefresh: _fetchOrders,
+                        child: filteredOrders.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [
+                              SizedBox(height: 200),
+                              Center(
+                                child: Text(
+                                  'No accepted orders found',
+                                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: filteredOrders.length,
+                            itemBuilder: (_, i) {
                           final o = filteredOrders[i];
 
                           return GestureDetector(
@@ -285,8 +296,9 @@ class _StockInPageState extends State<StockInPage> {
                               ),
                             ),
                           );
-                        },
-                      ),
+                          },
+                        ),
+                        ),
               ),
 
               const SizedBox(height: 10),

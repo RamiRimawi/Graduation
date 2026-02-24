@@ -397,10 +397,10 @@ class _StockOutPageState extends State<StockOutPage> {
                   setState(() => _currentTab = i);
                 },
                 children: [
-                  _PendingSection(orders: _pendingOrders, isLoading: _loading),
-                  _PreparingSection(orders: _preparingOrders),
-                  _PreparedSection(orders: _preparedOrders),
-                  _DeliverySection(drivers: _drivers),
+                  _PendingSection(orders: _pendingOrders, isLoading: _loading, onRefresh: _refreshAllTabs),
+                  _PreparingSection(orders: _preparingOrders, onRefresh: _refreshAllTabs),
+                  _PreparedSection(orders: _preparedOrders, onRefresh: _refreshAllTabs),
+                  _DeliverySection(drivers: _drivers, onRefresh: _refreshAllTabs),
                 ],
               ),
             ),
@@ -426,7 +426,8 @@ class _StockOutPageState extends State<StockOutPage> {
 class _PendingSection extends StatelessWidget {
   final List<OrderInfo> orders;
   final bool isLoading;
-  const _PendingSection({required this.orders, this.isLoading = false});
+  final Future<void> Function() onRefresh;
+  const _PendingSection({required this.orders, this.isLoading = false, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -458,40 +459,52 @@ class _PendingSection extends StatelessWidget {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.yellow),
                   )
-                : orders.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No pending orders',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: orders.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final o = orders[i];
-                      return GestureDetector(
-                        onTap: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => OrderDetailsPage(orderId: o.id),
+                : RefreshIndicator(
+                    color: AppColors.yellow,
+                    backgroundColor: AppColors.card,
+                    onRefresh: onRefresh,
+                    child: orders.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 200),
+                          Center(
+                            child: Text(
+                              'No pending orders',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: orders.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) {
+                          final o = orders[i];
+                          return GestureDetector(
+                            onTap: () async {
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => OrderDetailsPage(orderId: o.id),
+                                ),
+                              );
+
+                              // Refresh all tabs if order action was performed
+                              if (result == true && context.mounted) {
+                                final stockOutState = context
+                                    .findAncestorStateOfType<_StockOutPageState>();
+                                await stockOutState?._refreshAllTabs();
+                              }
+                            },
+                            child: _OrderCard(
+                              left: '${o.id}',
+                              middle: o.customerName,
                             ),
                           );
-
-                          // Refresh all tabs if order action was performed
-                          if (result == true && context.mounted) {
-                            final stockOutState = context
-                                .findAncestorStateOfType<_StockOutPageState>();
-                            await stockOutState?._refreshAllTabs();
-                          }
                         },
-                        child: _OrderCard(
-                          left: '${o.id}',
-                          middle: o.customerName,
-                        ),
-                      );
-                    },
+                      ),
                   ),
           ),
         ],
@@ -504,7 +517,8 @@ class _PendingSection extends StatelessWidget {
 
 class _PreparingSection extends StatelessWidget {
   final List<OrderInfo> orders;
-  const _PreparingSection({required this.orders});
+  final Future<void> Function() onRefresh;
+  const _PreparingSection({required this.orders, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -531,36 +545,54 @@ class _PreparingSection extends StatelessWidget {
           const SizedBox(height: 10),
 
           Expanded(
-            child: ListView.separated(
-              itemCount: orders.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final o = orders[i];
+            child: RefreshIndicator(
+              color: AppColors.yellow,
+              backgroundColor: AppColors.card,
+              onRefresh: onRefresh,
+              child: orders.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Text(
+                        'No preparing orders',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                )
+              : ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: orders.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final o = orders[i];
+                    return GestureDetector(
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PreparingOrderDetailsPage(orderId: o.id),
+                          ),
+                        );
 
-                return GestureDetector(
-                  onTap: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            PreparingOrderDetailsPage(orderId: o.id),
+                        // Refresh all tabs when returning (order status may have changed)
+                        if (context.mounted) {
+                          final stockOutState = context
+                              .findAncestorStateOfType<_StockOutPageState>();
+                          await stockOutState?._refreshAllTabs();
+                        }
+                      },
+                      child: _OrderCard(
+                        left: '${o.id}',
+                        middle: o.customerName,
+                        right: '${o.inventoryNo}',
                       ),
                     );
-
-                    // Refresh all tabs when returning (order status may have changed)
-                    if (context.mounted) {
-                      final stockOutState = context
-                          .findAncestorStateOfType<_StockOutPageState>();
-                      await stockOutState?._refreshAllTabs();
-                    }
                   },
-                  child: _OrderCard(
-                    left: '${o.id}',
-                    middle: o.customerName,
-                    right: '${o.inventoryNo}',
-                  ),
-                );
-              },
+                ),
             ),
           ),
         ],
@@ -573,7 +605,8 @@ class _PreparingSection extends StatelessWidget {
 
 class _PreparedSection extends StatelessWidget {
   final List<OrderInfo> orders;
-  const _PreparedSection({required this.orders});
+  final Future<void> Function() onRefresh;
+  const _PreparedSection({required this.orders, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -599,44 +632,56 @@ class _PreparedSection extends StatelessWidget {
           const SizedBox(height: 10),
 
           Expanded(
-            child: orders.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No prepared orders',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: orders.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final o = orders[i];
-
-                      return GestureDetector(
-                        onTap: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  PreparedOrderDetailsPage(orderId: o.id),
-                            ),
-                          );
-
-                          // Refresh all tabs if order was sent to delivery
-                          if (result == true && context.mounted) {
-                            final stockOutState = context
-                                .findAncestorStateOfType<_StockOutPageState>();
-                            await stockOutState?._refreshAllTabs();
-                          }
-                        },
-                        child: _OrderCard(
-                          left: '${o.id}',
-                          middle: o.customerName,
-                          right: '${o.inventoryNo}',
+            child: RefreshIndicator(
+              color: AppColors.yellow,
+              backgroundColor: AppColors.card,
+              onRefresh: onRefresh,
+              child: orders.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 200),
+                        Center(
+                          child: Text(
+                            'No prepared orders',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
-                      );
-                    },
-                  ),
+                      ],
+                    )
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: orders.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final o = orders[i];
+
+                        return GestureDetector(
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PreparedOrderDetailsPage(orderId: o.id),
+                              ),
+                            );
+
+                            // Refresh all tabs if order was sent to delivery
+                            if (result == true && context.mounted) {
+                              final stockOutState = context
+                                  .findAncestorStateOfType<_StockOutPageState>();
+                              await stockOutState?._refreshAllTabs();
+                            }
+                          },
+                          child: _OrderCard(
+                            left: '${o.id}',
+                            middle: o.customerName,
+                            right: '${o.inventoryNo}',
+                          ),
+                        );
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -648,8 +693,8 @@ class _PreparedSection extends StatelessWidget {
 
 class _DeliverySection extends StatelessWidget {
   final List<DeliveryDriver> drivers;
-
-  const _DeliverySection({required this.drivers});
+  final Future<void> Function() onRefresh;
+  const _DeliverySection({required this.drivers, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -670,47 +715,65 @@ class _DeliverySection extends StatelessWidget {
           const SizedBox(height: 16),
 
           Expanded(
-            child: ListView.separated(
-              itemCount: drivers.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (_, i) {
-                final d = drivers[i];
-
-                return GestureDetector(
-                  onTap: () async {
-                    // Show loading indicator
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.yellow,
-                        ),
+            child: RefreshIndicator(
+              color: AppColors.yellow,
+              backgroundColor: AppColors.card,
+              onRefresh: onRefresh,
+              child: drivers.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Text(
+                        'No active deliveries',
+                        style: TextStyle(color: Colors.white),
                       ),
-                    );
-
-                    // Fetch orders for this driver
-                    final orders = await context
-                        .findAncestorStateOfType<_StockOutPageState>()
-                        ?._fetchDriverOrders(d.driverId);
-
-                    if (context.mounted) {
-                      Navigator.pop(context); // Close loading
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DriverOrdersPage(
-                            driverName: d.name,
-                            assignedOrders: orders ?? [],
+                    ),
+                  ],
+                )
+              : ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: drivers.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (_, i) {
+                    final d = drivers[i];
+                    return GestureDetector(
+                      onTap: () async {
+                        // Show loading indicator
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.yellow,
+                            ),
                           ),
-                        ),
-                      );
-                    }
+                        );
+
+                        // Fetch orders for this driver
+                        final orders = await context
+                            .findAncestorStateOfType<_StockOutPageState>()
+                            ?._fetchDriverOrders(d.driverId);
+
+                        if (context.mounted) {
+                          Navigator.pop(context); // Close loading
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DriverOrdersPage(
+                                driverName: d.name,
+                                assignedOrders: orders ?? [],
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: _DeliveryCard(driver: d),
+                    );
                   },
-                  child: _DeliveryCard(driver: d),
-                );
-              },
+                ),
             ),
           ),
         ],

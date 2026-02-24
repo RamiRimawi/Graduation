@@ -158,10 +158,7 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF202020),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Delivery Archive',
           style: TextStyle(
@@ -177,13 +174,28 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
                 child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : customers.isEmpty
-            ? const Center(
-                child: Text(
-                  'No delivered orders yet',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+            ? RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _fetchDeliveredOrders,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Text(
+                        'No delivered orders yet',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                    ),
+                  ],
                 ),
               )
-            : ListView.builder(
+            : RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _fetchDeliveredOrders,
+                child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
                 itemCount: customers.length,
                 itemBuilder: (context, index) {
@@ -375,6 +387,7 @@ class _DeliveryArchiveState extends State<DeliveryArchive> {
                     ),
                   );
                 },
+              ),
               ),
       ),
     );

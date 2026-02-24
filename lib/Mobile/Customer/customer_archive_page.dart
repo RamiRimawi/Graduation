@@ -726,7 +726,11 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
             ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFFF9D949)),
               )
-            : SingleChildScrollView(
+            : RefreshIndicator(
+                color: const Color(0xFFF9D949),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _fetchOrders,
+                child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1124,6 +1128,7 @@ class _CustomerArchivePageState extends State<CustomerArchivePage> {
                     ),
                   ],
                 ),
+              ),
               ),
       ),
     );

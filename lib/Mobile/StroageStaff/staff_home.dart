@@ -174,17 +174,32 @@ class _HomeStaffState extends State<HomeStaff> {
                       ),
                     )
                   : customers.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No orders Preparing',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  ? RefreshIndicator(
+                      color: const Color(0xFFFFE14D),
+                      backgroundColor: const Color(0xFF2D2D2D),
+                      onRefresh: _fetchCustomers,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 200),
+                          Center(
+                            child: Text(
+                              'No orders Preparing',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     )
-                  : ListView.builder(
+                  : RefreshIndicator(
+                      color: const Color(0xFFFFE14D),
+                      backgroundColor: const Color(0xFF2D2D2D),
+                      onRefresh: _fetchCustomers,
+                      child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
                       itemCount: customers.length,
                       itemBuilder: (context, index) {
@@ -435,6 +450,7 @@ class _HomeStaffState extends State<HomeStaff> {
                           ),
                         );
                       },
+                    ),
                     ),
             ),
           ],

@@ -57,6 +57,15 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
     _fetchLowStockProducts();
   }
 
+  Future<void> _refresh() async {
+    await Future.wait([
+      _fetchStorageStaff(),
+      _fetchPinnedOrdersCount(),
+      _fetchPreparedOrdersCount(),
+      _fetchLowStockProducts(),
+    ]);
+  }
+
   Future<void> _fetchStorageStaff() async {
     try {
       final response = await supabase
@@ -231,9 +240,18 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Column(
+        child: RefreshIndicator(
+          color: AppColors.yellow,
+          backgroundColor: AppColors.card,
+          onRefresh: _refresh,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SizedBox(
+                height: constraints.maxHeight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,6 +297,10 @@ class _HomeManagerPageState extends State<HomeManagerPage> {
                 ),
               ),
             ],
+          ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

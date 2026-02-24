@@ -92,33 +92,49 @@ class _SupplierHomePageState extends State<SupplierHomePage> {
                 child: CircularProgressIndicator(color: Color(0xFFB7A447)),
               )
             : _orders.isEmpty
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32.0),
-                  child: Text(
-                    'No orders yet',
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
+            ? RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _loadOrders,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32.0),
+                        child: Text(
+                          'No orders yet',
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               )
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                itemCount: _orders.length,
-                itemBuilder: (context, index) {
-                  final orderData = _orders[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildCard(
-                      id: orderData['id'],
-                      name: orderData['name'],
-                      products: orderData['productCount'],
-                      orderId: orderData['order']['order_id'],
-                      orderStatus:
-                          orderData['order']['order_status'] as String?,
-                    ),
-                  );
-                },
+            : RefreshIndicator(
+                color: const Color(0xFFB7A447),
+                backgroundColor: const Color(0xFF2D2D2D),
+                onRefresh: _loadOrders,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                  itemCount: _orders.length,
+                  itemBuilder: (context, index) {
+                    final orderData = _orders[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _buildCard(
+                        id: orderData['id'],
+                        name: orderData['name'],
+                        products: orderData['productCount'],
+                        orderId: orderData['order']['order_id'],
+                        orderStatus:
+                            orderData['order']['order_status'] as String?,
+                      ),
+                    );
+                  },
+                ),
               ),
       ),
     );
