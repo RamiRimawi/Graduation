@@ -185,8 +185,8 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
   }
 
   Widget _buildCustomerCard(Map<String, dynamic> customer) {
-    final imageUrl = (customer['image'] as String?)?.trim();
     final name = customer['name'] as String? ?? 'Unknown';
+    final imageUrl = (customer['image'] as String?)?.trim();
 
     return GestureDetector(
       onTap: () => _showCustomerSheet(customer),
@@ -206,15 +206,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
         child: Column(
           children: [
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF262626),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                ),
-                child: _buildProfileImage(imageUrl),
-              ),
+              child: Center(child: _buildProfileWidget(name, imageUrl)),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -237,8 +229,8 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
   }
 
   void _showCustomerSheet(Map<String, dynamic> customer) {
-    final imageUrl = (customer['image'] as String?)?.trim();
     final name = (customer['name'] as String?) ?? 'Unknown';
+    final imageUrl = (customer['image'] as String?)?.trim();
     final address = (customer['address'] as String?) ?? '—';
     final mobile = (customer['mobile'] as String?) ?? '—';
     final telephone = (customer['telephone'] as String?) ?? '—';
@@ -265,7 +257,7 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
                   children: [
                     SizedBox(
                       height: 200,
-                      child: Center(child: _buildProfileImage(imageUrl)),
+                      child: Center(child: _buildProfileWidget(name, imageUrl, size: 80)),
                     ),
                     const SizedBox(height: 16),
                     _infoRow('Name', name),
@@ -315,43 +307,31 @@ class _SalesRepCustomersPageState extends State<SalesRepCustomersPage> {
     );
   }
 
-  Widget _buildProfileImage(String? imageUrl) {
-    final placeholder = Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF262626),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Center(
-        child: Icon(Icons.person, color: Color(0xFFB7A447), size: 64),
-      ),
-    );
-
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return placeholder;
+  Widget _buildProfileWidget(String name, String? imageUrl, {double size = 48}) {
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    if (hasImage) {
+      return CircleAvatar(
+        radius: size,
+        backgroundColor: const Color(0xFF3A3A3A),
+        backgroundImage: NetworkImage(imageUrl!),
+        onBackgroundImageError: (_, __) {},
+      );
     }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Image.network(
-        imageUrl,
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => placeholder,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
-            color: const Color(0xFF262626),
-            child: const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFB7A447),
-                strokeWidth: 2,
-              ),
-            ),
-          );
-        },
+    // No image — show initials
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final first = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0][0].toUpperCase() : '';
+    final second = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0].toUpperCase() : '';
+    final initials = '$first$second'.isEmpty ? '?' : '$first$second';
+    return CircleAvatar(
+      radius: size,
+      backgroundColor: const Color(0xFF3A3A3A),
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: const Color(0xFFB7A447),
+          fontSize: size * 0.75,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
