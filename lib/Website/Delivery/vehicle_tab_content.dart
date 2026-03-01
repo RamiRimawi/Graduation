@@ -98,7 +98,11 @@ class _VehicleTabContentState extends State<VehicleTabContent> {
                           vehicleImage: v['vehicle_image'],
                           isActive: v['is_active'] ?? false,
                         ),
-                      );
+                      ).then((_) {
+                        if (mounted) {
+                          _fetchVehicles();
+                        }
+                      });
                     },
                   ),
                 )

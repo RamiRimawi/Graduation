@@ -298,6 +298,29 @@ class _VehiclePopupState extends State<VehiclePopup> {
                           ),
                           onPressed: () => _showEditToDateDialog(),
                           tooltip: 'Edit To Date',
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: _showAssignDriverDialog,
+                          icon: const Icon(Icons.add, size: 16),
+                          label: Text(
+                            'Assign Driver',
+                            style: GoogleFonts.roboto(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF50B2E7),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -720,6 +743,386 @@ class _VehiclePopupState extends State<VehiclePopup> {
     if (result != null && mounted) {
       await _updateToDate(result);
     }
+  }
+
+  Future<void> _showAssignDriverDialog() async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final todayStr = DateFormat('yyyy-MM-dd').format(today);
+
+      final allDriversRaw =
+          await supabase
+                  .from('delivery_driver')
+                  .select('delivery_driver_id, name')
+                  .order('name', ascending: true)
+              as List<dynamic>;
+
+      final busyTodayRaw =
+          await supabase
+                  .from('delivery_vehicle')
+                  .select('delivery_driver_id')
+                  .lte('from_date', todayStr)
+                  .gte('to_date', todayStr)
+              as List<dynamic>;
+
+      final busyDriverIds = busyTodayRaw
+          .map((e) => (e as Map<String, dynamic>)['delivery_driver_id'] as int?)
+          .whereType<int>()
+          .toSet();
+
+      final availableDrivers = allDriversRaw
+          .map((e) => e as Map<String, dynamic>)
+          .where((d) => !busyDriverIds.contains(d['delivery_driver_id']))
+          .map(
+            (d) => {
+              'driver_id': d['delivery_driver_id'] as int,
+              'driver_name': (d['name'] as String?) ?? 'Unknown',
+            },
+          )
+          .toList();
+
+      if (!mounted) return;
+
+      if (availableDrivers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No available delivery drivers right now',
+              style: GoogleFonts.roboto(),
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      DateTime fromDate = today;
+      DateTime toDate = today.add(const Duration(days: 30));
+      int? selectedDriverId;
+      bool saving = false;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> pickDate({required bool isFrom}) async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: isFrom ? fromDate : toDate,
+                  firstDate: isFrom ? today : fromDate,
+                  lastDate: DateTime(2100),
+                  builder: (context, child) {
+                    return Theme(
+                      data: ThemeData.dark().copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: Color(0xFF50B2E7),
+                          onPrimary: Colors.white,
+                          surface: Color(0xFF2D2D2D),
+                          onSurface: Colors.white,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+
+                if (picked == null) return;
+
+                setDialogState(() {
+                  if (isFrom) {
+                    fromDate = picked;
+                    if (toDate.isBefore(fromDate)) {
+                      toDate = fromDate;
+                    }
+                  } else {
+                    toDate = picked;
+                  }
+                });
+              }
+
+              return Dialog(
+                backgroundColor: const Color(0xFF2D2D2D),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  width: 440,
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Assign Vehicle To Driver',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Only drivers with no assigned vehicle today are listed.',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white60,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<int>(
+                        value: selectedDriverId,
+                        dropdownColor: const Color(0xFF202020),
+                        decoration: InputDecoration(
+                          labelText: 'Delivery Driver',
+                          labelStyle: GoogleFonts.roboto(color: Colors.white70),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Colors.white24),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF50B2E7),
+                            ),
+                          ),
+                        ),
+                        style: GoogleFonts.roboto(color: Colors.white),
+                        items: availableDrivers
+                            .map(
+                              (d) => DropdownMenuItem<int>(
+                                value: d['driver_id'] as int,
+                                child: Text(
+                                  d['driver_name'] as String,
+                                  style: GoogleFonts.roboto(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: saving
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  selectedDriverId = value;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 14),
+                      InkWell(
+                        onTap: saving ? null : () => pickDate(isFrom: true),
+                        child: _buildDateBox('From Date', fromDate),
+                      ),
+                      const SizedBox(height: 10),
+                      InkWell(
+                        onTap: saving ? null : () => pickDate(isFrom: false),
+                        child: _buildDateBox('To Date', toDate),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: saving
+                                ? null
+                                : () => Navigator.of(dialogContext).pop(),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.roboto(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: saving
+                                ? null
+                                : () async {
+                                    if (selectedDriverId == null) {
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Please select a driver',
+                                            style: GoogleFonts.roboto(),
+                                          ),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    setDialogState(() => saving = true);
+
+                                    try {
+                                      final fromDateStr = DateFormat(
+                                        'yyyy-MM-dd',
+                                      ).format(fromDate);
+                                      final toDateStr = DateFormat(
+                                        'yyyy-MM-dd',
+                                      ).format(toDate);
+
+                                      final driverConflict =
+                                          await supabase
+                                                  .from('delivery_vehicle')
+                                                  .select('plate_id')
+                                                  .eq(
+                                                    'delivery_driver_id',
+                                                    selectedDriverId as int,
+                                                  )
+                                                  .lte('from_date', fromDateStr)
+                                                  .gte('to_date', fromDateStr)
+                                                  .limit(1)
+                                              as List<dynamic>;
+
+                                      if (driverConflict.isNotEmpty) {
+                                        throw Exception(
+                                          'Selected driver already has a vehicle on the selected start date',
+                                        );
+                                      }
+
+                                      final vehicleConflict =
+                                          await supabase
+                                                  .from('delivery_vehicle')
+                                                  .select('delivery_driver_id')
+                                                  .eq(
+                                                    'plate_id',
+                                                    widget.plateId,
+                                                  )
+                                                  .lte('from_date', fromDateStr)
+                                                  .gte('to_date', fromDateStr)
+                                                  .limit(1)
+                                              as List<dynamic>;
+
+                                      if (vehicleConflict.isNotEmpty) {
+                                        throw Exception(
+                                          'Vehicle is already assigned on the selected start date',
+                                        );
+                                      }
+
+                                      await supabase
+                                          .from('delivery_vehicle')
+                                          .insert({
+                                            'plate_id': widget.plateId,
+                                            'delivery_driver_id':
+                                                selectedDriverId,
+                                            'from_date': fromDateStr,
+                                            'to_date': toDateStr,
+                                          });
+
+                                      await supabase
+                                          .from('vehicle')
+                                          .update({'is_active': true})
+                                          .eq('plate_id', widget.plateId);
+
+                                      if (!mounted) return;
+
+                                      Navigator.of(dialogContext).pop();
+
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Vehicle assigned successfully',
+                                            style: GoogleFonts.roboto(),
+                                          ),
+                                          backgroundColor: const Color(
+                                            0xFF67CD67,
+                                          ),
+                                        ),
+                                      );
+
+                                      await _fetchVehicleData();
+                                    } catch (e) {
+                                      if (!mounted) return;
+
+                                      setDialogState(() => saving = false);
+                                      ScaffoldMessenger.of(
+                                        this.context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Assignment failed: $e',
+                                            style: GoogleFonts.roboto(),
+                                          ),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF50B2E7),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: saving
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    'Assign',
+                                    style: GoogleFonts.roboto(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to load available drivers: $e',
+            style: GoogleFonts.roboto(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildDateBox(String title, DateTime date) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF202020),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF50B2E7).withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$title: ${DateFormat('MMM dd, yyyy').format(date)}',
+            style: GoogleFonts.roboto(color: Colors.white, fontSize: 14),
+          ),
+          const Icon(Icons.calendar_today, color: Color(0xFF50B2E7), size: 20),
+        ],
+      ),
+    );
   }
 
   Future<void> _updateToDate(DateTime newToDate) async {
