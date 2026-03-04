@@ -28,6 +28,7 @@ class _VehiclePopupState extends State<VehiclePopup> {
   Map<String, dynamic>? currentDriver;
   List<Map<String, dynamic>> driverHistory = [];
   bool _loading = true;
+  bool _deletingAssignment = false;
   int? hoveredRow;
 
   @override
@@ -69,6 +70,7 @@ class _VehiclePopupState extends State<VehiclePopup> {
 
       if (mounted) {
         setState(() {
+          currentDriver = null;
           if (currentRes != null) {
             final driver = currentRes['delivery_driver'];
             String? profileImage;
@@ -290,14 +292,64 @@ class _VehiclePopupState extends State<VehiclePopup> {
                         ),
                       ),
                       if (currentDriver != null)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit,
-                            color: Color(0xFF50B2E7),
-                            size: 20,
-                          ),
-                          onPressed: () => _showEditToDateDialog(),
-                          tooltip: 'Edit To Date',
+                        Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit,
+                                color: Color(0xFF50B2E7),
+                                size: 20,
+                              ),
+                              onPressed: _deletingAssignment
+                                  ? null
+                                  : () => _showEditToDateDialog(),
+                              tooltip: 'Edit To Date',
+                            ),
+                            TextButton.icon(
+                              onPressed: _deletingAssignment
+                                  ? null
+                                  : _showDeleteAssignmentDialog,
+                              icon: _deletingAssignment
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFFFF6B6B),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.delete_outline,
+                                      size: 16,
+                                      color: Color(0xFFFF6B6B),
+                                    ),
+                              label: Text(
+                                'Delete',
+                                style: GoogleFonts.roboto(
+                                  color: const Color(0xFFFF6B6B),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                backgroundColor: const Color(
+                                  0xFFFF6B6B,
+                                ).withOpacity(0.12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(
+                                    color: Color(0x66FF6B6B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         )
                       else
                         ElevatedButton.icon(
@@ -1166,6 +1218,167 @@ class _VehiclePopupState extends State<VehiclePopup> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _showDeleteAssignmentDialog() async {
+    if (currentDriver == null || _deletingAssignment) return;
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 24,
+          ),
+          backgroundColor: const Color(0xFF2D2D2D),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: SizedBox(
+            width: 430,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Delete Vehicle Assignment?',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'This will remove the current assignment of this vehicle from ${currentDriver!['driver_name']}.',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.roboto(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: Text(
+                          'Delete',
+                          style: GoogleFonts.roboto(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B6B),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (shouldDelete == true) {
+      await _deleteCurrentAssignment();
+    }
+  }
+
+  Future<void> _deleteCurrentAssignment() async {
+    if (currentDriver == null) return;
+
+    setState(() {
+      _deletingAssignment = true;
+    });
+
+    try {
+      final driverId = currentDriver!['driver_id'];
+      final fromDateStr = currentDriver!['from_date'];
+
+      await supabase.from('delivery_vehicle').delete().match({
+        'plate_id': widget.plateId,
+        'delivery_driver_id': driverId,
+        'from_date': fromDateStr,
+      });
+
+      final now = DateTime.now();
+      final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+      final stillActive =
+          await supabase
+                  .from('delivery_vehicle')
+                  .select('delivery_driver_id')
+                  .eq('plate_id', widget.plateId)
+                  .lte('from_date', todayStr)
+                  .gte('to_date', todayStr)
+                  .limit(1)
+              as List<dynamic>;
+
+      await supabase
+          .from('vehicle')
+          .update({'is_active': stillActive.isNotEmpty})
+          .eq('plate_id', widget.plateId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Vehicle assignment deleted successfully',
+              style: GoogleFonts.roboto(),
+            ),
+            backgroundColor: const Color(0xFF67CD67),
+          ),
+        );
+
+        await _fetchVehicleData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to delete assignment: $e',
+              style: GoogleFonts.roboto(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingAssignment = false;
+        });
       }
     }
   }
