@@ -76,42 +76,36 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
           .select(
             'storage_manager_id,name,mobile_number,telephone_number,address,accounts!storage_manager_storage_manager_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Storage Manager');
       final storageStaff = await client
           .from('storage_staff')
           .select(
             'storage_staff_id,name,mobile_number,telephone_number,address,accounts!storage_staff_storage_staff_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Storage Staff');
       final deliveryDrivers = await client
           .from('delivery_driver')
           .select(
             'delivery_driver_id,name,mobile_number,telephone_number,address,accounts!delivery_driver_delivery_driver_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Delivery Driver');
       final customers = await client
           .from('customer')
           .select(
             'customer_id,name,email,mobile_number,telephone_number,address,accounts!customer_customer_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Customer');
       final salesReps = await client
           .from('sales_representative')
           .select(
             'sales_rep_id,name,email,mobile_number,telephone_number,accounts!sales_representative_sales_rep_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Sales Rep');
       final suppliers = await client
           .from('supplier')
           .select(
             'supplier_id,name,email,mobile_number,telephone_number,address,accounts!supplier_supplier_id_fkey!inner(is_active,profile_image,last_action_by,last_action_time,password)',
           )
-          .eq('accounts.is_active', true)
           .eq('accounts.type', 'Supplier');
 
       if (mounted) {
@@ -143,11 +137,18 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
             final name = (r["name"] as String?)?.trim();
             // Retrieve profile_image from the joined accounts relation
             String? img;
+            var isActive = true;
             final accountsData = r['accounts'];
             if (accountsData is Map<String, dynamic>) {
               img = accountsData['profile_image'] as String?;
+              isActive = accountsData['is_active'] == true;
             }
-            return _AccountItem(name: name ?? '', imageUrl: img, rawData: r);
+            return _AccountItem(
+              name: name ?? '',
+              imageUrl: img,
+              isActive: isActive,
+              rawData: r,
+            );
           })
           .where((i) => i.name.isNotEmpty)
           .toList();
@@ -323,6 +324,7 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
                                         _AccountCard(
                                           name: item.name,
                                           imageUrl: item.imageUrl,
+                                          isActive: item.isActive,
                                           onTap: () => _showAccountDetails(
                                             context,
                                             item,
@@ -827,6 +829,11 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
               child: _AccountDetailsPopup(
                 item: item,
                 role: role,
+                onToggleActive: (newStatus) => _updateAccountStatus(
+                  role: role,
+                  item: item,
+                  isActive: newStatus,
+                ),
                 onEdit: () {
                   Navigator.of(ctx).pop();
                   _openEditPopup(ctx, role, item);
@@ -862,6 +869,45 @@ class _MobileAccountsPageState extends State<MobileAccountsPage> {
         );
       },
     );
+  }
+
+  String _currentActor() {
+    final user = supabase.auth.currentUser;
+    return user?.email ?? user?.id ?? 'accountant';
+  }
+
+  Future<void> _updateAccountStatus({
+    required String role,
+    required _AccountItem item,
+    required bool isActive,
+  }) async {
+    final data = item.rawData;
+    final idKeys = {
+      'Storage Manager': 'storage_manager_id',
+      'Storage Staff': 'storage_staff_id',
+      'Delivery Driver': 'delivery_driver_id',
+      'Customer': 'customer_id',
+      'Sales Rep': 'sales_rep_id',
+      'Supplier': 'supplier_id',
+    };
+
+    final idKey = idKeys[role];
+    if (idKey == null || data[idKey] == null) {
+      throw Exception('Unable to resolve account ID for selected role');
+    }
+
+    await supabase
+        .from('accounts')
+        .update({
+          'is_active': isActive,
+          'last_action_by': _currentActor(),
+          'last_action_time': DateTime.now().toIso8601String(),
+        })
+        .eq('user_id', data[idKey]);
+
+    if (mounted) {
+      await _loadAccounts();
+    }
   }
 }
 
@@ -1352,9 +1398,15 @@ class _EditAccountPopupState extends State<_EditAccountPopup> {
 class _AccountCard extends StatelessWidget {
   final String name;
   final String? imageUrl;
+  final bool isActive;
   final VoidCallback onTap;
 
-  const _AccountCard({required this.name, this.imageUrl, required this.onTap});
+  const _AccountCard({
+    required this.name,
+    this.imageUrl,
+    required this.isActive,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1367,6 +1419,10 @@ class _AccountCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF2D2D2D),
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isActive ? const Color(0xFF3D3D3D) : const Color(0xFF7A2E2E),
+            width: 1,
+          ),
           boxShadow: const [
             BoxShadow(
               color: Colors.black26,
@@ -1398,14 +1454,41 @@ class _AccountCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isActive ? 'Active' : 'Inactive',
+                    style: TextStyle(
+                      color: isActive
+                          ? Colors.greenAccent.shade100
+                          : Colors.redAccent.shade100,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isActive
+                    ? Colors.greenAccent.shade100
+                    : Colors.redAccent.shade100,
               ),
             ),
           ],
@@ -1418,28 +1501,120 @@ class _AccountCard extends StatelessWidget {
 class _AccountItem {
   final String name;
   final String? imageUrl;
+  final bool isActive;
   final Map<String, dynamic> rawData;
-  _AccountItem({required this.name, this.imageUrl, required this.rawData});
+
+  _AccountItem({
+    required this.name,
+    this.imageUrl,
+    required this.isActive,
+    required this.rawData,
+  });
 }
 
 /* ----------------------- ACCOUNT DETAILS POPUP ----------------------- */
 
-class _AccountDetailsPopup extends StatelessWidget {
+class _AccountDetailsPopup extends StatefulWidget {
   final _AccountItem item;
   final String role;
   final VoidCallback onEdit;
+  final Future<void> Function(bool newStatus) onToggleActive;
 
   const _AccountDetailsPopup({
     required this.item,
     required this.role,
     required this.onEdit,
+    required this.onToggleActive,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final data = item.rawData;
+  State<_AccountDetailsPopup> createState() => _AccountDetailsPopupState();
+}
 
-    // Extract account data from the joined accounts table
+class _AccountDetailsPopupState extends State<_AccountDetailsPopup> {
+  late bool _isActive;
+  bool _statusLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final accounts = widget.item.rawData['accounts'];
+    if (accounts is Map<String, dynamic>) {
+      _isActive = accounts['is_active'] == true;
+    } else {
+      _isActive = widget.item.isActive;
+    }
+  }
+
+  Future<void> _toggleStatus() async {
+    final nextStatus = !_isActive;
+    final actionLabel = nextStatus ? 'activate' : 'deactivate';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2D2D),
+        title: Text(
+          nextStatus ? 'Activate Account' : 'Deactivate Account',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Are you sure you want to $actionLabel this account?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF9D949),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() => _statusLoading = true);
+    try {
+      await widget.onToggleActive(nextStatus);
+      if (!mounted) return;
+      setState(() => _isActive = nextStatus);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nextStatus
+                ? 'Account activated successfully'
+                : 'Account deactivated successfully',
+          ),
+          backgroundColor: nextStatus ? Colors.green : Colors.redAccent,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating account status: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _statusLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.item.rawData;
+
     Map<String, dynamic>? accountData;
     String? accountIdKey;
 
@@ -1452,7 +1627,7 @@ class _AccountDetailsPopup extends StatelessWidget {
       'Supplier': 'supplier_id',
     };
 
-    accountIdKey = idKeys[role];
+    accountIdKey = idKeys[widget.role];
 
     if (data['accounts'] is Map<String, dynamic>) {
       accountData = data['accounts'] as Map<String, dynamic>;
@@ -1461,7 +1636,7 @@ class _AccountDetailsPopup extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: 760),
         margin: const EdgeInsets.symmetric(horizontal: 40),
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
@@ -1475,150 +1650,201 @@ class _AccountDetailsPopup extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with edit and close buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Account Details',
-                  style: GoogleFonts.roboto(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Color(0xFFF9D949)),
-                      onPressed: onEdit,
-                      tooltip: 'Edit',
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Account Details',
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Color(0xFFF9D949)),
+                        onPressed: widget.onEdit,
+                        tooltip: 'Edit',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(color: Color(0xFF3D3D3D)),
+              const SizedBox(height: 16),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF232427),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF3D3D3D)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 42,
+                      backgroundColor: Colors.grey.shade800,
+                      backgroundImage:
+                          widget.item.imageUrl != null &&
+                              widget.item.imageUrl!.isNotEmpty
+                          ? NetworkImage(widget.item.imageUrl!)
+                          : null,
+                      child:
+                          (widget.item.imageUrl == null ||
+                              widget.item.imageUrl!.isEmpty)
+                          ? const Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 34,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['name']?.toString() ?? 'N/A',
+                            style: GoogleFonts.roboto(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _StatusChip(label: widget.role, isRole: true),
+                              _StatusChip(
+                                label: _isActive ? 'Active' : 'Inactive',
+                                isActive: _isActive,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _statusLoading ? null : _toggleStatus,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isActive
+                            ? const Color(0xFF7A2E2E)
+                            : const Color(0xFF2D6A3E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: _statusLoading
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(_isActive ? Icons.block : Icons.check_circle),
+                      label: Text(
+                        _isActive ? 'Deactivate' : 'Activate',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ],
                 ),
+              ),
+
+              const SizedBox(height: 18),
+
+              _DetailsSection(
+                title: 'Personal Information',
+                children: [
+                  _InfoRow(
+                    label: 'Name',
+                    value: data['name']?.toString() ?? 'N/A',
+                  ),
+                  if (accountIdKey != null && data[accountIdKey] != null)
+                    _InfoRow(
+                      label: 'ID',
+                      value: data[accountIdKey]?.toString() ?? 'N/A',
+                    ),
+                  if (data['email'] != null &&
+                      data['email'].toString().isNotEmpty)
+                    _InfoRow(
+                      label: 'Email',
+                      value: data['email']?.toString() ?? 'N/A',
+                    ),
+                  if (data['mobile_number'] != null)
+                    _InfoRow(
+                      label: 'Mobile Number',
+                      value: data['mobile_number']?.toString() ?? 'N/A',
+                    ),
+                  if (data['telephone_number'] != null)
+                    _InfoRow(
+                      label: 'Telephone Number',
+                      value: data['telephone_number']?.toString() ?? 'N/A',
+                    ),
+                  if (data['address'] != null &&
+                      data['address'].toString().isNotEmpty)
+                    _InfoRow(
+                      label: 'Address',
+                      value: data['address']?.toString() ?? 'N/A',
+                    ),
+                ],
+              ),
+
+              if (accountData != null) ...[
+                const SizedBox(height: 14),
+                _DetailsSection(
+                  title: 'Account Activity',
+                  children: [
+                    _InfoRow(
+                      label: 'Status',
+                      value: _isActive ? 'Active' : 'Inactive',
+                      valueColor: _isActive
+                          ? Colors.greenAccent.shade100
+                          : Colors.redAccent.shade100,
+                    ),
+                    if (accountData['last_action_by'] != null)
+                      _InfoRow(
+                        label: 'Last Modified By',
+                        value:
+                            accountData['last_action_by']?.toString() ?? 'N/A',
+                      ),
+                    if (accountData['last_action_time'] != null)
+                      _InfoRow(
+                        label: 'Last Modified Time',
+                        value: _formatDateTime(
+                          accountData['last_action_time']?.toString(),
+                        ),
+                      ),
+                  ],
+                ),
               ],
-            ),
-            const SizedBox(height: 8),
-            const Divider(color: Color(0xFF3D3D3D)),
-            const SizedBox(height: 20),
-
-            // Profile Image
-            Center(
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.grey.shade800,
-                backgroundImage:
-                    item.imageUrl != null && item.imageUrl!.isNotEmpty
-                    ? NetworkImage(item.imageUrl!)
-                    : null,
-                child: (item.imageUrl == null || item.imageUrl!.isEmpty)
-                    ? const Icon(Icons.person, color: Colors.white, size: 50)
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Role Badge
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9D949).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFFF9D949),
-                    width: 1.5,
-                  ),
-                ),
-                child: Text(
-                  role,
-                  style: GoogleFonts.roboto(
-                    color: const Color(0xFFF9D949),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Information Fields
-            _InfoRow(label: 'Name', value: data['name']?.toString() ?? 'N/A'),
-            if (accountIdKey != null && data[accountIdKey] != null)
-              _InfoRow(
-                label: 'ID',
-                value: data[accountIdKey]?.toString() ?? 'N/A',
-              ),
-            if (data['email'] != null && data['email'].toString().isNotEmpty)
-              _InfoRow(
-                label: 'Email',
-                value: data['email']?.toString() ?? 'N/A',
-              ),
-            if (data['mobile_number'] != null)
-              _InfoRow(
-                label: 'Mobile Number',
-                value: data['mobile_number']?.toString() ?? 'N/A',
-              ),
-            if (data['telephone_number'] != null)
-              _InfoRow(
-                label: 'Telephone Number',
-                value: data['telephone_number']?.toString() ?? 'N/A',
-              ),
-            if (data['address'] != null &&
-                data['address'].toString().isNotEmpty)
-              _InfoRow(
-                label: 'Address',
-                value: data['address']?.toString() ?? 'N/A',
-              ),
-
-            // Account Information Section
-            if (accountData != null) ...[
-              const SizedBox(height: 16),
-              const Divider(color: Color(0xFF3D3D3D)),
-              const SizedBox(height: 16),
-              Text(
-                'Account Information',
-                style: GoogleFonts.roboto(
-                  color: const Color(0xFFB7A447),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _InfoRow(
-                label: 'Status',
-                value: accountData['is_active'] == true ? 'Active' : 'Inactive',
-                valueColor: accountData['is_active'] == true
-                    ? Colors.greenAccent
-                    : Colors.redAccent,
-              ),
-              if (accountData['last_action_by'] != null)
-                _InfoRow(
-                  label: 'Last Modified By',
-                  value: accountData['last_action_by']?.toString() ?? 'N/A',
-                ),
-              if (accountData['last_action_time'] != null)
-                _InfoRow(
-                  label: 'Last Modified Time',
-                  value: _formatDateTime(
-                    accountData['last_action_time']?.toString(),
-                  ),
-                ),
             ],
-
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
@@ -1635,6 +1861,91 @@ class _AccountDetailsPopup extends StatelessWidget {
   }
 }
 
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final bool isRole;
+  final bool isActive;
+
+  const _StatusChip({
+    required this.label,
+    this.isRole = false,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = isRole
+        ? const Color(0xFFF9D949)
+        : isActive
+        ? const Color(0xFF2D6A3E)
+        : const Color(0xFF7A2E2E);
+
+    final textColor = isRole
+        ? const Color(0xFFF9D949)
+        : isActive
+        ? Colors.greenAccent.shade100
+        : Colors.redAccent.shade100;
+
+    final bgColor = isRole
+        ? const Color(0xFFF9D949).withOpacity(0.12)
+        : isActive
+        ? const Color(0xFF2D6A3E).withOpacity(0.18)
+        : const Color(0xFF7A2E2E).withOpacity(0.2);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailsSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _DetailsSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF232427),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF3D3D3D)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.roboto(
+              color: const Color(0xFFB7A447),
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1645,17 +1956,17 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 150,
+            width: 210,
             child: Text(
               '$label:',
               style: GoogleFonts.roboto(
                 color: const Color(0xFFB7A447),
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1665,7 +1976,7 @@ class _InfoRow extends StatelessWidget {
               value,
               style: GoogleFonts.roboto(
                 color: valueColor ?? Colors.white,
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
             ),
