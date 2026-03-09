@@ -28,12 +28,17 @@ class DeliveryLivePopup extends StatefulWidget {
 class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+  static const String _lightMapTileUrl =
+      'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ';
+  static const String _darkMapTileUrl =
+      'https://api.maptiler.com/maps/basic-v2-dark/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ';
 
   // Keep the map camera stable across rebuilds.
   // (If initialCenter/initialZoom change on every setState, flutter_map may
   // re-apply them and cause zoom/center to "jump".)
   final LatLng _mapInitialCenter = const LatLng(31.9522, 35.2332);
   final double _mapInitialZoom = 14;
+  bool _isDarkMapStyle = false;
   bool _userHasInteractedWithMap = false;
   int? _lastAutoFitOrderId;
 
@@ -396,6 +401,16 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
     }
   }
 
+  void _showFullPath() {
+    final points = <LatLng>[
+      _driverMarkerLocation,
+      if (_customerLocation != null) _customerLocation!,
+      ..._routePoints,
+    ];
+
+    _fitMapToPoints(points);
+  }
+
   @override
   void dispose() {
     _pollingTimer?.cancel();
@@ -738,22 +753,31 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
   }
 
   void _fitMapToRoute() {
-    if (_routePoints.isEmpty) return;
+    _fitMapToPoints(_routePoints);
+  }
 
-    double minLat = _routePoints.first.latitude;
-    double maxLat = _routePoints.first.latitude;
-    double minLng = _routePoints.first.longitude;
-    double maxLng = _routePoints.first.longitude;
+  void _fitMapToPoints(List<LatLng> points) {
+    if (points.isEmpty) return;
 
-    for (final point in _routePoints) {
+    if (points.length == 1) {
+      _mapController.move(points.first, 16);
+      return;
+    }
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final point in points) {
       minLat = minLat > point.latitude ? point.latitude : minLat;
       maxLat = maxLat < point.latitude ? point.latitude : maxLat;
       minLng = minLng > point.longitude ? point.longitude : minLng;
       maxLng = maxLng < point.longitude ? point.longitude : maxLng;
     }
 
-    final latPadding = (maxLat - minLat) * 0.002;
-    final lngPadding = (maxLng - minLng) * 0.002;
+    final latPadding = ((maxLat - minLat).abs() * 0.15).clamp(0.0015, 0.05);
+    final lngPadding = ((maxLng - minLng).abs() * 0.15).clamp(0.0015, 0.05);
 
     final paddedMinLat = minLat - latPadding;
     final paddedMaxLat = maxLat + latPadding;
@@ -771,7 +795,7 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
 
     if (latDelta > 0 && lngDelta > 0) {
       final maxDelta = latDelta > lngDelta ? latDelta : lngDelta;
-      zoomLevel = (log(360 / maxDelta) / log(2)) + 0.60;
+      zoomLevel = (log(360 / maxDelta) / log(2)) + 0.25;
 
       if (zoomLevel > 19.5) zoomLevel = 19.5;
       if (zoomLevel < 4) zoomLevel = 4;
@@ -1324,8 +1348,9 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
                           ),
                           children: [
                             TileLayer(
-                              urlTemplate:
-                                  'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=dkYOU5miikUvzB2wvCgJ',
+                              urlTemplate: _isDarkMapStyle
+                                  ? _darkMapTileUrl
+                                  : _lightMapTileUrl,
                               userAgentPackageName: 'com.example.app',
                               tileProvider: NetworkTileProvider(),
                             ),
@@ -1365,9 +1390,25 @@ class _DeliveryLivePopupState extends State<DeliveryLivePopup>
                           child: Column(
                             children: [
                               _MapIconButton(
+                                icon: _isDarkMapStyle
+                                    ? Icons.dark_mode
+                                    : Icons.light_mode,
+                                onTap: () {
+                                  setState(() {
+                                    _isDarkMapStyle = !_isDarkMapStyle;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              _MapIconButton(
                                 icon: Icons.my_location,
                                 onTap: () =>
                                     _mapController.move(_driverLocation, 16),
+                              ),
+                              const SizedBox(height: 8),
+                              _MapIconButton(
+                                icon: Icons.route,
+                                onTap: _showFullPath,
                               ),
                               const SizedBox(height: 8),
                               _MapIconButton(
